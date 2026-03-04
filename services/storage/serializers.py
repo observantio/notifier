@@ -23,6 +23,7 @@ logger = logging.getLogger(__name__)
 def rule_to_pydantic(r) -> AlertRulePydantic:
     payload = {
         "id": r.id,
+        "createdBy": getattr(r, "created_by", None),
         "orgId": r.org_id,
         "name": r.name,
         "expression": r.expr,
@@ -35,6 +36,7 @@ def rule_to_pydantic(r) -> AlertRulePydantic:
         "notificationChannels": r.notification_channels or [],
         "visibility": r.visibility or "private",
         "sharedGroupIds": [g.id for g in r.shared_groups] if getattr(r, "shared_groups", None) else [],
+        "isHidden": bool(getattr(r, "is_hidden", False)),
     }
     return AlertRulePydantic.parse_obj(payload)
 
@@ -54,6 +56,7 @@ def channel_to_pydantic_for_viewer(ch, viewer_user_id: Any) -> NotificationChann
         "createdBy": ch.created_by,
         "visibility": ch.visibility or "private",
         "sharedGroupIds": [g.id for g in ch.shared_groups] if getattr(ch, "shared_groups", None) else [],
+        "isHidden": bool(getattr(ch, "is_hidden", False)),
     }
     return NotificationChannelPydantic.parse_obj(payload)
 

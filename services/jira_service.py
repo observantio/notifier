@@ -11,6 +11,7 @@ You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2
 import base64
 import logging
 import os
+from urllib.parse import urlparse
 from typing import Any, Dict, List, Literal, Optional
 import httpx
 from config import config
@@ -40,6 +41,7 @@ class JiraService:
 
     def _auth_headers(self, credentials: Credentials = None) -> Dict[str, str]:
         scoped = credentials or {}
+        auth_mode = str(scoped.get("auth_mode") or scoped.get("authMode") or "").strip().lower()
         bearer = (
             scoped.get("bearer")
             or scoped.get("bearer_token")
@@ -47,11 +49,23 @@ class JiraService:
             or self.bearer
             or ""
         ).strip()
-        if bearer:
-            return {"Authorization": f"Bearer {bearer}"}
-
         email = (scoped.get("email") or self.email or "").strip()
         api_token = (scoped.get("api_token") or scoped.get("apiToken") or self.api_token or "").strip()
+
+        # Respect explicit auth mode first to avoid accidental precedence bugs.
+        if auth_mode in {"bearer", "sso"}:
+            if not bearer:
+                raise JiraError(f"Jira {auth_mode} auth requires bearer token")
+            return {"Authorization": f"Bearer {bearer}"}
+        if auth_mode == "api_token":
+            if not (email and api_token):
+                raise JiraError("Jira api_token auth requires email and api_token")
+            token = base64.b64encode(f"{email}:{api_token}".encode()).decode()
+            return {"Authorization": f"Basic {token}"}
+
+        # Backward-compatible fallback when auth mode is absent.
+        if bearer:
+            return {"Authorization": f"Bearer {bearer}"}
         if email and api_token:
             token = base64.b64encode(f"{email}:{api_token}".encode()).decode()
             return {"Authorization": f"Basic {token}"}
@@ -90,7 +104,24 @@ class JiraService:
             return response.json() if response.content else {}
         except httpx.HTTPStatusError as exc:
             logger.warning("Jira %s failed: %s %s", method, exc.response.status_code, exc.response.text[:240])
+            detail = (exc.response.text or "").strip()
+            if detail:
+                raise JiraError(f"Jira API error: {exc.response.status_code} - {detail[:240]}") from exc
             raise JiraError(f"Jira API error: {exc.response.status_code}") from exc
+        except httpx.TimeoutException as exc:
+            host = urlparse(url).netloc or "jira"
+            logger.warning("Jira %s timeout contacting %s", method, host)
+            raise JiraError(f"Jira request timed out while contacting {host}") from exc
+        except httpx.RequestError as exc:
+            host = urlparse(url).netloc or "jira"
+            logger.warning("Jira %s connection failure contacting %s: %s", method, host, exc)
+            raise JiraError(f"Unable to connect to Jira host {host}") from exc
+        except RuntimeError as exc:
+            # uvloop/anyio may surface closed transport/handler shutdown as RuntimeError.
+            # Treat these as transient connectivity failures instead of noisy stack traces.
+            host = urlparse(url).netloc or "jira"
+            logger.warning("Jira %s runtime transport failure contacting %s: %s", method, host, exc)
+            raise JiraError(f"Unable to connect to Jira host {host}") from exc
         except JiraError:
             raise
         except Exception as exc:
@@ -109,15 +140,19 @@ class JiraService:
         summary: str,
         description: Optional[str] = None,
         issue_type: str = "Task",
+        priority: Optional[str] = None,
         credentials: Credentials = None,
     ) -> Dict[str, Any]:
+        fields = {
+            "project": {"key": project_key},
+            "summary": summary,
+            "description": description or "",
+            "issuetype": {"name": issue_type},
+        }
+        if priority:
+            fields["priority"] = {"name": str(priority).strip()}
         payload = {
-            "fields": {
-                "project": {"key": project_key},
-                "summary": summary,
-                "description": description or "",
-                "issuetype": {"name": issue_type},
-            }
+            "fields": fields
         }
         data = await self._post("/rest/api/2/issue", payload, credentials)
         key = data.get("key")
@@ -144,6 +179,89 @@ class JiraService:
             for it in (issue_types or [])
             if (name := str(it.get("name") or "").strip())
         ]
+
+    async def list_transitions(self, issue_key: str, credentials: Credentials = None) -> List[Dict[str, Any]]:
+        data = await self._get(f"/rest/api/2/issue/{issue_key}/transitions", credentials)
+        transitions = data.get("transitions") if isinstance(data, dict) else []
+        return [item for item in (transitions or []) if isinstance(item, dict)]
+
+    async def transition_issue(
+        self,
+        issue_key: str,
+        transition_id: str,
+        credentials: Credentials = None,
+    ) -> Dict[str, Any]:
+        return await self._post(
+            f"/rest/api/2/issue/{issue_key}/transitions",
+            {"transition": {"id": str(transition_id)}},
+            credentials,
+        )
+
+    async def transition_issue_to_todo(self, issue_key: str, credentials: Credentials = None) -> bool:
+        return await self._transition_issue_by_target(
+            issue_key,
+            credentials=credentials,
+            target_names={"to do", "todo"},
+            transition_names={"to do", "todo"},
+            status_category_key="new",
+        )
+
+    async def transition_issue_to_in_progress(self, issue_key: str, credentials: Credentials = None) -> bool:
+        return await self._transition_issue_by_target(
+            issue_key,
+            credentials=credentials,
+            target_names={"in progress", "in-progress", "doing"},
+            transition_names={"start progress", "in progress", "start"},
+            status_category_key="indeterminate",
+        )
+
+    async def transition_issue_to_done(self, issue_key: str, credentials: Credentials = None) -> bool:
+        return await self._transition_issue_by_target(
+            issue_key,
+            credentials=credentials,
+            target_names={"done", "closed", "resolved"},
+            transition_names={"done", "close issue", "resolve issue", "resolve"},
+            status_category_key="done",
+        )
+
+    async def _transition_issue_by_target(
+        self,
+        issue_key: str,
+        *,
+        credentials: Credentials = None,
+        target_names: set[str],
+        transition_names: set[str],
+        status_category_key: str,
+    ) -> bool:
+        transitions = await self.list_transitions(issue_key, credentials)
+        if not transitions:
+            return False
+
+        def _name(item: Dict[str, Any]) -> str:
+            return str(item.get("name") or "").strip().lower()
+
+        def _target_name(item: Dict[str, Any]) -> str:
+            to_obj = item.get("to") if isinstance(item.get("to"), dict) else {}
+            return str(to_obj.get("name") or "").strip().lower()
+
+        def _status_category(item: Dict[str, Any]) -> str:
+            to_obj = item.get("to") if isinstance(item.get("to"), dict) else {}
+            category = to_obj.get("statusCategory") if isinstance(to_obj.get("statusCategory"), dict) else {}
+            return str(category.get("key") or "").strip().lower()
+
+        preferred = next((item for item in transitions if _target_name(item) in target_names), None)
+        if not preferred:
+            preferred = next((item for item in transitions if _name(item) in transition_names), None)
+        if not preferred:
+            preferred = next((item for item in transitions if _status_category(item) == status_category_key), None)
+        if not preferred:
+            return False
+
+        transition_id = str(preferred.get("id") or "").strip()
+        if not transition_id:
+            return False
+        await self.transition_issue(issue_key, transition_id, credentials)
+        return True
 
     async def add_comment(self, issue_key: str, text: str, credentials: Credentials = None) -> Dict[str, Any]:
         return await self._post(f"/rest/api/2/issue/{issue_key}/comment", {"body": text}, credentials)

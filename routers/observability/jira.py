@@ -14,13 +14,13 @@ from typing import Optional
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
 from fastapi.concurrency import run_in_threadpool
+from pydantic import BaseModel
 
 from middleware.dependencies import require_permission_with_scope
 from middleware.error_handlers import handle_route_errors
 from models.access.auth_models import Permission, TokenData
 from models.alerting.incidents import AlertIncident, AlertIncidentUpdateRequest
 from models.alerting.requests import (
-    IncidentJiraCommentRequest,
     IncidentJiraCreateRequest,
     JiraConfigUpdateRequest,
     JiraIntegrationCreateRequest,
@@ -42,19 +42,28 @@ from services.alerting.integration_security_service import (
     resolve_jira_integration,
     save_tenant_jira_config,
     save_tenant_jira_integrations,
-    sync_jira_comments_to_incident_notes,
     validate_jira_credentials,
     validate_shared_group_ids_for_user,
 )
 from services.jira_service import JiraError, jira_service
 from services.storage_db_service import DatabaseStorageService
 from services.jira.helpers import jira_issue_types_via_integration, jira_projects_via_integration, resolve_incident_jira_credentials
+from services.incidents.helpers import (
+    build_formatted_incident_note_bodies,
+    format_incident_description,
+    map_severity_to_jira_priority,
+)
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/alertmanager", tags=["alertmanager-jira"])
 
 storage_service = DatabaseStorageService()
+SUPPORTED_INCIDENT_JIRA_ISSUE_TYPES = {"task", "bug"}
+
+
+class HideTogglePayload(BaseModel):
+    hidden: bool = True
 
 @router.get("/jira/config")
 async def get_jira_config(
@@ -123,15 +132,28 @@ async def list_jira_issue_types(
 
 @router.get("/integrations/jira")
 async def list_jira_integrations(
+    show_hidden: bool = Query(False),
     current_user: TokenData = Depends(require_permission_with_scope(Permission.READ_INCIDENTS, "alertmanager")),
 ):
     integrations = load_tenant_jira_integrations(current_user.tenant_id)
+    hidden_ids = set(
+        await run_in_threadpool(
+            storage_service.get_hidden_jira_integration_ids,
+            current_user.tenant_id,
+            current_user.user_id,
+        )
+    )
+    visible_items = []
+    for item in integrations:
+        if not jira_integration_has_access(item, current_user, write=False):
+            continue
+        masked = mask_jira_integration(item, current_user)
+        masked["isHidden"] = str(masked.get("id") or "") in hidden_ids
+        if not show_hidden and masked["isHidden"]:
+            continue
+        visible_items.append(masked)
     return {
-        "items": [
-            mask_jira_integration(item, current_user)
-            for item in integrations
-            if jira_integration_has_access(item, current_user, write=False)
-        ]
+        "items": visible_items
     }
 
 
@@ -272,7 +294,41 @@ async def delete_jira_integration(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only integration owner can delete this integration")
     integrations.pop(index)
     save_tenant_jira_integrations(current_user.tenant_id, integrations)
-    return {"status": "success"}
+    unlinked = await run_in_threadpool(
+        storage_service.unlink_jira_integration_from_incidents,
+        current_user.tenant_id,
+        integration_id,
+    )
+    return {"status": "success", "incidentsUnlinked": unlinked}
+
+
+@router.post("/integrations/jira/{integration_id}/hide")
+@handle_route_errors()
+async def hide_jira_integration(
+    integration_id: str,
+    payload: HideTogglePayload = Body(...),
+    current_user: TokenData = Depends(require_permission_with_scope(Permission.READ_INCIDENTS, "alertmanager")),
+):
+    integrations = load_tenant_jira_integrations(current_user.tenant_id)
+    match = next((item for item in integrations if str(item.get("id")) == integration_id), None)
+    if not match or not jira_integration_has_access(match, current_user, write=False):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Jira integration not found")
+    if str(match.get("createdBy") or "") == current_user.user_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You cannot hide your own Jira integration")
+    if normalize_visibility(str(match.get("visibility") or "private"), "private") == "private":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only shared Jira integrations can be hidden")
+
+    hidden = bool(payload.hidden)
+    ok = await run_in_threadpool(
+        storage_service.toggle_jira_integration_hidden,
+        current_user.tenant_id,
+        current_user.user_id,
+        integration_id,
+        hidden,
+    )
+    if not ok:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to update Jira integration visibility")
+    return {"status": "success", "hidden": hidden}
 
 
 @router.post("/incidents/{incident_id}/jira", response_model=AlertIncident)
@@ -292,6 +348,12 @@ async def create_incident_jira(
     )
     if not incident:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Incident not found")
+    has_existing_link = bool(str(getattr(incident, "jira_ticket_key", "") or "").strip())
+    if has_existing_link and not bool(getattr(payload, "replaceExisting", False)):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Incident already linked to Jira ticket {incident.jira_ticket_key}",
+        )
 
     integration_id = (payload.integrationId or "").strip()
     if not integration_id:
@@ -304,14 +366,20 @@ async def create_incident_jira(
     project = (payload.projectKey or "").strip()
     if not project:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="projectKey is required")
+    requested_issue_type = str(payload.issueType or "Task").strip()
+    if requested_issue_type.lower() not in SUPPORTED_INCIDENT_JIRA_ISSUE_TYPES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only Jira issue types Task and Bug are supported",
+        )
 
     try:
         res = await jira_service.create_issue(
             project_key=project,
             summary=(payload.summary or incident.alert_name or "Incident").strip(),
-            description=payload.description
-            or f"Incident: {incident.alert_name}\n\nLabels: {incident.labels or {}}\nAnnotations: {incident.annotations or {}}",
-            issue_type=(payload.issueType or "Task").strip(),
+            description=format_incident_description(incident, payload.description),
+            issue_type="Bug" if requested_issue_type.lower() == "bug" else "Task",
+            priority=map_severity_to_jira_priority(getattr(incident, "severity", None)),
             credentials=jira_integration_credentials(integration),
         )
     except JiraError as exc:
@@ -319,6 +387,18 @@ async def create_incident_jira(
     except Exception:
         logger.exception("Unexpected error creating Jira issue for incident %s", incident_id)
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to create Jira issue")
+
+    issue_key = str(res.get("key") or "").strip()
+    if issue_key:
+        try:
+            await jira_service.transition_issue_to_todo(
+                issue_key=issue_key,
+                credentials=jira_integration_credentials(integration),
+            )
+        except JiraError as exc:
+            logger.warning("Failed to move newly created Jira issue %s to To Do: %s", issue_key, exc)
+        except Exception:
+            logger.exception("Unexpected error while moving Jira issue %s to To Do", issue_key)
 
     updated = await run_in_threadpool(
         storage_service.update_incident,
@@ -334,8 +414,76 @@ async def create_incident_jira(
     if not updated:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to persist Jira metadata")
 
+    # Backfill existing incident notes into the new Jira ticket so the ticket
+    # starts with the full incident context.
+    try:
+        for formatted_text in build_formatted_incident_note_bodies(updated, current_user):
+            await jira_service.add_comment(
+                issue_key=res.get("key"),
+                text=formatted_text,
+                credentials=jira_integration_credentials(integration),
+            )
+    except JiraError as exc:
+        logger.warning("Failed to backfill incident notes to Jira issue %s: %s", res.get("key"), exc)
+    except Exception:
+        logger.exception("Unexpected error while backfilling incident notes to Jira issue %s", res.get("key"))
+
     logger.info("Created Jira issue %s for incident %s", res.get("key"), incident_id)
     return updated
+
+
+@router.post("/incidents/{incident_id}/jira/sync-notes")
+@handle_route_errors()
+async def sync_incident_jira_notes(
+    incident_id: str,
+    current_user: TokenData = Depends(require_permission_with_scope(Permission.UPDATE_INCIDENTS, "alertmanager")),
+):
+    group_ids = getattr(current_user, "group_ids", []) or []
+    incident = await run_in_threadpool(
+        storage_service.get_incident_for_user,
+        incident_id,
+        current_user.tenant_id,
+        current_user.user_id,
+        group_ids,
+    )
+    if not incident:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Incident not found")
+    if not incident.jira_ticket_key:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Incident is not linked to Jira")
+
+    credentials = resolve_incident_jira_credentials(incident, current_user.tenant_id, current_user)
+    if credentials is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No usable Jira credentials found for this incident")
+
+    note_bodies = build_formatted_incident_note_bodies(incident, current_user)
+    if not note_bodies:
+        return {"synced": 0, "skipped": 0, "totalNotes": 0}
+
+    try:
+        existing_comments = await jira_service.list_comments(incident.jira_ticket_key, credentials=credentials)
+    except JiraError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc))
+
+    existing_bodies = {
+        str(item.get("body") or "").strip()
+        for item in (existing_comments or [])
+        if isinstance(item, dict)
+    }
+
+    synced = 0
+    skipped = 0
+    for body in note_bodies:
+        if body in existing_bodies:
+            skipped += 1
+            continue
+        try:
+            await jira_service.add_comment(incident.jira_ticket_key, body, credentials=credentials)
+            existing_bodies.add(body)
+            synced += 1
+        except JiraError as exc:
+            raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc))
+
+    return {"synced": synced, "skipped": skipped, "totalNotes": len(note_bodies)}
 
 
 @router.get("/incidents/{incident_id}/jira/comments")
@@ -365,76 +513,4 @@ async def list_incident_jira_comments(
     except JiraError as exc:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc))
 
-    sync_jira_comments_to_incident_notes(incident_id, current_user.tenant_id, comments)
     return {"comments": comments}
-
-
-@router.post("/incidents/{incident_id}/jira/sync-comments")
-async def sync_incident_jira_comments(
-    incident_id: str,
-    current_user: TokenData = Depends(require_permission_with_scope(Permission.UPDATE_INCIDENTS, "alertmanager")),
-):
-    group_ids = getattr(current_user, "group_ids", []) or []
-    incident = await run_in_threadpool(
-        storage_service.get_incident_for_user,
-        incident_id,
-        current_user.tenant_id,
-        current_user.user_id,
-        group_ids,
-    )
-    if not incident:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Incident not found")
-    if not incident.jira_ticket_key:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Incident has no Jira ticket key")
-
-    credentials = resolve_incident_jira_credentials(incident, current_user.tenant_id, current_user)
-    if credentials is None:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Jira integration is not enabled or incomplete")
-
-    try:
-        comments = await jira_service.list_comments(incident.jira_ticket_key, credentials=credentials)
-    except JiraError as exc:
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc))
-
-    appended = sync_jira_comments_to_incident_notes(incident_id, current_user.tenant_id, comments)
-    return {"status": "success", "synced": appended, "count": len(comments)}
-
-
-@router.post("/incidents/{incident_id}/jira/comments")
-async def create_incident_jira_comment(
-    incident_id: str,
-    payload: IncidentJiraCommentRequest = Body(...),
-    current_user: TokenData = Depends(require_permission_with_scope(Permission.UPDATE_INCIDENTS, "alertmanager")),
-):
-    group_ids = getattr(current_user, "group_ids", []) or []
-    incident = await run_in_threadpool(
-        storage_service.get_incident_for_user,
-        incident_id,
-        current_user.tenant_id,
-        current_user.user_id,
-        group_ids,
-    )
-    if not incident:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Incident not found")
-    if not incident.jira_ticket_key:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Incident has no Jira ticket key")
-
-    text = (payload.text or "").strip()
-    if not text:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Comment text is required")
-
-    credentials = resolve_incident_jira_credentials(incident, current_user.tenant_id, current_user)
-    if credentials is None:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Jira integration is not enabled or incomplete")
-
-    try:
-        comment = await jira_service.add_comment(incident.jira_ticket_key, text, credentials=credentials)
-    except JiraError as exc:
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc))
-
-    try:
-        sync_jira_comments_to_incident_notes(incident_id, current_user.tenant_id, [comment])
-    except Exception:
-        logger.warning("Failed to persist Jira comment into incident notes for incident %s", incident_id)
-
-    return {"status": "success", "comment": comment}

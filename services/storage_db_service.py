@@ -11,6 +11,8 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional, Tuple
 
+from database import get_db_session
+from db_models import HiddenJiraIntegration, HiddenNotificationChannel, HiddenSilence
 from models.alerting.channels import NotificationChannel, NotificationChannelCreate
 from models.alerting.incidents import AlertIncident, AlertIncidentUpdateRequest
 from models.alerting.rules import AlertRule, AlertRuleCreate
@@ -39,7 +41,7 @@ class DatabaseStorageService:
         group_id: Optional[str] = None,
         limit: Optional[int] = None,
         offset: int = 0,
-    ) -> List[AlertIncident]:
+        ) -> List[AlertIncident]:
         return self.incidents.list_incidents(
             tenant_id=tenant_id,
             user_id=user_id,
@@ -49,6 +51,28 @@ class DatabaseStorageService:
             group_id=group_id,
             limit=limit,
             offset=offset,
+        )
+
+    def get_incident_summary(
+        self,
+        tenant_id: str,
+        user_id: str,
+        group_ids: Optional[List[str]] = None,
+    ) -> Dict[str, Any]:
+        return self.incidents.get_incident_summary(
+            tenant_id=tenant_id,
+            user_id=user_id,
+            group_ids=group_ids,
+        )
+
+    def unlink_jira_integration_from_incidents(
+        self,
+        tenant_id: str,
+        integration_id: str,
+    ) -> int:
+        return self.incidents.unlink_jira_integration_from_incidents(
+            tenant_id=tenant_id,
+            integration_id=integration_id,
         )
 
     def get_incident_for_user(
@@ -100,6 +124,15 @@ class DatabaseStorageService:
 
     def get_alert_rules_for_org(self, tenant_id: str, org_id: str) -> List[AlertRule]:
         return self.rules.get_alert_rules_for_org(tenant_id, org_id)
+
+    def get_hidden_rule_ids(self, tenant_id: str, user_id: str) -> List[str]:
+        return self.rules.get_hidden_rule_ids(tenant_id, user_id)
+
+    def get_hidden_rule_names(self, tenant_id: str, user_id: str) -> List[str]:
+        return self.rules.get_hidden_rule_names(tenant_id, user_id)
+
+    def toggle_rule_hidden(self, tenant_id: str, user_id: str, rule_id: str, hidden: bool) -> bool:
+        return self.rules.toggle_rule_hidden(tenant_id, user_id, rule_id, hidden)
 
     def get_alert_rules_with_owner(
         self,
@@ -206,3 +239,121 @@ class DatabaseStorageService:
 
     def get_notification_channels_for_rule_name(self, rule_name: str) -> List[NotificationChannel]:
         return self.channels.get_notification_channels_for_rule_name(rule_name)
+
+    def get_hidden_silence_ids(self, tenant_id: str, user_id: str) -> List[str]:
+        with get_db_session() as db:
+            rows = (
+                db.query(HiddenSilence.silence_id)
+                .filter(
+                    HiddenSilence.tenant_id == tenant_id,
+                    HiddenSilence.user_id == user_id,
+                )
+                .all()
+            )
+            return [str(silence_id) for (silence_id,) in rows]
+
+    def toggle_silence_hidden(self, tenant_id: str, user_id: str, silence_id: str, hidden: bool) -> bool:
+        with get_db_session() as db:
+            existing = (
+                db.query(HiddenSilence)
+                .filter(
+                    HiddenSilence.tenant_id == tenant_id,
+                    HiddenSilence.user_id == user_id,
+                    HiddenSilence.silence_id == silence_id,
+                )
+                .first()
+            )
+
+            if hidden:
+                if not existing:
+                    db.add(
+                        HiddenSilence(
+                            tenant_id=tenant_id,
+                            user_id=user_id,
+                            silence_id=silence_id,
+                        )
+                    )
+            else:
+                if existing:
+                    db.delete(existing)
+            return True
+
+    def get_hidden_channel_ids(self, tenant_id: str, user_id: str) -> List[str]:
+        with get_db_session() as db:
+            rows = (
+                db.query(HiddenNotificationChannel.channel_id)
+                .filter(
+                    HiddenNotificationChannel.tenant_id == tenant_id,
+                    HiddenNotificationChannel.user_id == user_id,
+                )
+                .all()
+            )
+            return [str(channel_id) for (channel_id,) in rows]
+
+    def toggle_channel_hidden(self, tenant_id: str, user_id: str, channel_id: str, hidden: bool) -> bool:
+        with get_db_session() as db:
+            existing = (
+                db.query(HiddenNotificationChannel)
+                .filter(
+                    HiddenNotificationChannel.tenant_id == tenant_id,
+                    HiddenNotificationChannel.user_id == user_id,
+                    HiddenNotificationChannel.channel_id == channel_id,
+                )
+                .first()
+            )
+            if hidden:
+                if not existing:
+                    db.add(
+                        HiddenNotificationChannel(
+                            tenant_id=tenant_id,
+                            user_id=user_id,
+                            channel_id=channel_id,
+                        )
+                    )
+            else:
+                if existing:
+                    db.delete(existing)
+            return True
+
+    def get_hidden_jira_integration_ids(self, tenant_id: str, user_id: str) -> List[str]:
+        with get_db_session() as db:
+            rows = (
+                db.query(HiddenJiraIntegration.integration_id)
+                .filter(
+                    HiddenJiraIntegration.tenant_id == tenant_id,
+                    HiddenJiraIntegration.user_id == user_id,
+                )
+                .all()
+            )
+            return [str(integration_id) for (integration_id,) in rows]
+
+    def toggle_jira_integration_hidden(
+        self,
+        tenant_id: str,
+        user_id: str,
+        integration_id: str,
+        hidden: bool,
+    ) -> bool:
+        with get_db_session() as db:
+            existing = (
+                db.query(HiddenJiraIntegration)
+                .filter(
+                    HiddenJiraIntegration.tenant_id == tenant_id,
+                    HiddenJiraIntegration.user_id == user_id,
+                    HiddenJiraIntegration.integration_id == integration_id,
+                )
+                .first()
+            )
+            if hidden:
+                if not existing:
+                    db.add(
+                        HiddenJiraIntegration(
+                            tenant_id=tenant_id,
+                            user_id=user_id,
+                            integration_id=integration_id,
+                        )
+                    )
+            else:
+                if existing:
+                    db.delete(existing)
+            return True

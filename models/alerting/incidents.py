@@ -63,6 +63,7 @@ class AlertIncidentUpdateRequest(BaseModel):
     status: Optional[str] = None
     assignee: Optional[str] = None
     note: Optional[str] = None
+    actor_username: Optional[str] = Field(None, alias="actorUsername")
     visibility: Optional[IncidentVisibility] = None
     shared_group_ids: Optional[List[str]] = Field(default=None, alias="sharedGroupIds")
     jira_ticket_key: Optional[str] = Field(None, alias="jiraTicketKey")

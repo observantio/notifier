@@ -9,23 +9,48 @@ You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2
 """
 
 import logging
-from datetime import datetime, timezone
+import os
+from urllib.parse import urlparse
 from typing import Dict, List, Optional
 
 from cryptography.fernet import Fernet
 from fastapi import HTTPException, status
+from sqlalchemy.orm.attributes import flag_modified
 
 from config import config
 from database import get_db_session
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
-from db_models import AlertIncident as AlertIncidentDB, Tenant
+from db_models import Tenant
 from models.access.auth_models import Role, TokenData
 from services.common.url_utils import is_safe_http_url
 from services.common.visibility import normalize_visibility as _base_normalize_visibility
 
 ALLOWED_JIRA_AUTH_MODES = {"api_token", "bearer", "sso"}
 logger = logging.getLogger(__name__)
+
+
+def _normalized_id(value: object) -> str:
+    return str(value or "").strip()
+
+
+def _normalized_id_list(values: Optional[List[object]]) -> List[str]:
+    return [_normalized_id(v) for v in (values or []) if _normalized_id(v)]
+
+
+def _current_user_id(current_user: TokenData) -> str:
+    return _normalized_id(getattr(current_user, "user_id", ""))
+
+
+def _tenant_settings_copy(tenant: Tenant) -> Dict[str, object]:
+    current = tenant.settings if isinstance(tenant.settings, dict) else {}
+    return dict(current)
+
+
+def _persist_tenant_settings(tenant: Tenant, settings: Dict[str, object]) -> None:
+    tenant.settings = dict(settings)
+    # settings is JSON; force SQLAlchemy to persist nested mutations reliably.
+    flag_modified(tenant, "settings")
 
 
 def ensure_default_tenant(db) -> str:
@@ -140,7 +165,7 @@ def save_tenant_jira_config(
         tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
         if not tenant:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
-        settings = tenant.settings if isinstance(tenant.settings, dict) else {}
+        settings = _tenant_settings_copy(tenant)
         jira_cfg = {
             "enabled": bool(enabled),
             "base_url": normalized_url,
@@ -149,7 +174,7 @@ def save_tenant_jira_config(
             "bearer": encrypt_tenant_secret(normalized_bearer),
         }
         settings["jira"] = jira_cfg
-        tenant.settings = settings
+        _persist_tenant_settings(tenant, settings)
         db.flush()
         return {
             "enabled": jira_cfg["enabled"],
@@ -190,7 +215,18 @@ def normalize_visibility(value: Optional[str], default_value: str = "private") -
 
 
 def is_jira_sso_available() -> bool:
-    return config.AUTH_PROVIDER == "keycloak" and bool(config.OIDC_ISSUER_URL and config.OIDC_CLIENT_ID)
+    # BeNotified may run with a slimmer Config surface than BeObservant.
+    # Use getattr/env fallbacks so missing attributes never crash requests.
+    auth_provider = str(
+        getattr(config, "AUTH_PROVIDER", None) or os.getenv("AUTH_PROVIDER", "")
+    ).strip().lower()
+    oidc_issuer = str(
+        getattr(config, "OIDC_ISSUER_URL", None) or os.getenv("OIDC_ISSUER_URL", "")
+    ).strip()
+    oidc_client_id = str(
+        getattr(config, "OIDC_CLIENT_ID", None) or os.getenv("OIDC_CLIENT_ID", "")
+    ).strip()
+    return auth_provider in {"keycloak", "oidc"} and bool(oidc_issuer and oidc_client_id)
 
 
 def normalize_jira_auth_mode(value: Optional[str]) -> str:
@@ -216,8 +252,16 @@ def validate_jira_credentials(
     api_token: Optional[str],
     bearer_token: Optional[str],
 ) -> None:
-    if not is_safe_http_url(str(base_url or "").strip()):
+    normalized_base_url = str(base_url or "").strip()
+    if not is_safe_http_url(normalized_base_url):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Jira base URL is missing or invalid")
+    host = (urlparse(normalized_base_url).hostname or "").strip().lower()
+    is_atlassian_cloud = host.endswith(".atlassian.net")
+    if is_atlassian_cloud and auth_mode in {"bearer", "sso"}:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Atlassian Cloud requires Email + API token (authMode=api_token)",
+        )
     if auth_mode == "api_token":
         if not str(email or "").strip():
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Jira email is required for api_token auth mode")
@@ -244,9 +288,9 @@ def save_tenant_jira_integrations(tenant_id: str, items: List[Dict[str, object]]
         tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
         if not tenant:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
-        settings = tenant.settings if isinstance(tenant.settings, dict) else {}
-        settings["jira_integrations"] = items
-        tenant.settings = settings
+        settings = _tenant_settings_copy(tenant)
+        settings["jira_integrations"] = [dict(item) for item in (items or [])]
+        _persist_tenant_settings(tenant, settings)
         db.flush()
 
 
@@ -268,7 +312,7 @@ def validate_shared_group_ids_for_user(
 
 
 def jira_integration_has_access(item: Dict[str, object], current_user: TokenData, *, write: bool = False) -> bool:
-    if str(item.get("createdBy") or "") == current_user.user_id:
+    if _normalized_id(item.get("createdBy")) == _current_user_id(current_user):
         return True
     if write:
         return False
@@ -276,14 +320,14 @@ def jira_integration_has_access(item: Dict[str, object], current_user: TokenData
     if visibility == "tenant":
         return True
     if visibility == "group":
-        shared_group_ids = [str(gid) for gid in (item.get("sharedGroupIds") or []) if isinstance(gid, str) and gid.strip()]
-        user_groups = getattr(current_user, "group_ids", []) or []
+        shared_group_ids = set(_normalized_id_list(item.get("sharedGroupIds") or []))
+        user_groups = set(_normalized_id_list(getattr(current_user, "group_ids", []) or []))
         return bool(set(shared_group_ids) & set(user_groups))
     return False
 
 
 def mask_jira_integration(item: Dict[str, object], current_user: TokenData) -> Dict[str, object]:
-    is_owner = str(item.get("createdBy") or "") == current_user.user_id
+    is_owner = _normalized_id(item.get("createdBy")) == _current_user_id(current_user)
     return {
         "id": item.get("id"),
         "name": item.get("name"),
@@ -336,39 +380,3 @@ def integration_is_usable(item: Dict[str, object]) -> bool:
     if credentials["auth_mode"] == "api_token":
         return bool(credentials.get("email") and credentials.get("api_token"))
     return bool(credentials.get("bearer"))
-
-
-def sync_jira_comments_to_incident_notes(incident_id: str, tenant_id: str, comments: List[Dict[str, object]]) -> int:
-    if not comments:
-        return 0
-    with get_db_session() as db:
-        incident = (
-            db.query(AlertIncidentDB)
-            .filter(AlertIncidentDB.id == incident_id, AlertIncidentDB.tenant_id == tenant_id)
-            .first()
-        )
-        if not incident:
-            return 0
-        notes = list(incident.notes or [])
-        existing_comment_ids = {
-            str(note["jiraCommentId"])
-            for note in notes
-            if isinstance(note, dict) and note.get("jiraCommentId")
-        }
-        appended = 0
-        for comment in comments:
-            comment_id = str(comment.get("id") or "").strip()
-            if not comment_id or comment_id in existing_comment_ids:
-                continue
-            notes.append({
-                "author": f"jira:{comment.get('author') or 'jira'}",
-                "text": str(comment.get("body") or ""),
-                "createdAt": str(comment.get("created") or datetime.now(timezone.utc).isoformat()),
-                "jiraCommentId": comment_id,
-            })
-            existing_comment_ids.add(comment_id)
-            appended += 1
-        if appended:
-            incident.notes = notes
-            db.flush()
-        return appended

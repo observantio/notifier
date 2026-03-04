@@ -15,10 +15,11 @@ from typing import List, Optional, Tuple, cast
 from sqlalchemy.orm import joinedload
 
 from database import get_db_session
-from db_models import AlertRule as AlertRuleDB
+from db_models import AlertRule as AlertRuleDB, HiddenAlertRule
 from models.alerting.rules import AlertRule, AlertRuleCreate
 from services.common.access import has_access, assign_shared_groups
 from services.common.pagination import cap_pagination
+from services.common.tenants import ensure_tenant_exists
 from services.storage.serializers import rule_to_pydantic
 
 logger = logging.getLogger(__name__)
@@ -28,6 +29,69 @@ def _shared_group_ids(db_obj) -> List[str]:
     return [g.id for g in db_obj.shared_groups] if getattr(db_obj, "shared_groups", None) else []
 
 class RuleStorageService:
+    def get_hidden_rule_ids(self, tenant_id: str, user_id: str) -> List[str]:
+        with get_db_session() as db:
+            rows = (
+                db.query(HiddenAlertRule.rule_id)
+                .filter(
+                    HiddenAlertRule.tenant_id == tenant_id,
+                    HiddenAlertRule.user_id == user_id,
+                )
+                .all()
+            )
+            return [str(rule_id) for (rule_id,) in rows]
+
+    def get_hidden_rule_names(self, tenant_id: str, user_id: str) -> List[str]:
+        with get_db_session() as db:
+            rows = (
+                db.query(AlertRuleDB.name)
+                .join(HiddenAlertRule, HiddenAlertRule.rule_id == AlertRuleDB.id)
+                .filter(
+                    HiddenAlertRule.tenant_id == tenant_id,
+                    HiddenAlertRule.user_id == user_id,
+                    AlertRuleDB.tenant_id == tenant_id,
+                )
+                .all()
+            )
+            return [str(name) for (name,) in rows if str(name or "").strip()]
+
+    def toggle_rule_hidden(self, tenant_id: str, user_id: str, rule_id: str, hidden: bool) -> bool:
+        with get_db_session() as db:
+            rule = (
+                db.query(AlertRuleDB)
+                .filter(
+                    AlertRuleDB.id == rule_id,
+                    AlertRuleDB.tenant_id == tenant_id,
+                )
+                .first()
+            )
+            if not rule:
+                return False
+
+            existing = (
+                db.query(HiddenAlertRule)
+                .filter(
+                    HiddenAlertRule.tenant_id == tenant_id,
+                    HiddenAlertRule.user_id == user_id,
+                    HiddenAlertRule.rule_id == rule_id,
+                )
+                .first()
+            )
+
+            if hidden:
+                if not existing:
+                    db.add(
+                        HiddenAlertRule(
+                            tenant_id=tenant_id,
+                            user_id=user_id,
+                            rule_id=rule_id,
+                        )
+                    )
+            else:
+                if existing:
+                    db.delete(existing)
+            return True
+
     def get_public_alert_rules(self, tenant_id: str) -> List[AlertRule]:
         with get_db_session() as db:
             rules = (
@@ -143,6 +207,7 @@ class RuleStorageService:
         group_ids: Optional[List[str]] = None,
     ) -> AlertRule:
         with get_db_session() as db:
+            ensure_tenant_exists(db, tenant_id)
             rule = AlertRuleDB(
                 id=str(uuid.uuid4()),
                 tenant_id=tenant_id,

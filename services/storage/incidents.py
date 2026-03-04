@@ -11,6 +11,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import asyncio
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
@@ -26,7 +27,15 @@ from models.alerting.incidents import AlertIncident, AlertIncidentUpdateRequest
 from services.common.access import has_access
 from services.common.meta import INCIDENT_META_KEY, parse_meta, _safe_group_ids
 from services.common.pagination import cap_pagination
+from services.common.tenants import ensure_tenant_exists
 from services.common.visibility import normalize_storage_visibility
+from services.alerting.integration_security_service import (
+    get_effective_jira_credentials,
+    integration_is_usable,
+    jira_integration_credentials,
+    load_tenant_jira_integrations,
+)
+from services.jira_service import JiraError, jira_service
 from services.storage.serializers import incident_to_pydantic
 
 logger = logging.getLogger(__name__)
@@ -63,12 +72,171 @@ def _resolve_rule_by_alertname(db: Session, tenant_id: str, labels: Dict[str, An
         return None
 
 
+def _run_async(coro) -> None:
+    try:
+        asyncio.run(coro)
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        try:
+            loop.run_until_complete(coro)
+        finally:
+            loop.close()
+
+
+def _resolve_incident_jira_credentials(tenant_id: str, integration_id: Optional[str]) -> Optional[Dict[str, Any]]:
+    integration_id = str(integration_id or "").strip()
+    if integration_id:
+        for item in load_tenant_jira_integrations(tenant_id):
+            if str(item.get("id") or "").strip() != integration_id:
+                continue
+            if not integration_is_usable(item):
+                return None
+            return jira_integration_credentials(item)
+    tenant_credentials = get_effective_jira_credentials(tenant_id)
+    if tenant_credentials.get("base_url"):
+        return tenant_credentials
+    return None
+
+
+def _move_reopened_incident_jira_ticket_to_todo(tenant_id: str, incident: AlertIncidentDB) -> None:
+    annotations = incident.annotations if isinstance(incident.annotations, dict) else {}
+    meta = parse_meta(annotations)
+    issue_key = str(meta.get("jira_ticket_key") or "").strip()
+    if not issue_key:
+        return
+    integration_id = str(meta.get("jira_integration_id") or "").strip() or None
+    credentials = _resolve_incident_jira_credentials(tenant_id, integration_id)
+    if not credentials:
+        return
+    try:
+        _run_async(jira_service.transition_issue_to_todo(issue_key=issue_key, credentials=credentials))
+    except JiraError as exc:
+        logger.warning("Failed moving Jira issue %s to To Do for refired incident: %s", issue_key, exc)
+    except Exception:
+        logger.exception("Unexpected error moving Jira issue %s to To Do for refired incident", issue_key)
+
+
+def _sync_reopened_incident_note_to_jira(
+    tenant_id: str,
+    incident: AlertIncidentDB,
+    *,
+    note_text: str,
+    created_at: datetime,
+) -> None:
+    annotations = incident.annotations if isinstance(incident.annotations, dict) else {}
+    meta = parse_meta(annotations)
+    issue_key = str(meta.get("jira_ticket_key") or "").strip()
+    if not issue_key:
+        return
+    integration_id = str(meta.get("jira_integration_id") or "").strip() or None
+    credentials = _resolve_incident_jira_credentials(tenant_id, integration_id)
+    if not credentials:
+        return
+    when_label = created_at.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+    body = f"System · {when_label}\n{note_text}"
+    try:
+        _run_async(jira_service.add_comment(issue_key=issue_key, text=body, credentials=credentials))
+    except JiraError as exc:
+        logger.warning("Failed syncing refire note to Jira issue %s: %s", issue_key, exc)
+    except Exception:
+        logger.exception("Unexpected error syncing refire note to Jira issue %s", issue_key)
+
+
 class IncidentStorageService:
+    def unlink_jira_integration_from_incidents(
+        self,
+        tenant_id: str,
+        integration_id: str,
+    ) -> int:
+        target_integration_id = str(integration_id or "").strip()
+        if not target_integration_id:
+            return 0
+
+        updated_count = 0
+        with get_db_session() as db:
+            incidents = (
+                db.query(AlertIncidentDB)
+                .filter(AlertIncidentDB.tenant_id == tenant_id)
+                .all()
+            )
+            for incident in incidents:
+                annotations = incident.annotations if isinstance(incident.annotations, dict) else {}
+                meta = parse_meta(annotations)
+                linked_id = str(meta.get("jira_integration_id") or "").strip()
+                if linked_id != target_integration_id:
+                    continue
+
+                meta.pop("jira_integration_id", None)
+                meta.pop("jira_ticket_key", None)
+                meta.pop("jira_ticket_url", None)
+                incident.annotations = {**annotations, INCIDENT_META_KEY: json.dumps(meta)}
+                updated_count += 1
+
+            if updated_count:
+                db.flush()
+
+        return updated_count
+
+    def get_incident_summary(
+        self,
+        tenant_id: str,
+        user_id: str,
+        group_ids: Optional[List[str]] = None,
+    ) -> Dict[str, Any]:
+        group_ids = group_ids or []
+        summary = {
+            "open_total": 0,
+            "unassigned_open": 0,
+            "assigned_open": 0,
+            "assigned_to_me_open": 0,
+            "by_visibility": {"public": 0, "private": 0, "group": 0},
+        }
+
+        with get_db_session() as db:
+            incidents = (
+                db.query(AlertIncidentDB)
+                .filter(AlertIncidentDB.tenant_id == tenant_id)
+                .all()
+            )
+
+            for incident in incidents:
+                meta = parse_meta(incident.annotations or {})
+                inc_visibility = str(meta.get("visibility") or "public").lower()
+                if inc_visibility not in {"public", "private", "group"}:
+                    inc_visibility = "public"
+
+                creator_id = str(meta.get("created_by") or "") or None
+                if not has_access(
+                    inc_visibility,
+                    creator_id,
+                    user_id,
+                    _safe_group_ids(meta),
+                    group_ids,
+                ):
+                    continue
+
+                if str(incident.status or "").lower() == "resolved":
+                    continue
+
+                summary["open_total"] += 1
+                summary["by_visibility"][inc_visibility] += 1
+
+                assignee = str(incident.assignee or "").strip()
+                if not assignee:
+                    summary["unassigned_open"] += 1
+                else:
+                    summary["assigned_open"] += 1
+                    if assignee == str(user_id):
+                        summary["assigned_to_me_open"] += 1
+
+        return summary
+
     def sync_incidents_from_alerts(self, tenant_id: str, alerts: List[Dict[str, Any]], resolve_missing: bool = True) -> None:
         now = datetime.now(timezone.utc)
         active_fingerprints: set[str] = set()
 
         with get_db_session() as db:
+            ensure_tenant_exists(db, tenant_id)
             for alert in alerts or []:
                 labels = alert.get("labels", {}) or {}
                 annotations = alert.get("annotations", {}) or {}
@@ -151,6 +319,25 @@ class IncidentStorageService:
                 incident.status = "open"
                 incident.last_seen_at = now
                 incident.resolved_at = None
+
+                if previous_status.lower() == "resolved":
+                    reopen_note = "System reopened this incident because the alert fired again"
+                    existing_notes = list(incident.notes or [])
+                    existing_notes.append(
+                        {
+                            "author": "system",
+                            "text": reopen_note,
+                            "createdAt": now.isoformat(),
+                        }
+                    )
+                    incident.notes = existing_notes
+                    _move_reopened_incident_jira_ticket_to_todo(tenant_id, incident)
+                    _sync_reopened_incident_note_to_jira(
+                        tenant_id,
+                        incident,
+                        note_text=reopen_note,
+                        created_at=now,
+                    )
 
             if resolve_missing:
                 open_incidents = db.query(AlertIncidentDB).filter(
@@ -302,7 +489,11 @@ class IncidentStorageService:
                     incident.resolved_at = datetime.now(timezone.utc)
                     manual_manage_flag = False
                     if previous_status.lower() != "resolved":
-                        resolved_note_text = f"{user_id} marked this incident as resolved"
+                        actor_name = (
+                            getattr(payload, "actor_username", None)
+                            or user_id
+                        )
+                        resolved_note_text = f"{actor_name} marked this incident as resolved"
                 else:
                     incident.resolved_at = None
                     if incident.status == "open":

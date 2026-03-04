@@ -65,7 +65,4 @@ class IncidentJiraCreateRequest(BaseModel):
     summary: Optional[str] = None
     description: Optional[str] = None
     issueType: Optional[str] = None
-
-
-class IncidentJiraCommentRequest(BaseModel):
-    text: str
+    replaceExisting: bool = False

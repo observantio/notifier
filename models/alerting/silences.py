@@ -52,6 +52,7 @@ class Silence(BaseModel):
     status: Optional[Dict[str, str]] = Field(None, description=DESC_CURRENT_STATUS_SILENCE)
     visibility: Optional[Visibility] = Field(None, description=DESC_VISIBILITY_SCOPE)
     shared_group_ids: List[str] = Field(default_factory=list, alias="sharedGroupIds", description=DESC_GROUP_IDS_SILENCE_SHARED_WITH)
+    is_hidden: bool = Field(False, alias="isHidden", description="Whether this silence is hidden for the current user")
     model_config = ConfigDict(populate_by_name=True, use_enum_values=True)
 
 

@@ -11,6 +11,7 @@ You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2
 import logging
 from typing import List, Optional
 from fastapi import HTTPException, status
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from db_models import Group
 
@@ -33,7 +34,24 @@ def _resolve_groups(
     present_ids = {g.id for g in groups}
     missing = [gid for gid in normalized if gid not in present_ids]
     if missing:
-        logger.warning("Skipping unknown group IDs for tenant %s: %s", tenant_id, missing)
+        logger.warning("Auto-creating missing group IDs for tenant %s: %s", tenant_id, missing)
+        for gid in missing:
+            db.add(
+                Group(
+                    id=gid,
+                    tenant_id=tenant_id,
+                    name=gid,
+                    description="Auto-created placeholder group",
+                    is_active=True,
+                )
+            )
+        try:
+            db.flush()
+        except IntegrityError:
+            # Another request may have created one or more groups concurrently.
+            db.rollback()
+        groups = db.query(Group).filter(Group.tenant_id == tenant_id, Group.id.in_(normalized)).all()
+        present_ids = {g.id for g in groups}
 
     if enforce_membership:
         actor_groups = set(actor_group_ids or [])

@@ -19,6 +19,7 @@ ensure_test_env()
 from fastapi import HTTPException
 
 from services.alerting.integration_security_service import (
+    is_jira_sso_available,
     normalize_jira_auth_mode,
     normalize_visibility,
     validate_jira_credentials,
@@ -57,6 +58,13 @@ class IntegrationSecurityServiceTests(unittest.TestCase):
                 api_token='token123',
                 bearer_token=None,
             )
+
+    def test_is_jira_sso_available_missing_config_attrs_does_not_crash(self):
+        with patch(
+            "services.alerting.integration_security_service.config",
+            object(),
+        ):
+            self.assertFalse(is_jira_sso_available())
 
 
 if __name__ == '__main__':

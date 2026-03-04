@@ -41,6 +41,7 @@ class RuleSeverity(str, Enum):
 
 class AlertRule(BaseModel):
     id: Optional[str] = Field(None, description=DESC_UNIQUE_IDENTIFIER)
+    created_by: Optional[str] = Field(None, alias="createdBy", description="User ID who created the rule")
     org_id: Optional[str] = Field(None, alias="orgId", description="Organization ID / API key scoped to this rule")
     name: str = Field(..., description=DESC_RULE_NAME)
     expr: str = Field(..., alias="expression", description=DESC_RULE_EXPRESSION)
@@ -55,6 +56,7 @@ class AlertRule(BaseModel):
     notification_channels: List[str] = Field(default_factory=list, alias="notificationChannels", description="Notification channel IDs for this rule")
     visibility: Visibility = Field(Visibility.PRIVATE, description=DESC_VISIBILITY_SCOPE)
     shared_group_ids: List[str] = Field(default_factory=list, alias="sharedGroupIds", description=DESC_GROUP_IDS_RULE_SHARED_WITH)
+    is_hidden: bool = Field(False, alias="isHidden", description="Whether this rule is hidden for the current user")
     model_config = ConfigDict(use_enum_values=True, populate_by_name=True)
 
 

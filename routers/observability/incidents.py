@@ -19,6 +19,12 @@ from middleware.error_handlers import handle_route_errors
 from models.access.auth_models import Permission, TokenData
 from models.alerting.incidents import AlertIncident, AlertIncidentUpdateRequest
 from services.alertmanager_service import AlertManagerService
+from services.incidents.helpers import (
+    move_incident_ticket_to_done,
+    move_incident_ticket_to_in_progress,
+    move_incident_ticket_to_todo,
+    sync_note_to_jira_comment,
+)
 from services.storage_db_service import DatabaseStorageService
 from services.notification_service import NotificationService
 
@@ -49,6 +55,18 @@ async def get_incidents(
         group_id=group_id_filter,
         limit=limit,
         offset=offset,
+    )
+
+
+@router.get("/incidents/summary")
+async def get_incidents_summary(
+    current_user: TokenData = Depends(require_permission_with_scope(Permission.READ_INCIDENTS, "alertmanager")),
+):
+    return await run_in_threadpool(
+        storage_service.get_incident_summary,
+        current_user.tenant_id,
+        current_user.user_id,
+        getattr(current_user, "group_ids", []) or [],
     )
 
 
@@ -86,27 +104,43 @@ async def patch_incident(
                     detail="Cannot mark resolved: underlying alert is still active",
                 )
 
+    enriched_payload = payload.model_copy(
+        update={"actorUsername": current_user.username or current_user.user_id}
+    )
+
     updated = await run_in_threadpool(
         storage_service.update_incident,
         incident_id,
         current_user.tenant_id,
         current_user.user_id,
-        payload,
+        enriched_payload,
     )
     if not updated:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Incident not found")
 
     if updated.assignee and updated.assignee != existing.assignee:
+        assignment_note = f"Assignment updated by {current_user.username or current_user.user_id}"
         try:
             await run_in_threadpool(
                 storage_service.update_incident,
                 incident_id,
                 current_user.tenant_id,
                 current_user.user_id,
-                AlertIncidentUpdateRequest(note=f"Assigned to {updated.assignee} by {current_user.username or current_user.user_id}"),
+                AlertIncidentUpdateRequest(note=assignment_note),
             )
         except Exception:
             logger.exception("Failed to record assignment note for incident %s", incident_id)
+        await sync_note_to_jira_comment(
+            updated,
+            tenant_id=current_user.tenant_id,
+            current_user=current_user,
+            note_text=assignment_note,
+        )
+        await move_incident_ticket_to_in_progress(
+            updated,
+            tenant_id=current_user.tenant_id,
+            current_user=current_user,
+        )
 
         try:
             await notification_service.send_incident_assignment_email(
@@ -118,5 +152,43 @@ async def patch_incident(
             )
         except Exception:
             logger.exception("Failed to send assignment email for incident %s", incident_id)
+
+    if payload.note:
+        await sync_note_to_jira_comment(
+            updated,
+            tenant_id=current_user.tenant_id,
+            current_user=current_user,
+            note_text=payload.note,
+        )
+
+    previous_status = str(existing.status or "").lower()
+    updated_status = str(updated.status or "").lower()
+    actor_label = current_user.username or current_user.user_id
+    if previous_status != updated_status:
+        status_note = None
+        if updated_status == "resolved":
+            status_note = f"{actor_label} marked this incident as resolved"
+        elif updated_status == "open":
+            status_note = f"{actor_label} reopened this incident"
+        if status_note:
+            await sync_note_to_jira_comment(
+                updated,
+                tenant_id=current_user.tenant_id,
+                current_user=current_user,
+                note_text=status_note,
+            )
+    if updated_status == "resolved":
+        await move_incident_ticket_to_done(
+            updated,
+            tenant_id=current_user.tenant_id,
+            current_user=current_user,
+        )
+
+    if previous_status == "resolved" and updated_status == "open":
+        await move_incident_ticket_to_todo(
+            updated,
+            tenant_id=current_user.tenant_id,
+            current_user=current_user,
+        )
 
     return updated

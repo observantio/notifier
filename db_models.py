@@ -187,3 +187,63 @@ class PurgedSilence(Base):
     id:         Mapped[str]           = mapped_column(String,   primary_key=True)
     tenant_id:  Mapped[Optional[str]] = mapped_column(String,   ForeignKey(_FK_TENANTS, ondelete="CASCADE"), index=True)
     created_at: Mapped[datetime]      = mapped_column(DateTime, default=_now, nullable=False)
+
+
+class HiddenAlertRule(Base):
+    __tablename__ = "hidden_alert_rules"
+
+    id:         Mapped[str]      = mapped_column(String, primary_key=True, default=_uuid)
+    tenant_id:  Mapped[str]      = mapped_column(String, ForeignKey(_FK_TENANTS, ondelete="CASCADE"), nullable=False, index=True)
+    user_id:    Mapped[str]      = mapped_column(String, nullable=False, index=True)
+    rule_id:    Mapped[str]      = mapped_column(String, ForeignKey("alert_rules.id", ondelete="CASCADE"), nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_now, nullable=False)
+
+    __table_args__ = (
+        Index("idx_hidden_alert_rules_tenant_user", "tenant_id", "user_id"),
+        Index("idx_hidden_alert_rules_unique", "tenant_id", "user_id", "rule_id", unique=True),
+    )
+
+
+class HiddenSilence(Base):
+    __tablename__ = "hidden_silences"
+
+    id:         Mapped[str]      = mapped_column(String, primary_key=True, default=_uuid)
+    tenant_id:  Mapped[str]      = mapped_column(String, ForeignKey(_FK_TENANTS, ondelete="CASCADE"), nullable=False, index=True)
+    user_id:    Mapped[str]      = mapped_column(String, nullable=False, index=True)
+    silence_id: Mapped[str]      = mapped_column(String, nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_now, nullable=False)
+
+    __table_args__ = (
+        Index("idx_hidden_silences_tenant_user", "tenant_id", "user_id"),
+        Index("idx_hidden_silences_unique", "tenant_id", "user_id", "silence_id", unique=True),
+    )
+
+
+class HiddenNotificationChannel(Base):
+    __tablename__ = "hidden_notification_channels"
+
+    id:         Mapped[str]      = mapped_column(String, primary_key=True, default=_uuid)
+    tenant_id:  Mapped[str]      = mapped_column(String, ForeignKey(_FK_TENANTS, ondelete="CASCADE"), nullable=False, index=True)
+    user_id:    Mapped[str]      = mapped_column(String, nullable=False, index=True)
+    channel_id: Mapped[str]      = mapped_column(String, ForeignKey("notification_channels.id", ondelete="CASCADE"), nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_now, nullable=False)
+
+    __table_args__ = (
+        Index("idx_hidden_channels_tenant_user", "tenant_id", "user_id"),
+        Index("idx_hidden_channels_unique", "tenant_id", "user_id", "channel_id", unique=True),
+    )
+
+
+class HiddenJiraIntegration(Base):
+    __tablename__ = "hidden_jira_integrations"
+
+    id:             Mapped[str]      = mapped_column(String, primary_key=True, default=_uuid)
+    tenant_id:      Mapped[str]      = mapped_column(String, ForeignKey(_FK_TENANTS, ondelete="CASCADE"), nullable=False, index=True)
+    user_id:        Mapped[str]      = mapped_column(String, nullable=False, index=True)
+    integration_id: Mapped[str]      = mapped_column(String, nullable=False, index=True)
+    created_at:     Mapped[datetime] = mapped_column(DateTime, default=_now, nullable=False)
+
+    __table_args__ = (
+        Index("idx_hidden_jira_tenant_user", "tenant_id", "user_id"),
+        Index("idx_hidden_jira_unique", "tenant_id", "user_id", "integration_id", unique=True),
+    )

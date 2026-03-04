@@ -18,11 +18,12 @@ import threading
 import time
 from dataclasses import dataclass
 from ipaddress import ip_address, ip_network
-from typing import Dict, Optional
+from typing import Dict, Optional, Any
 from urllib.parse import urlparse, urlunparse
 from fastapi import HTTPException, Request, status
 from config import config
 
+redis: Any
 try:
     import redis
 except Exception:

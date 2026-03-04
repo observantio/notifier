@@ -41,6 +41,7 @@ class NotificationChannel(BaseModel):
     created_by: Optional[str] = Field(None, alias="createdBy", description="Owner user id")
     visibility: Visibility = Field(Visibility.PRIVATE, description=DESC_VISIBILITY_SCOPE)  
     shared_group_ids: List[str] = Field(default_factory=list, alias="sharedGroupIds", description=DESC_GROUP_IDS_CHANNEL_SHARED_WITH)
+    is_hidden: bool = Field(False, alias="isHidden", description="Whether this channel is hidden for the current user")
     model_config = ConfigDict(use_enum_values=True, populate_by_name=True)
 
 

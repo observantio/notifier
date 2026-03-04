@@ -14,6 +14,7 @@ from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, status
 from fastapi.concurrency import run_in_threadpool
+from pydantic import BaseModel
 
 from config import config, constants
 from database import get_db_session
@@ -53,6 +54,9 @@ webhook_router = APIRouter(tags=["alertmanager-webhooks"])
 alertmanager_service = AlertManagerService()
 notification_service = NotificationService()
 storage_service = DatabaseStorageService()
+
+class HideTogglePayload(BaseModel):
+    hidden: bool = True
 
 
 def _scope_header(request: Request) -> str:
@@ -133,6 +137,7 @@ async def get_alerts(
     silenced: Optional[bool] = Query(None),
     inhibited: Optional[bool] = Query(None),
     filter_labels: Optional[str] = Query(None),
+    show_hidden: bool = Query(False),
     current_user: TokenData = Depends(require_permission_with_scope(Permission.READ_ALERTS, "alertmanager")),
 ):
     labels = alertmanager_service.parse_filter_labels(filter_labels)
@@ -147,6 +152,20 @@ async def get_alerts(
         getattr(current_user, "group_ids", []) or [],
         alert_dicts,
     )
+    if not show_hidden:
+        hidden_rule_names = set(
+            await run_in_threadpool(
+                storage_service.get_hidden_rule_names,
+                current_user.tenant_id,
+                current_user.user_id,
+            )
+        )
+        if hidden_rule_names:
+            filtered = [
+                alert
+                for alert in filtered
+                if str((alert.get("labels") or {}).get("alertname") or "") not in hidden_rule_names
+            ]
     return [Alert(**d) for d in filtered]
 
 
@@ -237,14 +256,29 @@ async def import_alert_rules(
     }
 
 
+@router.get("/integrations/channel-types")
+async def get_integration_channel_types(
+    current_user: TokenData = Depends(require_permission_with_scope(Permission.READ_CHANNELS, "alertmanager")),
+):
+    return {"allowedTypes": allowed_channel_types()}
+
+
 @router.get("/silences", response_model=List[Silence])
 @handle_route_errors(bad_request_detail=INVALID_FILTER_LABELS_JSON)
 async def get_silences(
     filter_labels: Optional[str] = Query(None),
     include_expired: bool = Query(False),
+    show_hidden: bool = Query(False),
     current_user: TokenData = Depends(require_permission_with_scope(Permission.READ_SILENCES, "alertmanager")),
 ):
     silences = await alertmanager_service.get_silences(filter_labels=alertmanager_service.parse_filter_labels(filter_labels))
+    hidden_ids = set(
+        await run_in_threadpool(
+            storage_service.get_hidden_silence_ids,
+            current_user.tenant_id,
+            current_user.user_id,
+        )
+    )
     result = []
     for silence in silences:
         silence = alertmanager_service.apply_silence_metadata(silence)
@@ -253,6 +287,9 @@ async def get_silences(
             if state and str(state).lower() == "expired":
                 continue
         if alertmanager_service.silence_accessible(silence, current_user):
+            silence.is_hidden = bool(silence.id and silence.id in hidden_ids)
+            if silence.is_hidden and not show_hidden:
+                continue
             result.append(silence)
     return result
 
@@ -260,6 +297,7 @@ async def get_silences(
 @router.get("/silences/{silence_id}", response_model=Silence)
 async def get_silence(
     silence_id: str,
+    show_hidden: bool = Query(False),
     current_user: TokenData = Depends(require_permission_with_scope(Permission.READ_SILENCES, "alertmanager")),
 ):
     silence = await alertmanager_service.get_silence(silence_id)
@@ -267,6 +305,16 @@ async def get_silence(
         raise HTTPException(status_code=404, detail=f"Silence {silence_id} not found")
     silence = alertmanager_service.apply_silence_metadata(silence)
     if not alertmanager_service.silence_accessible(silence, current_user):
+        raise HTTPException(status_code=404, detail=f"Silence {silence_id} not found")
+    hidden_ids = set(
+        await run_in_threadpool(
+            storage_service.get_hidden_silence_ids,
+            current_user.tenant_id,
+            current_user.user_id,
+        )
+    )
+    silence.is_hidden = bool(silence.id and silence.id in hidden_ids)
+    if silence.is_hidden and not show_hidden:
         raise HTTPException(status_code=404, detail=f"Silence {silence_id} not found")
     return silence
 
@@ -343,12 +391,23 @@ async def get_receivers(
 async def get_alert_rules(
     limit: int = Query(config.DEFAULT_QUERY_LIMIT, ge=1, le=config.MAX_QUERY_LIMIT),
     offset: int = Query(0, ge=0),
+    show_hidden: bool = Query(False),
     current_user: TokenData = Depends(require_permission_with_scope(Permission.READ_RULES, "alertmanager")),
 ):
     tenant_id, user_id, group_ids = alertmanager_service.user_scope(current_user)
+    hidden_ids = set(
+        await run_in_threadpool(
+            storage_service.get_hidden_rule_ids,
+            tenant_id,
+            user_id,
+        )
+    )
     rules_with_owner = await run_in_threadpool(storage_service.get_alert_rules_with_owner, tenant_id, user_id, group_ids, limit, offset)
     result: List[AlertRule] = []
     for rule, owner in rules_with_owner:
+        rule.is_hidden = bool(rule.id and rule.id in hidden_ids)
+        if rule.is_hidden and not show_hidden:
+            continue
         if owner != current_user.user_id and not getattr(current_user, "is_superuser", False):
             rule.org_id = None
         result.append(rule)
@@ -402,10 +461,70 @@ async def get_alert_rule(
     rule = await run_in_threadpool(storage_service.get_alert_rule, rule_id, tenant_id, user_id, group_ids)
     if not rule:
         raise HTTPException(status_code=404, detail=f"Alert rule {rule_id} not found")
+    hidden_ids = set(
+        await run_in_threadpool(
+            storage_service.get_hidden_rule_ids,
+            tenant_id,
+            user_id,
+        )
+    )
+    rule.is_hidden = bool(rule.id and rule.id in hidden_ids)
     raw = await run_in_threadpool(storage_service.get_alert_rule_raw, rule_id, tenant_id)
     if raw and raw.created_by != current_user.user_id and not getattr(current_user, "is_superuser", False):
         rule.org_id = None
     return rule
+
+
+@router.post("/rules/{rule_id}/hide")
+@handle_route_errors()
+async def hide_alert_rule(
+    rule_id: str,
+    payload: HideTogglePayload = Body(...),
+    current_user: TokenData = Depends(require_permission_with_scope(Permission.READ_RULES, "alertmanager")),
+):
+    tenant_id, user_id, group_ids = alertmanager_service.user_scope(current_user)
+    rule = await run_in_threadpool(storage_service.get_alert_rule, rule_id, tenant_id, user_id, group_ids)
+    if not rule:
+        raise HTTPException(status_code=404, detail=f"Alert rule {rule_id} not found")
+
+    raw = await run_in_threadpool(storage_service.get_alert_rule_raw, rule_id, tenant_id)
+    if raw and str(getattr(raw, "created_by", "") or "") == user_id:
+        raise HTTPException(status_code=403, detail="You cannot hide your own alert rule")
+
+    ok = await run_in_threadpool(storage_service.toggle_rule_hidden, tenant_id, user_id, rule_id, bool(payload.hidden))
+    if not ok:
+        raise HTTPException(status_code=404, detail=f"Alert rule {rule_id} not found")
+    return {"status": "success", "hidden": bool(payload.hidden)}
+
+
+@router.post("/silences/{silence_id}/hide")
+@handle_route_errors()
+async def hide_silence(
+    silence_id: str,
+    payload: HideTogglePayload = Body(...),
+    current_user: TokenData = Depends(require_permission_with_scope(Permission.READ_SILENCES, "alertmanager")),
+):
+    silence = await alertmanager_service.get_silence(silence_id)
+    if not silence:
+        raise HTTPException(status_code=404, detail=f"Silence {silence_id} not found")
+    silence = alertmanager_service.apply_silence_metadata(silence)
+    if not alertmanager_service.silence_accessible(silence, current_user):
+        raise HTTPException(status_code=404, detail=f"Silence {silence_id} not found")
+
+    owner = str(getattr(silence, "created_by", "") or "")
+    if owner and owner in {str(current_user.username or ""), str(current_user.user_id or "")}:
+        raise HTTPException(status_code=403, detail="You cannot hide your own silence")
+
+    ok = await run_in_threadpool(
+        storage_service.toggle_silence_hidden,
+        current_user.tenant_id,
+        current_user.user_id,
+        silence_id,
+        bool(payload.hidden),
+    )
+    if not ok:
+        raise HTTPException(status_code=500, detail="Failed to update silence visibility")
+    return {"status": "success", "hidden": bool(payload.hidden)}
 
 
 @router.post("/rules", response_model=AlertRule, status_code=status.HTTP_201_CREATED)
@@ -530,10 +649,24 @@ async def delete_alert_rule(
 async def get_notification_channels(
     limit: int = Query(config.DEFAULT_QUERY_LIMIT, ge=1, le=config.MAX_QUERY_LIMIT),
     offset: int = Query(0, ge=0),
+    show_hidden: bool = Query(False),
     current_user: TokenData = Depends(require_permission_with_scope(Permission.READ_CHANNELS, "alertmanager")),
 ):
     tenant_id, user_id, group_ids = alertmanager_service.user_scope(current_user)
-    return await run_in_threadpool(storage_service.get_notification_channels, tenant_id, user_id, group_ids, limit, offset)
+    channels = await run_in_threadpool(
+        storage_service.get_notification_channels,
+        tenant_id,
+        user_id,
+        group_ids,
+        limit,
+        offset,
+    )
+    hidden_ids = set(await run_in_threadpool(storage_service.get_hidden_channel_ids, tenant_id, user_id))
+    for channel in channels:
+        channel.is_hidden = bool(channel.id and channel.id in hidden_ids)
+    if not show_hidden:
+        channels = [channel for channel in channels if not channel.is_hidden]
+    return channels
 
 
 @router.get("/channels/{channel_id}", response_model=NotificationChannel)
@@ -545,7 +678,31 @@ async def get_notification_channel(
     channel = await run_in_threadpool(storage_service.get_notification_channel, channel_id, tenant_id, user_id, group_ids)
     if not channel:
         raise HTTPException(status_code=404, detail=f"Notification channel {channel_id} not found")
+    hidden_ids = set(await run_in_threadpool(storage_service.get_hidden_channel_ids, tenant_id, user_id))
+    channel.is_hidden = bool(channel.id and channel.id in hidden_ids)
     return channel
+
+
+@router.post("/channels/{channel_id}/hide")
+@handle_route_errors()
+async def hide_notification_channel(
+    channel_id: str,
+    payload: HideTogglePayload = Body(...),
+    current_user: TokenData = Depends(require_permission_with_scope(Permission.READ_CHANNELS, "alertmanager")),
+):
+    tenant_id, user_id, group_ids = alertmanager_service.user_scope(current_user)
+    channel = await run_in_threadpool(storage_service.get_notification_channel, channel_id, tenant_id, user_id, group_ids)
+    if not channel:
+        raise HTTPException(status_code=404, detail=f"Notification channel {channel_id} not found")
+    if str(getattr(channel, "created_by", "") or "") == user_id:
+        raise HTTPException(status_code=403, detail="You cannot hide your own notification channel")
+    if str(getattr(channel, "visibility", "private") or "private") == "private":
+        raise HTTPException(status_code=403, detail="Only shared notification channels can be hidden")
+
+    ok = await run_in_threadpool(storage_service.toggle_channel_hidden, tenant_id, user_id, channel_id, bool(payload.hidden))
+    if not ok:
+        raise HTTPException(status_code=500, detail="Failed to update channel visibility")
+    return {"status": "success", "hidden": bool(payload.hidden)}
 
 
 @router.post("/channels", response_model=NotificationChannel, status_code=status.HTTP_201_CREATED)
@@ -603,6 +760,11 @@ async def test_notification_channel(
     channel = await run_in_threadpool(storage_service.get_notification_channel, channel_id, tenant_id, user_id, group_ids)
     if not channel:
         raise HTTPException(status_code=404, detail=f"Notification channel {channel_id} not found")
+    if not bool(getattr(channel, "enabled", False)):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Channel is disabled. Enable it before sending a test notification.",
+        )
 
     test_alert = Alert(
         labels={"alertname": "InvokableTestAlert", "severity": "INFO"},

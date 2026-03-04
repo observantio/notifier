@@ -21,6 +21,7 @@ from models.alerting.channels import NotificationChannel, NotificationChannelCre
 from services.common.access import has_access, assign_shared_groups
 from services.common.encryption import decrypt_config, encrypt_config
 from services.common.pagination import cap_pagination
+from services.common.tenants import ensure_tenant_exists
 from services.storage.serializers import channel_to_pydantic, channel_to_pydantic_for_viewer
 
 logger = logging.getLogger(__name__)
@@ -104,6 +105,7 @@ class ChannelStorageService:
         group_ids: Optional[List[str]] = None,
     ) -> NotificationChannel:
         with get_db_session() as db:
+            ensure_tenant_exists(db, tenant_id)
             ch = NotificationChannelDB(
                 id=str(uuid.uuid4()),
                 tenant_id=tenant_id,
