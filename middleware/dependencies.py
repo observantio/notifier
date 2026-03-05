@@ -20,11 +20,8 @@ from typing import Optional
 import jwt
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from sqlalchemy import text
-from sqlalchemy.exc import SQLAlchemyError
 
 from config import config
-from database import get_db_session
 from middleware.rate_limit import enforce_ip_rate_limit, client_ip
 from models.access.auth_models import Permission, Role, TokenData
 
@@ -34,8 +31,6 @@ security = HTTPBearer(auto_error=False)
 
 _jti_lock = threading.Lock()
 _jti_cache: dict[str, float] = {}
-_group_refresh_lock = threading.Lock()
-_group_refresh_supported: bool | None = None
 
 def _extract_bearer_token(request: Request, credentials: HTTPAuthorizationCredentials | None) -> Optional[str]:
     if credentials and getattr(credentials, "credentials", None):
@@ -132,55 +127,6 @@ def _normalize_group_ids(group_ids: list[object] | None) -> list[str]:
     return out
 
 
-def _is_missing_group_membership_table_error(exc: SQLAlchemyError) -> bool:
-    message = str(exc).lower()
-    return (
-        "undefinedtable" in message
-        or 'relation "user_groups" does not exist' in message
-        or 'relation "groups" does not exist' in message
-    )
-
-
-def _load_live_group_ids(*, tenant_id: str, user_id: str, fallback_group_ids: list[str] | None = None) -> list[str]:
-    global _group_refresh_supported
-    fallback = _normalize_group_ids(fallback_group_ids)
-    if not tenant_id or not user_id:
-        return fallback
-    if _group_refresh_supported is False:
-        return fallback
-
-    sql = text(
-        """
-        SELECT ug.group_id
-        FROM user_groups AS ug
-        INNER JOIN groups AS g ON g.id = ug.group_id
-        WHERE ug.user_id = :user_id
-          AND g.tenant_id = :tenant_id
-          AND COALESCE(g.is_active, TRUE) = TRUE
-        """
-    )
-    try:
-        with get_db_session() as db:
-            rows = db.execute(sql, {"user_id": str(user_id), "tenant_id": str(tenant_id)}).all()
-            with _group_refresh_lock:
-                _group_refresh_supported = True
-            return _normalize_group_ids([row[0] for row in rows])
-    except SQLAlchemyError as exc:
-        if _is_missing_group_membership_table_error(exc):
-            with _group_refresh_lock:
-                _group_refresh_supported = False
-            logger.warning(
-                "Skipping live group refresh because membership tables are unavailable; using token groups."
-            )
-            return fallback
-        logger.exception(
-            "Failed to refresh live group memberships for user_id=%s tenant_id=%s",
-            user_id,
-            tenant_id,
-        )
-        return fallback
-
-
 def _assert_jti_not_replayed(jti: str) -> None:
     now = time.monotonic()
     ttl = int(getattr(config, "BENOTIFIED_CONTEXT_REPLAY_TTL_SECONDS", 180) or 180)
@@ -202,11 +148,7 @@ def get_current_user(
     if not token:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required")
     claims = _verify_context_token(token)
-    claims.group_ids = _load_live_group_ids(
-        tenant_id=str(claims.tenant_id or ""),
-        user_id=str(claims.user_id or ""),
-        fallback_group_ids=getattr(claims, "group_ids", []) or [],
-    )
+    claims.group_ids = _normalize_group_ids(getattr(claims, "group_ids", []) or [])
     return claims
 
 

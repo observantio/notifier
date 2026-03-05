@@ -12,7 +12,6 @@ import jwt
 import pytest
 from fastapi import HTTPException
 from starlette.requests import Request
-from sqlalchemy.exc import ProgrammingError
 
 from tests._env import ensure_test_env
 
@@ -42,8 +41,6 @@ def _reset_replay_cache():
     # the underlying implementation renamed the lock/cache variables
     with dependencies._jti_lock:
         dependencies._jti_cache.clear()
-    with dependencies._group_refresh_lock:
-        dependencies._group_refresh_supported = None
 
 
 def test_verify_context_token_rejects_missing_jti(monkeypatch):
@@ -127,7 +124,7 @@ def test_verify_context_token_unknown_role_falls_back_to_user(monkeypatch):
             "username": "user-1",
             "tenant_id": "t1",
             "org_id": "o1",
-            "role": "provisioning",
+            "role": "definitely-unknown-role",
             "permissions": [],
             "group_ids": [],
             "is_superuser": False,
@@ -219,7 +216,7 @@ def test_get_current_user_rejects_invalid_context_with_valid_service_token(monke
     assert exc.value.status_code == 401
 
 
-def test_get_current_user_refreshes_group_ids_from_db(monkeypatch):
+def test_get_current_user_normalizes_group_ids_from_token(monkeypatch):
     claims = TokenData(
         user_id="u1",
         username="user-1",
@@ -228,31 +225,11 @@ def test_get_current_user_refreshes_group_ids_from_db(monkeypatch):
         role=Role.USER,
         is_superuser=False,
         permissions=[],
-        group_ids=["stale-group"],
+        group_ids=["g1", "g2", "g1", "", "g2"],
     )
-
-    class _DB:
-        @staticmethod
-        def execute(_sql, _params):
-            class _Rows:
-                @staticmethod
-                def all():
-                    return [("g1",), ("g2",), ("g1",)]
-
-            return _Rows()
-
-    class _Ctx:
-        @staticmethod
-        def __enter__():
-            return _DB()
-
-        @staticmethod
-        def __exit__(*args):
-            return False
 
     monkeypatch.setattr(config, "get_secret", lambda *_args, **_kwargs: "expected-service-token")
     monkeypatch.setattr(dependencies, "_verify_context_token", lambda _token: claims)
-    monkeypatch.setattr(dependencies, "get_db_session", lambda: _Ctx())
 
     request = _request(
         "203.0.113.10",
@@ -264,54 +241,3 @@ def test_get_current_user_refreshes_group_ids_from_db(monkeypatch):
 
     user = dependencies.get_current_user(request=request, credentials=None)
     assert user.group_ids == ["g1", "g2"]
-
-
-def test_get_current_user_falls_back_when_user_groups_table_missing(monkeypatch):
-    claims = TokenData(
-        user_id="u1",
-        username="user-1",
-        tenant_id="t1",
-        org_id="t1",
-        role=Role.USER,
-        is_superuser=False,
-        permissions=[],
-        group_ids=["fallback-group"],
-    )
-    execute_calls = {"count": 0}
-
-    class _DB:
-        @staticmethod
-        def execute(_sql, _params):
-            execute_calls["count"] += 1
-            raise ProgrammingError(
-                "SELECT ... FROM user_groups",
-                {"user_id": "u1", "tenant_id": "t1"},
-                Exception('relation "user_groups" does not exist'),
-            )
-
-    class _Ctx:
-        @staticmethod
-        def __enter__():
-            return _DB()
-
-        @staticmethod
-        def __exit__(*args):
-            return False
-
-    monkeypatch.setattr(config, "get_secret", lambda *_args, **_kwargs: "expected-service-token")
-    monkeypatch.setattr(dependencies, "_verify_context_token", lambda _token: claims)
-    monkeypatch.setattr(dependencies, "get_db_session", lambda: _Ctx())
-
-    request = _request(
-        "203.0.113.10",
-        headers=[
-            (b"x-service-token", b"expected-service-token"),
-            (b"authorization", b"Bearer valid-context-token"),
-        ],
-    )
-
-    first = dependencies.get_current_user(request=request, credentials=None)
-    second = dependencies.get_current_user(request=request, credentials=None)
-    assert first.group_ids == ["fallback-group"]
-    assert second.group_ids == ["fallback-group"]
-    assert execute_calls["count"] == 1
