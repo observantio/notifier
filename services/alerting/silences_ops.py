@@ -44,6 +44,18 @@ def silence_accessible(silence: Silence, current_user: TokenData) -> bool:
     return False
 
 
+def silence_owned_by(silence: Silence, current_user: TokenData) -> bool:
+    owner = str(getattr(silence, "created_by", "") or "").strip()
+    if not owner:
+        return False
+    actor_ids = {
+        str(getattr(current_user, "username", "") or "").strip(),
+        str(getattr(current_user, "user_id", "") or "").strip(),
+    }
+    actor_ids.discard("")
+    return owner in actor_ids
+
+
 async def get_silences(service, filter_labels: Optional[Dict[str, str]] = None) -> List[Silence]:
     params = {}
     if filter_labels:

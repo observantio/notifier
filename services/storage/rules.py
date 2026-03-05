@@ -257,6 +257,15 @@ class RuleStorageService:
                 return None
             if not has_access(cast(str, r.visibility or "private"), cast(str, r.created_by), user_id, _shared_group_ids(r), group_ids):
                 return None
+            if not has_access(
+                cast(str, r.visibility or "private"),
+                cast(str, r.created_by),
+                user_id,
+                _shared_group_ids(r),
+                group_ids,
+                require_write=True,
+            ):
+                return None
 
             r.org_id = rule_update.org_id or None
             r.name = rule_update.name

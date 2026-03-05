@@ -357,6 +357,8 @@ async def update_silence(
     existing = alertmanager_service.apply_silence_metadata(existing)
     if not alertmanager_service.silence_accessible(existing, current_user):
         raise HTTPException(status_code=404, detail=f"Silence {silence_id} not found")
+    if not alertmanager_service.silence_owned_by(existing, current_user):
+        raise HTTPException(status_code=403, detail="Only silence owner can update this silence")
     new_id = await alertmanager_service.update_silence(silence_id, _build_silence_payload(silence, current_user))
     if not new_id:
         raise HTTPException(status_code=500, detail="Failed to update silence")
@@ -374,6 +376,8 @@ async def delete_silence(
     existing = alertmanager_service.apply_silence_metadata(existing)
     if not alertmanager_service.silence_accessible(existing, current_user):
         raise HTTPException(status_code=404, detail=f"Silence {silence_id} not found or already deleted")
+    if not alertmanager_service.silence_owned_by(existing, current_user):
+        raise HTTPException(status_code=403, detail="Only silence owner can delete this silence")
     if not await alertmanager_service.delete_silence(silence_id):
         raise HTTPException(status_code=404, detail=f"Silence {silence_id} not found or already deleted")
     return {"status": "success", "message": f"Silence {silence_id} deleted", "purged": True}

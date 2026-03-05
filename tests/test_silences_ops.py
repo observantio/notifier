@@ -17,7 +17,7 @@ ensure_test_env()
 
 from models.access.auth_models import TokenData
 from models.alerting.silences import Silence
-from services.alerting.silences_ops import apply_silence_metadata, silence_accessible
+from services.alerting.silences_ops import apply_silence_metadata, silence_accessible, silence_owned_by
 
 
 class SilencesOpsTests(unittest.TestCase):
@@ -59,6 +59,13 @@ class SilencesOpsTests(unittest.TestCase):
         user = self._user(username='alice')
         silence = self._silence(created_by='u1', visibility='private')
         self.assertTrue(silence_accessible(silence, user))
+
+    def test_silence_owned_by_matches_username_or_user_id(self):
+        user = self._user(username='alice')
+        self.assertTrue(silence_owned_by(self._silence(created_by='alice', visibility='tenant'), user))
+        self.assertTrue(silence_owned_by(self._silence(created_by='u1', visibility='tenant'), user))
+        self.assertFalse(silence_owned_by(self._silence(created_by='bob', visibility='tenant'), user))
+        self.assertFalse(silence_owned_by(self._silence(created_by='', visibility='tenant'), user))
 
     def test_apply_silence_metadata_updates_fields(self):
         silence = self._silence()

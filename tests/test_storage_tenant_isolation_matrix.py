@@ -150,6 +150,56 @@ def test_rule_tenant_isolation_matrix():
     not __import__("database", fromlist=[""]).connection_test(),
     reason="DB not available",
 )
+def test_rule_updates_require_owner_even_when_rule_is_shared():
+    service = DatabaseStorageService()
+    tenant_id = _id("tenant")
+    owner_id, viewer_id = _id("owner"), _id("viewer")
+    _ensure_tenant_user(tenant_id, owner_id)
+
+    rule = service.create_alert_rule(
+        AlertRuleCreate(
+            name=_id("shared-rule"),
+            expression="up == 0",
+            severity=RuleSeverity.WARNING,
+            groupName="owner-only-updates",
+            enabled=True,
+            labels={},
+            annotations={},
+            visibility="tenant",
+        ),
+        tenant_id,
+        owner_id,
+        group_ids=[],
+    )
+    # Viewer can read because the rule is tenant-visible.
+    assert service.get_alert_rule(rule.id, tenant_id, viewer_id, []) is not None
+    # Viewer cannot mutate because writes are owner-only.
+    assert (
+        service.update_alert_rule(
+            rule.id,
+            AlertRuleCreate(
+                name=_id("attempted-update"),
+                expression="up == 1",
+                severity=RuleSeverity.CRITICAL,
+                groupName="owner-only-updates",
+                enabled=True,
+                labels={},
+                annotations={},
+                visibility="tenant",
+            ),
+            tenant_id,
+            viewer_id,
+            group_ids=[],
+        )
+        is None
+    )
+    assert service.delete_alert_rule(rule.id, tenant_id, viewer_id, group_ids=[]) is False
+
+
+@pytest.mark.skipif(
+    not __import__("database", fromlist=[""]).connection_test(),
+    reason="DB not available",
+)
 def test_channel_tenant_isolation_matrix():
     service = DatabaseStorageService()
     tenant_a, tenant_b = _id("tenant-a"), _id("tenant-b")

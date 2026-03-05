@@ -59,6 +59,7 @@ from services.alerting.silences_ops import (
     get_silence as get_silence_ops,
     get_silences as get_silences_ops,
     silence_accessible as silence_accessible_ops,
+    silence_owned_by as silence_owned_by_ops,
     update_silence as update_silence_ops,
 )
 from services.common.http_client import create_async_client
@@ -136,6 +137,9 @@ class AlertManagerService:
 
     def silence_accessible(self, silence: Silence, current_user: TokenData) -> bool:
         return silence_accessible_ops(silence, current_user)
+
+    def silence_owned_by(self, silence: Silence, current_user: TokenData) -> bool:
+        return silence_owned_by_ops(silence, current_user)
 
     def resolve_rule_org_id(self, rule_org_id: Optional[str], current_user: TokenData) -> str:
         return resolve_rule_org_id_ops(rule_org_id, current_user)

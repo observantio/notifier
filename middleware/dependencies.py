@@ -34,6 +34,8 @@ security = HTTPBearer(auto_error=False)
 
 _jti_lock = threading.Lock()
 _jti_cache: dict[str, float] = {}
+_group_refresh_lock = threading.Lock()
+_group_refresh_supported: bool | None = None
 
 def _extract_bearer_token(request: Request, credentials: HTTPAuthorizationCredentials | None) -> Optional[str]:
     if credentials and getattr(credentials, "credentials", None):
@@ -130,9 +132,21 @@ def _normalize_group_ids(group_ids: list[object] | None) -> list[str]:
     return out
 
 
+def _is_missing_group_membership_table_error(exc: SQLAlchemyError) -> bool:
+    message = str(exc).lower()
+    return (
+        "undefinedtable" in message
+        or 'relation "user_groups" does not exist' in message
+        or 'relation "groups" does not exist' in message
+    )
+
+
 def _load_live_group_ids(*, tenant_id: str, user_id: str, fallback_group_ids: list[str] | None = None) -> list[str]:
+    global _group_refresh_supported
     fallback = _normalize_group_ids(fallback_group_ids)
     if not tenant_id or not user_id:
+        return fallback
+    if _group_refresh_supported is False:
         return fallback
 
     sql = text(
@@ -148,8 +162,17 @@ def _load_live_group_ids(*, tenant_id: str, user_id: str, fallback_group_ids: li
     try:
         with get_db_session() as db:
             rows = db.execute(sql, {"user_id": str(user_id), "tenant_id": str(tenant_id)}).all()
+            with _group_refresh_lock:
+                _group_refresh_supported = True
             return _normalize_group_ids([row[0] for row in rows])
-    except SQLAlchemyError:
+    except SQLAlchemyError as exc:
+        if _is_missing_group_membership_table_error(exc):
+            with _group_refresh_lock:
+                _group_refresh_supported = False
+            logger.warning(
+                "Skipping live group refresh because membership tables are unavailable; using token groups."
+            )
+            return fallback
         logger.exception(
             "Failed to refresh live group memberships for user_id=%s tenant_id=%s",
             user_id,

@@ -20,10 +20,12 @@ from fastapi import HTTPException
 
 from services.alerting.integration_security_service import (
     is_jira_sso_available,
+    jira_integration_has_access,
     normalize_jira_auth_mode,
     normalize_visibility,
     validate_jira_credentials,
 )
+from models.access.auth_models import TokenData
 
 
 class IntegrationSecurityServiceTests(unittest.TestCase):
@@ -65,6 +67,37 @@ class IntegrationSecurityServiceTests(unittest.TestCase):
             object(),
         ):
             self.assertFalse(is_jira_sso_available())
+
+    def test_jira_integration_write_access_is_owner_only(self):
+        owner = TokenData(
+            user_id="u-owner",
+            username="owner",
+            tenant_id="t1",
+            org_id="o1",
+            role="user",
+            permissions=[],
+            group_ids=["g1"],
+            is_superuser=False,
+        )
+        non_owner = TokenData(
+            user_id="u-other",
+            username="other",
+            tenant_id="t1",
+            org_id="o1",
+            role="user",
+            permissions=[],
+            group_ids=["g1"],
+            is_superuser=False,
+        )
+        item = {
+            "id": "int-1",
+            "createdBy": "u-owner",
+            "visibility": "group",
+            "sharedGroupIds": ["g1"],
+        }
+        self.assertTrue(jira_integration_has_access(item, owner, write=True))
+        self.assertFalse(jira_integration_has_access(item, non_owner, write=True))
+        self.assertTrue(jira_integration_has_access(item, non_owner, write=False))
 
 
 if __name__ == '__main__':

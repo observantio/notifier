@@ -68,3 +68,31 @@ def test_get_notification_channel_access_control():
     fetched_owner = svc.get_notification_channel(created.id, tenant_id="t-2", user_id="owner2", group_ids=None)
     assert fetched_owner is not None
     assert fetched_owner.config == {"webhook_url": "https://x"}
+
+
+@pytest.mark.skipif(not __import__('database', fromlist=['']).connection_test(), reason="DB not available")
+def test_channel_update_delete_require_owner():
+    svc = ChannelStorageService(None)
+    ch_in = NotificationChannelCreate(
+        name="shared-ch",
+        type=ChannelType.SLACK,
+        config={"webhook_url": "https://x"},
+        enabled=True,
+        visibility="tenant",
+    )
+    created = svc.create_notification_channel(ch_in, tenant_id="t-3", user_id="owner3", group_ids=None)
+    updated = svc.update_notification_channel(
+        created.id,
+        NotificationChannelCreate(
+            name="mutated",
+            type=ChannelType.SLACK,
+            config={"webhook_url": "https://mutated"},
+            enabled=True,
+            visibility="tenant",
+        ),
+        tenant_id="t-3",
+        user_id="viewer3",
+        group_ids=None,
+    )
+    assert updated is None
+    assert svc.delete_notification_channel(created.id, tenant_id="t-3", user_id="viewer3") is False
