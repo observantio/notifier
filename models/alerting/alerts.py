@@ -37,7 +37,6 @@ class AlertStatus(BaseModel):
     state: AlertState = Field(..., description=DESC_CURRENT_STATE_ALERT)
     silenced_by: List[str] = Field(default_factory=list, alias="silencedBy", description=DESC_LIST_SILENCES_SILENCE_ALERT)
     inhibited_by: List[str] = Field(default_factory=list, alias="inhibitedBy", description=DESC_LIST_ALERTS_INHIBIT_ALERT)
-
     model_config = ConfigDict(populate_by_name=True)
 
 
@@ -50,7 +49,6 @@ class Alert(BaseModel):
     status: AlertStatus = Field(..., description=DESC_CURRENT_STATUS_ALERT)
     receivers: Optional[List[Union[str, Dict[str, Any]]]] = Field(default_factory=list, description=DESC_LIST_RECEIVERS_ALERT)
     fingerprint: Optional[str] = Field(None, description=DESC_UNIQUE_IDENTIFIER_ALERT)
-
     model_config = ConfigDict(populate_by_name=True)
 
 

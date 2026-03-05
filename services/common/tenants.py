@@ -1,5 +1,11 @@
 """
-Tenant helpers for BeNotified storage operations.
+Tenants management utilities for ensuring tenant existence and handling tenant-related operations in a multi-tenant application context.
+
+Copyright (c) 2026 Stefan Kumarasinghe
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
 """
 
 from __future__ import annotations
@@ -10,7 +16,6 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from db_models import Tenant
-
 
 def ensure_tenant_exists(db: Session, tenant_id: Optional[str]) -> str:
     normalized = str(tenant_id or "").strip()

@@ -403,7 +403,6 @@ class Config:
         if self.DEFAULT_QUERY_LIMIT > self.MAX_QUERY_LIMIT:
             raise ValueError("DEFAULT_QUERY_LIMIT cannot exceed MAX_QUERY_LIMIT")
 
-
 class Constants:
     STATUS_SUCCESS: str = "Success"
 

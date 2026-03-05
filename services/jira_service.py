@@ -52,7 +52,6 @@ class JiraService:
         email = (scoped.get("email") or self.email or "").strip()
         api_token = (scoped.get("api_token") or scoped.get("apiToken") or self.api_token or "").strip()
 
-        # Respect explicit auth mode first to avoid accidental precedence bugs.
         if auth_mode in {"bearer", "sso"}:
             if not bearer:
                 raise JiraError(f"Jira {auth_mode} auth requires bearer token")
@@ -63,7 +62,6 @@ class JiraService:
             token = base64.b64encode(f"{email}:{api_token}".encode()).decode()
             return {"Authorization": f"Basic {token}"}
 
-        # Backward-compatible fallback when auth mode is absent.
         if bearer:
             return {"Authorization": f"Bearer {bearer}"}
         if email and api_token:
@@ -117,8 +115,6 @@ class JiraService:
             logger.warning("Jira %s connection failure contacting %s: %s", method, host, exc)
             raise JiraError(f"Unable to connect to Jira host {host}") from exc
         except RuntimeError as exc:
-            # uvloop/anyio may surface closed transport/handler shutdown as RuntimeError.
-            # Treat these as transient connectivity failures instead of noisy stack traces.
             host = urlparse(url).netloc or "jira"
             logger.warning("Jira %s runtime transport failure contacting %s: %s", method, host, exc)
             raise JiraError(f"Unable to connect to Jira host {host}") from exc

@@ -92,9 +92,6 @@ async def jira_issue_types_via_integration(tenant_id: str, integration_id: str, 
 def resolve_incident_jira_credentials(incident, tenant_id: str, current_user: TokenData):
     integration_id = str(getattr(incident, "jira_integration_id", "") or "").strip()
     if integration_id:
-        # Incident is already authorized for current_user; for linked Jira sync/view
-        # use the stored integration in tenant settings even if current_user is not
-        # allowed to manage that integration directly.
         try:
             integration = resolve_jira_integration(
                 tenant_id,

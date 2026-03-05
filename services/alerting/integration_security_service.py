@@ -49,7 +49,6 @@ def _tenant_settings_copy(tenant: Tenant) -> Dict[str, object]:
 
 def _persist_tenant_settings(tenant: Tenant, settings: Dict[str, object]) -> None:
     tenant.settings = dict(settings)
-    # settings is JSON; force SQLAlchemy to persist nested mutations reliably.
     flag_modified(tenant, "settings")
 
 
@@ -215,8 +214,6 @@ def normalize_visibility(value: Optional[str], default_value: str = "private") -
 
 
 def is_jira_sso_available() -> bool:
-    # BeNotified may run with a slimmer Config surface than BeObservant.
-    # Use getattr/env fallbacks so missing attributes never crash requests.
     auth_provider = str(
         getattr(config, "AUTH_PROVIDER", None) or os.getenv("AUTH_PROVIDER", "")
     ).strip().lower()

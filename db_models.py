@@ -26,9 +26,9 @@ class Base(DeclarativeBase):
     pass
 
 
-_FK_GROUPS  = "groups.id"
-_FK_TENANTS = "tenants.id"
-_CASCADE    = "all, delete-orphan"
+FK_GROUPS  = "groups.id"
+FK_TENANTS = "tenants.id"
+CASCADE    = "all, delete-orphan"
 
 
 def _uuid() -> str:
@@ -43,7 +43,7 @@ rule_groups = Table(
     "rule_groups",
     Base.metadata,
     Column("rule_id",  String, ForeignKey("alert_rules.id", ondelete="CASCADE"), primary_key=True),
-    Column("group_id", String, ForeignKey(_FK_GROUPS,       ondelete="CASCADE"), primary_key=True),
+    Column("group_id", String, ForeignKey(FK_GROUPS,       ondelete="CASCADE"), primary_key=True),
     Index("idx_rule_groups_rule",  "rule_id"),
     Index("idx_rule_groups_group", "group_id"),
 )
@@ -52,7 +52,7 @@ channel_groups = Table(
     "channel_groups",
     Base.metadata,
     Column("channel_id", String, ForeignKey("notification_channels.id", ondelete="CASCADE"), primary_key=True),
-    Column("group_id",   String, ForeignKey(_FK_GROUPS,                 ondelete="CASCADE"), primary_key=True),
+    Column("group_id",   String, ForeignKey(FK_GROUPS,                 ondelete="CASCADE"), primary_key=True),
     Index("idx_channel_groups_channel", "channel_id"),
     Index("idx_channel_groups_group",   "group_id"),
 )
@@ -69,10 +69,10 @@ class Tenant(Base):
     created_at:   Mapped[datetime]       = mapped_column(DateTime,    default=_now, nullable=False)
     updated_at:   Mapped[datetime]       = mapped_column(DateTime,    default=_now, onupdate=_now, nullable=False)
 
-    groups:                Mapped[List["Group"]]               = relationship("Group",               back_populates="tenant", cascade=_CASCADE)
-    alert_rules:           Mapped[List["AlertRule"]]           = relationship("AlertRule",           back_populates="tenant", cascade=_CASCADE)
-    alert_incidents:       Mapped[List["AlertIncident"]]       = relationship("AlertIncident",       back_populates="tenant", cascade=_CASCADE)
-    notification_channels: Mapped[List["NotificationChannel"]] = relationship("NotificationChannel", back_populates="tenant", cascade=_CASCADE)
+    groups:                Mapped[List["Group"]]               = relationship("Group",               back_populates="tenant", cascade=CASCADE)
+    alert_rules:           Mapped[List["AlertRule"]]           = relationship("AlertRule",           back_populates="tenant", cascade=CASCADE)
+    alert_incidents:       Mapped[List["AlertIncident"]]       = relationship("AlertIncident",       back_populates="tenant", cascade=CASCADE)
+    notification_channels: Mapped[List["NotificationChannel"]] = relationship("NotificationChannel", back_populates="tenant", cascade=CASCADE)
 
     __table_args__ = (
         Index("idx_tenants_active", "is_active"),
@@ -83,7 +83,7 @@ class Group(Base):
     __tablename__ = "groups"
 
     id:          Mapped[str]           = mapped_column(String,      primary_key=True, default=_uuid)
-    tenant_id:   Mapped[str]           = mapped_column(String,      ForeignKey(_FK_TENANTS, ondelete="CASCADE"), nullable=False, index=True)
+    tenant_id:   Mapped[str]           = mapped_column(String,      ForeignKey(FK_TENANTS, ondelete="CASCADE"), nullable=False, index=True)
     name:        Mapped[str]           = mapped_column(String(100), nullable=False, index=True)
     description: Mapped[Optional[str]] = mapped_column(Text)
     is_active:   Mapped[bool]          = mapped_column(Boolean,     default=True, nullable=False)
@@ -104,7 +104,7 @@ class AlertRule(Base):
     __tablename__ = "alert_rules"
 
     id:                    Mapped[str]            = mapped_column(String,      primary_key=True, default=_uuid)
-    tenant_id:             Mapped[str]            = mapped_column(String,      ForeignKey(_FK_TENANTS, ondelete="CASCADE"), nullable=False, index=True)
+    tenant_id:             Mapped[str]            = mapped_column(String,      ForeignKey(FK_TENANTS, ondelete="CASCADE"), nullable=False, index=True)
     created_by:            Mapped[Optional[str]]  = mapped_column(String,      index=True)
     org_id:                Mapped[Optional[str]]  = mapped_column(String,      index=True)
     name:                  Mapped[str]            = mapped_column(String(200), nullable=False, index=True)
@@ -134,7 +134,7 @@ class AlertIncident(Base):
     __tablename__ = "alert_incidents"
 
     id:           Mapped[str]               = mapped_column(String,      primary_key=True, default=_uuid)
-    tenant_id:    Mapped[str]               = mapped_column(String,      ForeignKey(_FK_TENANTS, ondelete="CASCADE"), nullable=False, index=True)
+    tenant_id:    Mapped[str]               = mapped_column(String,      ForeignKey(FK_TENANTS, ondelete="CASCADE"), nullable=False, index=True)
     fingerprint:  Mapped[str]               = mapped_column(String(255), nullable=False, index=True)
     alert_name:   Mapped[str]               = mapped_column(String(200), nullable=False, index=True)
     severity:     Mapped[str]               = mapped_column(String(20),  nullable=False, default="warning", index=True)
@@ -161,7 +161,7 @@ class NotificationChannel(Base):
     __tablename__ = "notification_channels"
 
     id:         Mapped[str]            = mapped_column(String,      primary_key=True, default=_uuid)
-    tenant_id:  Mapped[str]            = mapped_column(String,      ForeignKey(_FK_TENANTS, ondelete="CASCADE"), nullable=False, index=True)
+    tenant_id:  Mapped[str]            = mapped_column(String,      ForeignKey(FK_TENANTS, ondelete="CASCADE"), nullable=False, index=True)
     created_by: Mapped[Optional[str]]  = mapped_column(String,      index=True)
     name:       Mapped[str]            = mapped_column(String(200), nullable=False, index=True)
     type:       Mapped[str]            = mapped_column(String(50),  nullable=False, index=True)
@@ -185,7 +185,7 @@ class PurgedSilence(Base):
     __tablename__ = "purged_silences"
 
     id:         Mapped[str]           = mapped_column(String,   primary_key=True)
-    tenant_id:  Mapped[Optional[str]] = mapped_column(String,   ForeignKey(_FK_TENANTS, ondelete="CASCADE"), index=True)
+    tenant_id:  Mapped[Optional[str]] = mapped_column(String,   ForeignKey(FK_TENANTS, ondelete="CASCADE"), index=True)
     created_at: Mapped[datetime]      = mapped_column(DateTime, default=_now, nullable=False)
 
 
@@ -193,7 +193,7 @@ class HiddenAlertRule(Base):
     __tablename__ = "hidden_alert_rules"
 
     id:         Mapped[str]      = mapped_column(String, primary_key=True, default=_uuid)
-    tenant_id:  Mapped[str]      = mapped_column(String, ForeignKey(_FK_TENANTS, ondelete="CASCADE"), nullable=False, index=True)
+    tenant_id:  Mapped[str]      = mapped_column(String, ForeignKey(FK_TENANTS, ondelete="CASCADE"), nullable=False, index=True)
     user_id:    Mapped[str]      = mapped_column(String, nullable=False, index=True)
     rule_id:    Mapped[str]      = mapped_column(String, ForeignKey("alert_rules.id", ondelete="CASCADE"), nullable=False, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now, nullable=False)
@@ -208,7 +208,7 @@ class HiddenSilence(Base):
     __tablename__ = "hidden_silences"
 
     id:         Mapped[str]      = mapped_column(String, primary_key=True, default=_uuid)
-    tenant_id:  Mapped[str]      = mapped_column(String, ForeignKey(_FK_TENANTS, ondelete="CASCADE"), nullable=False, index=True)
+    tenant_id:  Mapped[str]      = mapped_column(String, ForeignKey(FK_TENANTS, ondelete="CASCADE"), nullable=False, index=True)
     user_id:    Mapped[str]      = mapped_column(String, nullable=False, index=True)
     silence_id: Mapped[str]      = mapped_column(String, nullable=False, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now, nullable=False)
@@ -223,7 +223,7 @@ class HiddenNotificationChannel(Base):
     __tablename__ = "hidden_notification_channels"
 
     id:         Mapped[str]      = mapped_column(String, primary_key=True, default=_uuid)
-    tenant_id:  Mapped[str]      = mapped_column(String, ForeignKey(_FK_TENANTS, ondelete="CASCADE"), nullable=False, index=True)
+    tenant_id:  Mapped[str]      = mapped_column(String, ForeignKey(FK_TENANTS, ondelete="CASCADE"), nullable=False, index=True)
     user_id:    Mapped[str]      = mapped_column(String, nullable=False, index=True)
     channel_id: Mapped[str]      = mapped_column(String, ForeignKey("notification_channels.id", ondelete="CASCADE"), nullable=False, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now, nullable=False)
@@ -238,7 +238,7 @@ class HiddenJiraIntegration(Base):
     __tablename__ = "hidden_jira_integrations"
 
     id:             Mapped[str]      = mapped_column(String, primary_key=True, default=_uuid)
-    tenant_id:      Mapped[str]      = mapped_column(String, ForeignKey(_FK_TENANTS, ondelete="CASCADE"), nullable=False, index=True)
+    tenant_id:      Mapped[str]      = mapped_column(String, ForeignKey(FK_TENANTS, ondelete="CASCADE"), nullable=False, index=True)
     user_id:        Mapped[str]      = mapped_column(String, nullable=False, index=True)
     integration_id: Mapped[str]      = mapped_column(String, nullable=False, index=True)
     created_at:     Mapped[datetime] = mapped_column(DateTime, default=_now, nullable=False)

@@ -48,7 +48,6 @@ def _resolve_groups(
         try:
             db.flush()
         except IntegrityError:
-            # Another request may have created one or more groups concurrently.
             db.rollback()
         groups = db.query(Group).filter(Group.tenant_id == tenant_id, Group.id.in_(normalized)).all()
         present_ids = {g.id for g in groups}

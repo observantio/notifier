@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import logging
 import secrets
-
 from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
@@ -12,7 +11,6 @@ from middleware.headers import security_headers_middleware
 from middleware.error_handlers import general_exception_handler, validation_exception_handler
 from middleware.concurrency_limit import ConcurrencyLimitMiddleware
 from middleware.request_size_limit import RequestSizeLimitMiddleware
-
 from routers.observability.alerts import router as alertmanager_alerts_router, webhook_router as alertmanager_webhook_router
 from routers.observability.incidents import router as alertmanager_incidents_router
 from routers.observability.jira import router as alertmanager_jira_router

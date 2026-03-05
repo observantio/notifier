@@ -14,7 +14,6 @@ from enum import Enum
 
 from .silences import Visibility
 
-
 DESC_UNIQUE_IDENTIFIER = "Unique identifier"
 DESC_RULE_NAME = "Rule name"
 DESC_RULE_EXPRESSION = "Prometheus expression for the alert rule"
