@@ -115,10 +115,12 @@ async def test_patch_incident_requests_write_access_for_existing_incident(monkey
 
     def fake_get_incident_for_user(*args, **kwargs):
         captured["existing_args"] = args
+        captured["existing_kwargs"] = kwargs
         return existing
 
     def fake_update_incident(*args, **kwargs):
         captured["update_args"] = args
+        captured["update_kwargs"] = kwargs
         return updated
 
     monkeypatch.setattr(storage_service, "get_incident_for_user", fake_get_incident_for_user)
@@ -138,5 +140,16 @@ async def test_patch_incident_requests_write_access_for_existing_incident(monkey
     payload = AlertIncidentUpdateRequest()
     await patch_incident("i2", payload, current_user=user)
 
-    assert captured["existing_args"][5] is True
-    assert captured["update_args"][5] == ["g1"]
+    existing_write_access = (
+        captured["existing_kwargs"].get("write_access")
+        if "write_access" in captured["existing_kwargs"]
+        else captured["existing_args"][4]
+    )
+    assert existing_write_access is True
+
+    update_group_ids = (
+        captured["update_kwargs"].get("group_ids")
+        if "group_ids" in captured["update_kwargs"]
+        else captured["update_args"][4]
+    )
+    assert update_group_ids == ["g1"]
