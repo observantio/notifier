@@ -39,7 +39,14 @@ async def notify_for_alerts(service, tenant_id: str, alerts_list, storage_servic
             org_id=org_id,
         )
         if not channels:
-            logger.info("No notification channels configured for rule %s", alertname)
+            logger.info(
+                "No deliverable notification channels for rule=%s org=%s rule_id=%s visibility=%s configured_channel_ids=%s",
+                alertname,
+                org_id or "",
+                getattr(matched_rule, "id", None) if matched_rule else None,
+                getattr(matched_rule, "visibility", None) if matched_rule else None,
+                getattr(matched_rule, "notification_channels", None) if matched_rule else None,
+            )
             continue
 
         raw_status = incoming_alert.get("status") or {}

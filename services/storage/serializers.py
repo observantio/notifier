@@ -88,6 +88,10 @@ def incident_to_pydantic(incident) -> AlertIncidentPydantic:
         visibility_value = "public"
 
     safe_annotations = {str(k): str(v) for k, v in annotations.items() if k != INCIDENT_META_KEY and v is not None}
+    if "beobservantCorrelationId" not in safe_annotations:
+        corr = str(meta.get("correlation_id") or meta.get("incident_key") or "").strip()
+        if corr:
+            safe_annotations["beobservantCorrelationId"] = corr
 
     payload = {
         "id": incident.id,

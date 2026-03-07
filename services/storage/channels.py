@@ -249,28 +249,65 @@ class ChannelStorageService:
                 .limit(int(app_config.MAX_QUERY_LIMIT))
                 .all()
             )
+            if not rules:
+                logger.info(
+                    "No enabled rules found for delivery: tenant=%s rule=%s org=%s",
+                    tenant_id,
+                    rule_name,
+                    org_id or "",
+                )
+                return []
             if org_id:
                 org_matched = [r for r in rules if str(getattr(r, "org_id", "") or "") == str(org_id)]
                 rules = org_matched or [r for r in rules if not getattr(r, "org_id", None)] or rules
 
+            tenant_channels = (
+                db.query(NotificationChannelDB)
+                .options(joinedload(NotificationChannelDB.shared_groups))
+                .filter(NotificationChannelDB.tenant_id == tenant_id)
+                .limit(int(app_config.MAX_QUERY_LIMIT))
+                .all()
+            )
+            channel_by_id = {str(ch.id): ch for ch in tenant_channels}
+
             results: List[NotificationChannel] = []
             seen_ids: set[str] = set()
+            debug_notes: List[str] = []
             for r in rules:
-                q = (
-                    db.query(NotificationChannelDB)
-                    .options(joinedload(NotificationChannelDB.shared_groups))
-                    .filter(NotificationChannelDB.tenant_id == r.tenant_id)
-                    .filter(NotificationChannelDB.enabled.is_(True))
-                )
-                if r.notification_channels:
-                    q = q.filter(NotificationChannelDB.id.in_(r.notification_channels))
-                for ch in q.limit(int(app_config.MAX_QUERY_LIMIT)).all():
+                configured_ids = [str(cid) for cid in (r.notification_channels or []) if str(cid).strip()]
+                if configured_ids:
+                    candidate_channels = [channel_by_id[cid] for cid in configured_ids if cid in channel_by_id]
+                    missing_ids = [cid for cid in configured_ids if cid not in channel_by_id]
+                    disabled_ids = [str(ch.id) for ch in candidate_channels if not bool(ch.enabled)]
+                    if missing_ids:
+                        debug_notes.append(f"rule={r.id}:missing={missing_ids}")
+                    if disabled_ids:
+                        debug_notes.append(f"rule={r.id}:disabled={disabled_ids}")
+                    candidate_channels = [ch for ch in candidate_channels if bool(ch.enabled)]
+                else:
+                    candidate_channels = [ch for ch in tenant_channels if bool(ch.enabled)]
+                    debug_notes.append(f"rule={r.id}:no_explicit_channel_ids")
+
+                compatible_skipped = 0
+                for ch in candidate_channels:
                     if ch.id in seen_ids:
                         continue
                     if not self._rule_channel_compatible(r, ch):
+                        compatible_skipped += 1
                         continue
                     raw_cfg = decrypt_config(cast(Dict[str, Any], getattr(ch, "config") or {}))
                     setattr(ch, "config", raw_cfg)
                     results.append(channel_to_pydantic(ch))
                     seen_ids.add(str(ch.id))
+                if compatible_skipped:
+                    debug_notes.append(f"rule={r.id}:incompatible_skipped={compatible_skipped}")
+            if not results:
+                logger.info(
+                    "No deliverable channels after resolution: tenant=%s rule=%s org=%s matched_rules=%s notes=%s",
+                    tenant_id,
+                    rule_name,
+                    org_id or "",
+                    [str(getattr(r, "id", "")) for r in rules],
+                    ";".join(debug_notes) if debug_notes else "none",
+                )
             return results

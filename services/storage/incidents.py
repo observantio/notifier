@@ -49,6 +49,7 @@ def _shared_group_ids(db_obj) -> List[str]:
 
 
 INCIDENT_META_KEY_IDENTITY = "incident_key"
+METRIC_STATES_ANNOTATION_KEY = "beobservantMetricStates"
 
 
 def incident_scope_hint_from_labels(labels: Dict[str, Any]) -> str:
@@ -90,6 +91,47 @@ def incident_activity_token_from_row(incident: AlertIncidentDB) -> str:
     if key:
         return f"k:{key}"
     return f"fp:{str(getattr(incident, 'fingerprint', '') or '')}"
+
+
+def _extract_metric_state(labels: Dict[str, Any]) -> str:
+    if not isinstance(labels, dict):
+        return ""
+    return str(
+        labels.get("state")
+        or labels.get("metric_state")
+        or labels.get("mem_state")
+        or ""
+    ).strip()
+
+
+def _parse_metric_states(value: Any) -> List[str]:
+    raw = str(value or "").strip()
+    if not raw:
+        return []
+    seen: set[str] = set()
+    out: List[str] = []
+    for part in raw.split(","):
+        state = str(part or "").strip()
+        if not state or state in seen:
+            continue
+        seen.add(state)
+        out.append(state)
+    return out
+
+
+def _merge_metric_states(annotations: Dict[str, Any], *states: str) -> str:
+    existing_states = _parse_metric_states(
+        (annotations or {}).get(METRIC_STATES_ANNOTATION_KEY),
+    )
+    seen = set(existing_states)
+    merged = list(existing_states)
+    for state in states:
+        normalized = str(state or "").strip()
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        merged.append(normalized)
+    return ",".join(merged)
 
 
 def _incident_access_allowed(
@@ -311,6 +353,7 @@ class IncidentStorageService:
             for alert in alerts or []:
                 labels = alert.get("labels", {}) or {}
                 annotations = alert.get("annotations", {}) or {}
+                metric_state = _extract_metric_state(labels)
                 incident_key = incident_key_from_labels(labels)
                 fingerprint = alert.get("fingerprint") or labels.get("fingerprint")
 
@@ -342,10 +385,61 @@ class IncidentStorageService:
                             .order_by(AlertIncidentDB.updated_at.desc())
                             .all()
                         )
-                        incident = next(
-                            (item for item in candidates if incident_key_from_db_row(item) == incident_key),
-                            None,
-                        )
+                        matching_candidates = [
+                            item for item in candidates if incident_key_from_db_row(item) == incident_key
+                        ]
+                        if matching_candidates:
+                            canonical = matching_candidates[0]
+                            if len(matching_candidates) > 1:
+                                duplicate_ids = [str(item.id) for item in matching_candidates[1:]]
+                                logger.info(
+                                    "Deduplicating incidents for key=%s tenant=%s keeping=%s duplicates=%s",
+                                    incident_key,
+                                    tenant_id,
+                                    canonical.id,
+                                    duplicate_ids,
+                                )
+                                for duplicate in matching_candidates[1:]:
+                                    duplicate_state = ""
+                                    if isinstance(getattr(duplicate, "labels", None), dict):
+                                        duplicate_state = str(
+                                            duplicate.labels.get("state")
+                                            or duplicate.labels.get("metric_state")
+                                            or duplicate.labels.get("mem_state")
+                                            or ""
+                                        ).strip()
+                                    state_text = duplicate_state or "unknown"
+                                    dedupe_note = (
+                                        f"System deduplicated this incident into #{canonical.id} "
+                                        f"(correlation scope: {incident_key}; metric state: {state_text})"
+                                    )
+                                    if str(duplicate.status or "").lower() != "resolved":
+                                        duplicate.status = "resolved"
+                                        duplicate.resolved_at = now
+                                    existing_notes = list(duplicate.notes or [])
+                                    existing_notes.append(
+                                        {
+                                            "author": "system",
+                                            "text": dedupe_note,
+                                            "createdAt": now.isoformat(),
+                                        }
+                                    )
+                                    duplicate.notes = existing_notes
+                                merged_states = _merge_metric_states(
+                                    canonical.annotations if isinstance(canonical.annotations, dict) else {},
+                                    *[
+                                        _extract_metric_state(item.labels if isinstance(item.labels, dict) else {})
+                                        for item in matching_candidates
+                                    ],
+                                )
+                                canonical_annotations = (
+                                    canonical.annotations if isinstance(canonical.annotations, dict) else {}
+                                )
+                                canonical.annotations = {
+                                    **canonical_annotations,
+                                    METRIC_STATES_ANNOTATION_KEY: merged_states,
+                                }
+                            incident = canonical
                 if not incident:
                     incident = (
                         db.query(AlertIncidentDB)
@@ -368,8 +462,10 @@ class IncidentStorageService:
                         "visibility": (rule.visibility or "public") if rule else "public",
                         "shared_group_ids": _shared_group_ids(rule) if rule else [],
                         "created_by": rule.created_by if rule else None,
+                        "correlation_id": str(getattr(rule, "group", "") or "").strip() if rule else "",
                         INCIDENT_META_KEY_IDENTITY: incident_key,
                     }
+                    merged_states = _merge_metric_states(annotations, metric_state)
                     incident = AlertIncidentDB(
                         id=str(uuid.uuid4()),
                         tenant_id=tenant_id,
@@ -382,7 +478,11 @@ class IncidentStorageService:
                         last_seen_at=now,
                         resolved_at=None,
                         notes=[],
-                        annotations={**annotations, INCIDENT_META_KEY: json.dumps(metadata)},
+                        annotations={
+                            **annotations,
+                            METRIC_STATES_ANNOTATION_KEY: merged_states,
+                            INCIDENT_META_KEY: json.dumps(metadata),
+                        },
                     )
                     db.add(incident)
                     continue
@@ -401,12 +501,23 @@ class IncidentStorageService:
                 if rule:
                     existing_meta["visibility"] = rule.visibility or existing_meta.get("visibility", "public")
                     existing_meta["shared_group_ids"] = _shared_group_ids(rule)
+                    existing_meta["correlation_id"] = str(getattr(rule, "group", "") or "").strip()
                     if rule.created_by:
                         existing_meta["created_by"] = rule.created_by
                 if incident_key:
                     existing_meta[INCIDENT_META_KEY_IDENTITY] = incident_key
+                if not str(existing_meta.get("correlation_id") or "").strip() and incident_key:
+                    existing_meta["correlation_id"] = incident_key
 
-                incident.annotations = {**annotations, INCIDENT_META_KEY: json.dumps(existing_meta)}
+                merged_states = _merge_metric_states(
+                    incident.annotations if isinstance(incident.annotations, dict) else {},
+                    metric_state,
+                )
+                incident.annotations = {
+                    **annotations,
+                    METRIC_STATES_ANNOTATION_KEY: merged_states,
+                    INCIDENT_META_KEY: json.dumps(existing_meta),
+                }
                 if parsed_starts and not incident.starts_at:
                     incident.starts_at = parsed_starts
                 incident.status = "open"
