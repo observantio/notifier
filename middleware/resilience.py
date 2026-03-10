@@ -12,7 +12,7 @@ import asyncio
 import logging
 import random
 from functools import wraps
-from typing import Callable, TypeVar, ParamSpec
+from typing import Awaitable, Callable, ParamSpec, TypeVar
 import httpx
 
 from config import config
@@ -21,15 +21,16 @@ logger = logging.getLogger(__name__)
 
 P = ParamSpec('P')
 T = TypeVar('T')
+AsyncFunc = Callable[P, Awaitable[T]]
 
 def with_retry(
     max_retries: int = config.MAX_RETRIES,
     backoff: float = config.RETRY_BACKOFF
-) -> Callable[[Callable[P, T]], Callable[P, T]]:
-    def decorator(func: Callable[P, T]) -> Callable[P, T]:
+) -> Callable[[AsyncFunc[P, T]], AsyncFunc[P, T]]:
+    def decorator(func: AsyncFunc[P, T]) -> AsyncFunc[P, T]:
         @wraps(func)
         async def wrapper(*args: P.args, **kwargs: P.kwargs) -> T:
-            last_exception = None
+            last_exception: Exception | None = None
 
             for attempt in range(max_retries + 1):
                 try:
@@ -83,8 +84,8 @@ def with_retry(
     return decorator
 
 
-def with_timeout(timeout: float = config.DEFAULT_TIMEOUT) -> Callable[[Callable[P, T]], Callable[P, T]]:
-    def decorator(func: Callable[P, T]) -> Callable[P, T]:
+def with_timeout(timeout: float = config.DEFAULT_TIMEOUT) -> Callable[[AsyncFunc[P, T]], AsyncFunc[P, T]]:
+    def decorator(func: AsyncFunc[P, T]) -> AsyncFunc[P, T]:
         @wraps(func)
         async def wrapper(*args: P.args, **kwargs: P.kwargs) -> T:
             try:

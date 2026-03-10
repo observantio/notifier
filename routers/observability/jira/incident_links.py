@@ -3,6 +3,7 @@ import logging
 from fastapi import APIRouter, Body, Depends, HTTPException, status
 from fastapi.concurrency import run_in_threadpool
 
+from custom_types.json import JSONDict
 from middleware.dependencies import require_permission_with_scope
 from middleware.error_handlers import handle_route_errors
 from models.access.auth_models import Permission, TokenData
@@ -34,7 +35,7 @@ async def create_incident_jira(
     incident_id: str,
     payload: IncidentJiraCreateRequest = Body(...),
     current_user: TokenData = Depends(require_permission_with_scope(Permission.UPDATE_INCIDENTS, "alertmanager")),
-):
+) -> AlertIncident:
     group_ids = getattr(current_user, "group_ids", []) or []
     incident = await run_in_threadpool(
         storage_service.get_incident_for_user,
@@ -98,10 +99,12 @@ async def create_incident_jira(
         incident_id,
         current_user.tenant_id,
         current_user.user_id,
-        AlertIncidentUpdateRequest(
-            jiraTicketKey=response.get("key") or None,
-            jiraTicketUrl=response.get("url") or None,
-            jiraIntegrationId=integration_id,
+        AlertIncidentUpdateRequest.model_validate(
+            {
+                "jiraTicketKey": response.get("key") or None,
+                "jiraTicketUrl": response.get("url") or None,
+                "jiraIntegrationId": integration_id,
+            }
         ),
         group_ids,
     )
@@ -110,8 +113,11 @@ async def create_incident_jira(
 
     try:
         for formatted_text in build_formatted_incident_note_bodies(updated, current_user):
+            issue_key = str(response.get("key") or "").strip()
+            if not issue_key:
+                raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Missing Jira issue key")
             await jira_service.add_comment(
-                issue_key=response.get("key"),
+                issue_key=issue_key,
                 text=formatted_text,
                 credentials=jira_integration_credentials(integration),
             )
@@ -127,7 +133,7 @@ async def create_incident_jira(
 async def sync_incident_jira_notes(
     incident_id: str,
     current_user: TokenData = Depends(require_permission_with_scope(Permission.UPDATE_INCIDENTS, "alertmanager")),
-):
+) -> JSONDict:
     group_ids = getattr(current_user, "group_ids", []) or []
     incident = await run_in_threadpool(
         storage_service.get_incident_for_user,
@@ -181,7 +187,7 @@ async def sync_incident_jira_notes(
 async def list_incident_jira_comments(
     incident_id: str,
     current_user: TokenData = Depends(require_permission_with_scope(Permission.READ_INCIDENTS, "alertmanager")),
-):
+) -> JSONDict:
     group_ids = getattr(current_user, "group_ids", []) or []
     incident = await run_in_threadpool(
         storage_service.get_incident_for_user,

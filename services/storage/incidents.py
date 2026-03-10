@@ -16,13 +16,15 @@ import json
 import logging
 import asyncio
 import uuid
+from collections.abc import Coroutine
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import List, Mapping, Optional
 
 from fastapi import HTTPException, status as http_status
 from sqlalchemy.orm import Session, joinedload
 
 from config import config as app_config
+from custom_types.json import JSONDict
 from database import get_db_session
 from db_models import AlertIncident as AlertIncidentDB
 from db_models import AlertRule as AlertRuleDB
@@ -45,15 +47,20 @@ from services.storage.serializers import incident_to_pydantic
 logger = logging.getLogger(__name__)
 
 
-def _shared_group_ids(db_obj) -> List[str]:
-    return [g.id for g in db_obj.shared_groups] if getattr(db_obj, "shared_groups", None) else []
+def _json_dict(value: object) -> JSONDict:
+    return value if isinstance(value, dict) else {}
+
+
+def _shared_group_ids(db_obj: object) -> List[str]:
+    rule = db_obj if isinstance(db_obj, AlertRuleDB) else None
+    return [g.id for g in rule.shared_groups] if rule and rule.shared_groups else []
 
 
 INCIDENT_META_KEY_IDENTITY = "incident_key"
 METRIC_STATES_ANNOTATION_KEY = "beobservantMetricStates"
 
 
-def incident_scope_hint_from_labels(labels: Dict[str, Any]) -> str:
+def incident_scope_hint_from_labels(labels: Mapping[str, object]) -> str:
     for key in ("org_id", "orgId", "tenant", "product"):
         value = str((labels or {}).get(key) or "").strip()
         if value:
@@ -61,7 +68,7 @@ def incident_scope_hint_from_labels(labels: Dict[str, Any]) -> str:
     return ""
 
 
-def incident_key_from_labels(labels: Dict[str, Any]) -> Optional[str]:
+def incident_key_from_labels(labels: Mapping[str, object]) -> Optional[str]:
     alert_name = str((labels or {}).get("alertname") or "").strip()
     if not alert_name:
         return None
@@ -94,9 +101,7 @@ def incident_activity_token_from_row(incident: AlertIncidentDB) -> str:
     return f"fp:{str(getattr(incident, 'fingerprint', '') or '')}"
 
 
-def _extract_metric_state(labels: Dict[str, Any]) -> str:
-    if not isinstance(labels, dict):
-        return ""
+def _extract_metric_state(labels: Mapping[str, object]) -> str:
     return str(
         labels.get("state")
         or labels.get("metric_state")
@@ -105,7 +110,7 @@ def _extract_metric_state(labels: Dict[str, Any]) -> str:
     ).strip()
 
 
-def _parse_metric_states(value: Any) -> List[str]:
+def _parse_metric_states(value: object) -> List[str]:
     raw = str(value or "").strip()
     if not raw:
         return []
@@ -120,7 +125,7 @@ def _parse_metric_states(value: Any) -> List[str]:
     return out
 
 
-def _merge_metric_states(annotations: Dict[str, Any], *states: str) -> str:
+def _merge_metric_states(annotations: Mapping[str, object], *states: str) -> str:
     existing_states = _parse_metric_states(
         (annotations or {}).get(METRIC_STATES_ANNOTATION_KEY),
     )
@@ -135,7 +140,7 @@ def _merge_metric_states(annotations: Dict[str, Any], *states: str) -> str:
     return ",".join(merged)
 
 
-def _is_alert_suppressed(alert: Dict[str, Any]) -> bool:
+def _is_alert_suppressed(alert: JSONDict) -> bool:
     return is_suppressed_status(alert.get("status") or {})
 
 
@@ -163,7 +168,7 @@ def _incident_access_allowed(
     )
 
 
-def _resolve_rule_by_alertname(db: Session, tenant_id: str, labels: Dict[str, Any]) -> Optional[AlertRuleDB]:
+def _resolve_rule_by_alertname(db: Session, tenant_id: str, labels: Mapping[str, object]) -> Optional[AlertRuleDB]:
     alertname = labels.get("alertname")
     if not alertname:
         return None
@@ -190,7 +195,7 @@ def _resolve_rule_by_alertname(db: Session, tenant_id: str, labels: Dict[str, An
         return None
 
 
-def _run_async(coro) -> None:
+def _run_async(coro: Coroutine[object, object, object]) -> None:
     try:
         asyncio.run(coro)
     except RuntimeError:
@@ -201,7 +206,7 @@ def _run_async(coro) -> None:
             loop.close()
 
 
-def _resolve_incident_jira_credentials(tenant_id: str, integration_id: Optional[str]) -> Optional[Dict[str, Any]]:
+def _resolve_incident_jira_credentials(tenant_id: str, integration_id: Optional[str]) -> Optional[JSONDict]:
     integration_id = str(integration_id or "").strip()
     if integration_id:
         for item in load_tenant_jira_integrations(tenant_id):
@@ -209,10 +214,10 @@ def _resolve_incident_jira_credentials(tenant_id: str, integration_id: Optional[
                 continue
             if not integration_is_usable(item):
                 return None
-            return jira_integration_credentials(item)
+            return {str(key): value for key, value in jira_integration_credentials(item).items()}
     tenant_credentials = get_effective_jira_credentials(tenant_id)
     if tenant_credentials.get("base_url"):
-        return tenant_credentials
+        return {str(key): value for key, value in tenant_credentials.items()}
     return None
 
 
@@ -296,15 +301,13 @@ class IncidentStorageService:
         tenant_id: str,
         user_id: str,
         group_ids: Optional[List[str]] = None,
-    ) -> Dict[str, Any]:
+    ) -> JSONDict:
         group_ids = group_ids or []
-        summary = {
-            "open_total": 0,
-            "unassigned_open": 0,
-            "assigned_open": 0,
-            "assigned_to_me_open": 0,
-            "by_visibility": {"public": 0, "private": 0, "group": 0},
-        }
+        open_total = 0
+        unassigned_open = 0
+        assigned_open = 0
+        assigned_to_me_open = 0
+        by_visibility: dict[str, int] = {"public": 0, "private": 0, "group": 0}
 
         with get_db_session() as db:
             incidents = (
@@ -332,33 +335,40 @@ class IncidentStorageService:
                 if str(incident.status or "").lower() == "resolved":
                     continue
 
-                summary["open_total"] += 1
-                summary["by_visibility"][inc_visibility] += 1
+                open_total += 1
+                by_visibility[inc_visibility] += 1
 
                 assignee = str(incident.assignee or "").strip()
                 if not assignee:
-                    summary["unassigned_open"] += 1
+                    unassigned_open += 1
                 else:
-                    summary["assigned_open"] += 1
+                    assigned_open += 1
                     if assignee == str(user_id):
-                        summary["assigned_to_me_open"] += 1
+                        assigned_to_me_open += 1
 
-        return summary
+        return {
+            "open_total": open_total,
+            "unassigned_open": unassigned_open,
+            "assigned_open": assigned_open,
+            "assigned_to_me_open": assigned_to_me_open,
+            "by_visibility": by_visibility,
+        }
 
-    def sync_incidents_from_alerts(self, tenant_id: str, alerts: List[Dict[str, Any]], resolve_missing: bool = True) -> None:
+    def sync_incidents_from_alerts(self, tenant_id: str, alerts: List[JSONDict], resolve_missing: bool = True) -> None:
         now = datetime.now(timezone.utc)
         active_incident_tokens: set[str] = set()
 
         with get_db_session() as db:
             ensure_tenant_exists(db, tenant_id)
             for alert in alerts or []:
+                alert_data = _json_dict(alert)
                 if _is_alert_suppressed(alert):
                     continue
-                labels = alert.get("labels", {}) or {}
-                annotations = alert.get("annotations", {}) or {}
+                labels = _json_dict(alert_data.get("labels", {}))
+                annotations = _json_dict(alert_data.get("annotations", {}))
                 metric_state = _extract_metric_state(labels)
                 incident_key = incident_key_from_labels(labels)
-                fingerprint = alert.get("fingerprint") or labels.get("fingerprint")
+                fingerprint = alert_data.get("fingerprint") or labels.get("fingerprint")
 
                 if not fingerprint:
                     stable_blob = json.dumps(
@@ -451,7 +461,8 @@ class IncidentStorageService:
                     )
 
                 parsed_starts = None
-                starts_at = alert.get("startsAt") or alert.get("starts_at")
+                starts_at_value = alert_data.get("startsAt") or alert_data.get("starts_at")
+                starts_at = starts_at_value if isinstance(starts_at_value, str) else None
                 if starts_at:
                     try:
                         parsed_starts = datetime.fromisoformat(starts_at.replace("Z", "+00:00"))
@@ -473,8 +484,8 @@ class IncidentStorageService:
                         id=str(uuid.uuid4()),
                         tenant_id=tenant_id,
                         fingerprint=fingerprint,
-                        alert_name=labels.get("alertname") or "Unnamed alert",
-                        severity=labels.get("severity") or "warning",
+                        alert_name=str(labels.get("alertname") or "Unnamed alert"),
+                        severity=str(labels.get("severity") or "warning"),
                         status="open",
                         labels=labels,
                         starts_at=parsed_starts,
@@ -493,8 +504,8 @@ class IncidentStorageService:
                 existing_meta = parse_meta(incident.annotations or {})
                 previous_status = str(incident.status or "")
 
-                incident.alert_name = labels.get("alertname") or incident.alert_name
-                incident.severity = labels.get("severity") or incident.severity
+                incident.alert_name = str(labels.get("alertname") or incident.alert_name)
+                incident.severity = str(labels.get("severity") or incident.severity)
                 incident.labels = labels
 
                 if previous_status == "resolved" or incident.resolved_at is not None:
@@ -765,16 +776,16 @@ class IncidentStorageService:
         tenant_id: str,
         user_id: str,
         group_ids: Optional[List[str]],
-        alerts: List[Dict[str, Any]],
-    ) -> List[Dict[str, Any]]:
+        alerts: List[JSONDict],
+    ) -> List[JSONDict]:
         user_group_ids = [str(g) for g in (group_ids or []) if str(g).strip()]
         if not alerts:
             return []
 
         with get_db_session() as db:
-            visible: List[Dict[str, Any]] = []
+            visible: List[JSONDict] = []
             for alert in alerts:
-                labels = alert.get("labels") or {}
+                labels = _json_dict(alert.get("labels"))
                 alertname = str(labels.get("alertname") or "").strip()
                 if not alertname:
                     continue

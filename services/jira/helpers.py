@@ -12,6 +12,8 @@ from urllib.parse import urlparse
 
 from fastapi import  HTTPException, status
 from models.access.auth_models import TokenData
+from custom_types.json import JSONDict
+from models.alerting.incidents import AlertIncident
 
 from services.alerting.integration_security_service import (
     get_effective_jira_credentials,
@@ -24,18 +26,19 @@ from services.alerting.integration_security_service import (
 
 from services.jira_service import JiraError, jira_service
 
-async def jira_projects_via_integration(tenant_id: str, integration_id: str, current_user: TokenData) -> dict:
+
+def _find_integration(tenant_id: str, integration_id: str) -> JSONDict | None:
+    for item in load_tenant_jira_integrations(tenant_id):
+        if str(item.get("id") or "").strip() == str(integration_id or "").strip():
+            return item
+    return None
+
+async def jira_projects_via_integration(tenant_id: str, integration_id: str, current_user: TokenData) -> JSONDict:
+    integration: JSONDict | None
     try:
         integration = resolve_jira_integration(tenant_id, integration_id, current_user, require_write=False)
     except HTTPException as exc:
-        integration = next(
-            (
-                item
-                for item in load_tenant_jira_integrations(tenant_id)
-                if str(item.get("id") or "").strip() == str(integration_id or "").strip()
-            ),
-            None,
-        )
+        integration = _find_integration(tenant_id, integration_id)
         if not integration:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Jira integration not found") from exc
     credentials = jira_integration_credentials(integration)
@@ -55,18 +58,12 @@ async def jira_projects_via_integration(tenant_id: str, integration_id: str, cur
     return {"enabled": True, "projects": projects}
 
 
-async def jira_issue_types_via_integration(tenant_id: str, integration_id: str, project_key: str, current_user: TokenData) -> dict:
+async def jira_issue_types_via_integration(tenant_id: str, integration_id: str, project_key: str, current_user: TokenData) -> JSONDict:
+    integration: JSONDict | None
     try:
         integration = resolve_jira_integration(tenant_id, integration_id, current_user, require_write=False)
     except HTTPException as exc:
-        integration = next(
-            (
-                item
-                for item in load_tenant_jira_integrations(tenant_id)
-                if str(item.get("id") or "").strip() == str(integration_id or "").strip()
-            ),
-            None,
-        )
+        integration = _find_integration(tenant_id, integration_id)
         if not integration:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Jira integration not found") from exc
     credentials = jira_integration_credentials(integration)
@@ -89,9 +86,14 @@ async def jira_issue_types_via_integration(tenant_id: str, integration_id: str, 
     return {"enabled": True, "issueTypes": issue_types}
 
 
-def resolve_incident_jira_credentials(incident, tenant_id: str, current_user: TokenData):
+def resolve_incident_jira_credentials(
+    incident: AlertIncident,
+    tenant_id: str,
+    current_user: TokenData,
+) -> JSONDict | None:
     integration_id = str(getattr(incident, "jira_integration_id", "") or "").strip()
     if integration_id:
+        integration: JSONDict | None
         try:
             integration = resolve_jira_integration(
                 tenant_id,
@@ -100,24 +102,19 @@ def resolve_incident_jira_credentials(incident, tenant_id: str, current_user: To
                 require_write=False,
             )
         except HTTPException:
-            integration = next(
-                (
-                    item
-                    for item in load_tenant_jira_integrations(tenant_id)
-                    if str(item.get("id") or "").strip() == integration_id
-                ),
-                None,
-            )
+            integration = _find_integration(tenant_id, integration_id)
         if not integration or not integration_is_usable(integration):
             return None
         try:
-            return jira_integration_credentials(integration)
+            credentials: JSONDict = dict(jira_integration_credentials(integration))
+            return credentials
         except (TypeError, ValueError):
             return None
 
     if not jira_is_enabled_for_tenant(tenant_id):
         return None
     try:
-        return get_effective_jira_credentials(tenant_id)
+        default_credentials: JSONDict = dict(get_effective_jira_credentials(tenant_id))
+        return default_credentials
     except (TypeError, ValueError):
         return None

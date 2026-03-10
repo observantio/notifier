@@ -15,6 +15,7 @@ from email.message import EmailMessage
 
 
 from config import config
+from custom_types.json import JSONDict
 from models.alerting.alerts import Alert
 from models.alerting.channels import ChannelType, NotificationChannel
 from services.common.http_client import create_async_client
@@ -28,12 +29,12 @@ logger = logging.getLogger(__name__)
 
 class NotificationService:
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.timeout = config.DEFAULT_TIMEOUT
         self._client = create_async_client(self.timeout)
 
     @staticmethod
-    def _as_bool(value) -> bool:
+    def _as_bool(value: object) -> bool:
         try:
             return notification_validators._as_bool(value)
         except AttributeError:
@@ -45,7 +46,7 @@ class NotificationService:
                 return value.strip().lower() in ("1", "true", "yes", "on")
             return False
 
-    def validate_channel_config(self, channel_type: str, channel_config: dict | None) -> list[str]:
+    def validate_channel_config(self, channel_type: str, channel_config: JSONDict | None) -> list[str]:
         return notification_validators.validate_channel_config(channel_type, channel_config)
 
     async def _send_smtp_with_retry(
@@ -57,7 +58,7 @@ class NotificationService:
         password: str | None = None,
         start_tls: bool = False,
         use_tls: bool = False,
-    ):
+    ) -> object:
         return await notification_transport.send_smtp_with_retry(
             message,
             hostname=hostname,
@@ -150,11 +151,12 @@ class NotificationService:
             return False
         subject = f"[{action.upper()}] {alert.labels.get('alertname', 'Alert')}"
         body = notification_payloads.format_alert_body(alert, action)
-        provider = (cfg.get("email_provider") or cfg.get("emailProvider") or "smtp").strip().lower()
-        smtp_from = cfg.get("smtp_from") or cfg.get("smtpFrom") or cfg.get("from") or config.DEFAULT_ADMIN_EMAIL
+        provider_value = cfg.get("email_provider") or cfg.get("emailProvider") or "smtp"
+        provider = str(provider_value).strip().lower()
+        smtp_from = str(cfg.get("smtp_from") or cfg.get("smtpFrom") or cfg.get("from") or config.DEFAULT_ADMIN_EMAIL)
 
         if provider == "sendgrid":
-            api_key = cfg.get("sendgrid_api_key") or cfg.get("sendgridApiKey") or cfg.get("api_key") or cfg.get("apiKey")
+            api_key = str(cfg.get("sendgrid_api_key") or cfg.get("sendgridApiKey") or cfg.get("api_key") or cfg.get("apiKey") or "")
             if not api_key:
                 logger.error("SendGrid API key not configured for email channel %s", channel.name)
                 return False
@@ -166,7 +168,7 @@ class NotificationService:
             return sent
 
         if provider == "resend":
-            api_key = cfg.get("resend_api_key") or cfg.get("resendApiKey") or cfg.get("api_key") or cfg.get("apiKey")
+            api_key = str(cfg.get("resend_api_key") or cfg.get("resendApiKey") or cfg.get("api_key") or cfg.get("apiKey") or "")
             if not api_key:
                 logger.error("Resend API key not configured for email channel %s", channel.name)
                 return False
@@ -181,12 +183,12 @@ class NotificationService:
             logger.error("Unsupported email provider '%s' for channel %s", provider, channel.name)
             return False
 
-        smtp_host = cfg.get("smtp_host") or cfg.get("smtpHost")
-        smtp_port = int(cfg.get("smtp_port") or cfg.get("smtpPort") or 0)
-        smtp_user = cfg.get("smtp_username") or cfg.get("smtpUsername") or cfg.get("username")
-        smtp_pass = cfg.get("smtp_password") or cfg.get("smtpPassword") or cfg.get("password")
-        smtp_api_key = cfg.get("smtp_api_key") or cfg.get("smtpApiKey") or cfg.get("api_key") or cfg.get("apiKey")
-        smtp_auth_type = (cfg.get("smtp_auth_type") or cfg.get("smtpAuthType") or "password").strip().lower()
+        smtp_host = str(cfg.get("smtp_host") or cfg.get("smtpHost") or "")
+        smtp_port = int(str(cfg.get("smtp_port") or cfg.get("smtpPort") or 0))
+        smtp_user = str(cfg.get("smtp_username") or cfg.get("smtpUsername") or cfg.get("username") or "") or None
+        smtp_pass = str(cfg.get("smtp_password") or cfg.get("smtpPassword") or cfg.get("password") or "") or None
+        smtp_api_key = str(cfg.get("smtp_api_key") or cfg.get("smtpApiKey") or cfg.get("api_key") or cfg.get("apiKey") or "") or None
+        smtp_auth_type = str(cfg.get("smtp_auth_type") or cfg.get("smtpAuthType") or "password").strip().lower()
         use_starttls = self._as_bool(cfg.get("smtp_starttls") or cfg.get("smtpStartTLS") or cfg.get("starttls") or False)
         use_ssl = self._as_bool(cfg.get("smtp_use_ssl") or cfg.get("smtpUseSSL") or False)
 

@@ -1,6 +1,7 @@
 """Shared services and helper utilities for alertmanager routers."""
 
 import logging
+from typing import Sequence
 
 from fastapi import HTTPException, Request, status
 from fastapi.concurrency import run_in_threadpool
@@ -8,7 +9,9 @@ from pydantic import BaseModel
 from sqlalchemy.exc import SQLAlchemyError
 
 from models.access.auth_models import TokenData
+from models.alerting.channels import NotificationChannel, NotificationChannelCreate
 from models.alerting.silences import SilenceCreate, SilenceCreateRequest, Visibility
+from custom_types.json import JSONDict
 from services.alerting.integration_security_service import allowed_channel_types, validate_shared_group_ids_for_user
 from services.alertmanager_service import AlertManagerService
 from services.notification_service import NotificationService
@@ -31,9 +34,9 @@ def scope_header(request: Request) -> str:
     return request.headers.get("x-scope-orgid") or request.headers.get("X-Scope-OrgID") or ""
 
 
-async def sync_incidents(tenant_id: str, alerts, *, log_context: str) -> None:
+async def sync_incidents(tenant_id: str, alerts: Sequence[JSONDict], *, log_context: str) -> None:
     try:
-        await run_in_threadpool(storage_service.sync_incidents_from_alerts, tenant_id, alerts, False)
+        await run_in_threadpool(storage_service.sync_incidents_from_alerts, tenant_id, list(alerts), False)
     except SQLAlchemyError as exc:
         logger.warning("Incident sync skipped (%s): %s", log_context, exc)
 
@@ -60,7 +63,10 @@ def build_silence_payload(silence: SilenceCreateRequest, current_user: TokenData
     )
 
 
-def validate_channel(channel, channel_service: NotificationService) -> str:
+def validate_channel(
+    channel: NotificationChannel | NotificationChannelCreate,
+    channel_service: NotificationService,
+) -> str:
     requested_type = str(channel.type or "").strip().lower()
     if requested_type not in allowed_channel_types():
         raise HTTPException(

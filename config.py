@@ -315,7 +315,7 @@ class Config:
 
     def get_secret(self, key: str) -> Optional[str]:
         val = getattr(self, key, None)
-        if val:
+        if isinstance(val, str) and val:
             return val
         try:
             return self._secret_provider.get(key)
