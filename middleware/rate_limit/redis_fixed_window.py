@@ -1,5 +1,5 @@
 """
-Redis-based fixed window rate limiter for Be Observant middleware.
+Redis-based fixed window rate limiter for Watchdog middleware.
 
 Copyright (c) 2026 Stefan Kumarasinghe
 
@@ -34,7 +34,7 @@ class RedisFixedWindowRateLimiter:
         self,
         redis_url: str,
         *,
-        key_prefix: str = "beobs:rl",
+        key_prefix: str = "watchdog:rl",
         socket_timeout: float = 1.0,
         max_connections: int = 50,
     ) -> None:

@@ -45,17 +45,17 @@ def _reset_replay_cache():
 
 def test_verify_context_token_rejects_missing_jti(monkeypatch):
     key = "test-context-key"
-    monkeypatch.setattr(config, "BENOTIFIED_CONTEXT_VERIFY_KEY", key)
-    monkeypatch.setattr(config, "BENOTIFIED_CONTEXT_SIGNING_KEY", key)
-    monkeypatch.setattr(config, "BENOTIFIED_CONTEXT_ALGORITHM", "HS256")
-    monkeypatch.setattr(config, "BENOTIFIED_CONTEXT_AUDIENCE", "benotified")
-    monkeypatch.setattr(config, "BENOTIFIED_CONTEXT_ISSUER", "beobservant-main")
+    monkeypatch.setattr(config, "NOTIFIER_CONTEXT_VERIFY_KEY", key)
+    monkeypatch.setattr(config, "NOTIFIER_CONTEXT_SIGNING_KEY", key)
+    monkeypatch.setattr(config, "NOTIFIER_CONTEXT_ALGORITHM", "HS256")
+    monkeypatch.setattr(config, "NOTIFIER_CONTEXT_AUDIENCE", "notifier")
+    monkeypatch.setattr(config, "NOTIFIER_CONTEXT_ISSUER", "watchdog-main")
 
     now = datetime.now(timezone.utc)
     token = jwt.encode(
         {
-            "iss": "beobservant-main",
-            "aud": "benotified",
+            "iss": "watchdog-main",
+            "aud": "notifier",
             "iat": int(now.timestamp()),
             "exp": int((now + timedelta(seconds=60)).timestamp()),
             "user_id": "u1",
@@ -75,17 +75,17 @@ def test_verify_context_token_rejects_missing_jti(monkeypatch):
 
 def test_verify_context_token_replay_detection(monkeypatch):
     key = "test-context-key"
-    monkeypatch.setattr(config, "BENOTIFIED_CONTEXT_VERIFY_KEY", key)
-    monkeypatch.setattr(config, "BENOTIFIED_CONTEXT_SIGNING_KEY", key)
-    monkeypatch.setattr(config, "BENOTIFIED_CONTEXT_ALGORITHM", "HS256")
-    monkeypatch.setattr(config, "BENOTIFIED_CONTEXT_AUDIENCE", "benotified")
-    setattr(config, "BENOTIFIED_CONTEXT_ISSUER", "beobservant-main")
-    monkeypatch.setattr(config, "BENOTIFIED_CONTEXT_REPLAY_TTL_SECONDS", 120)
+    monkeypatch.setattr(config, "NOTIFIER_CONTEXT_VERIFY_KEY", key)
+    monkeypatch.setattr(config, "NOTIFIER_CONTEXT_SIGNING_KEY", key)
+    monkeypatch.setattr(config, "NOTIFIER_CONTEXT_ALGORITHM", "HS256")
+    monkeypatch.setattr(config, "NOTIFIER_CONTEXT_AUDIENCE", "notifier")
+    setattr(config, "NOTIFIER_CONTEXT_ISSUER", "watchdog-main")
+    monkeypatch.setattr(config, "NOTIFIER_CONTEXT_REPLAY_TTL_SECONDS", 120)
 
     now = datetime.now(timezone.utc)
     payload = {
-        "iss": "beobservant-main",
-        "aud": "benotified",
+        "iss": "watchdog-main",
+        "aud": "notifier",
         "iat": int(now.timestamp()),
         "exp": int((now + timedelta(seconds=60)).timestamp()),
         "jti": "replay-jti-1",
@@ -106,17 +106,17 @@ def test_verify_context_token_replay_detection(monkeypatch):
 
 def test_verify_context_token_unknown_role_falls_back_to_user(monkeypatch):
     key = "test-context-key"
-    monkeypatch.setattr(config, "BENOTIFIED_CONTEXT_VERIFY_KEY", key)
-    monkeypatch.setattr(config, "BENOTIFIED_CONTEXT_SIGNING_KEY", key)
-    monkeypatch.setattr(config, "BENOTIFIED_CONTEXT_ALGORITHM", "HS256")
-    monkeypatch.setattr(config, "BENOTIFIED_CONTEXT_AUDIENCE", "benotified")
-    setattr(config, "BENOTIFIED_CONTEXT_ISSUER", "beobservant-main")
+    monkeypatch.setattr(config, "NOTIFIER_CONTEXT_VERIFY_KEY", key)
+    monkeypatch.setattr(config, "NOTIFIER_CONTEXT_SIGNING_KEY", key)
+    monkeypatch.setattr(config, "NOTIFIER_CONTEXT_ALGORITHM", "HS256")
+    monkeypatch.setattr(config, "NOTIFIER_CONTEXT_AUDIENCE", "notifier")
+    setattr(config, "NOTIFIER_CONTEXT_ISSUER", "watchdog-main")
 
     now = datetime.now(timezone.utc)
     token = jwt.encode(
         {
-            "iss": "beobservant-main",
-            "aud": "benotified",
+            "iss": "watchdog-main",
+            "aud": "notifier",
             "iat": int(now.timestamp()),
             "exp": int((now + timedelta(seconds=60)).timestamp()),
             "jti": "role-fallback-jti-1",

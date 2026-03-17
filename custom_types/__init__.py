@@ -1,5 +1,5 @@
 """
-Custom types used across the BeCertain codebase.
+Custom types used across the Notifier codebase.
 
 Copyright (c) 2026 Stefan Kumarasinghe
 

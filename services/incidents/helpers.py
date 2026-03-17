@@ -1,5 +1,5 @@
 """
-Incident helper functions for BeNotified service - formatting descriptions, mapping severities, syncing notes to Jira, etc.
+Incident helper functions for Notifier service - formatting descriptions, mapping severities, syncing notes to Jira, etc.
 Copyright (c) 2026 Stefan Kumarasinghe
 
 Licensed under the Apache License, Version 2.0 (the "License");

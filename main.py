@@ -1,5 +1,5 @@
 """
-Entrypoint for the BeNotified service.
+Entrypoint for the Notifier service.
 
 Copyright (c) 2026 Stefan Kumarasinghe
 
@@ -31,15 +31,15 @@ logging.basicConfig(
     level=getattr(logging, config.LOG_LEVEL.upper()),
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
-logger = logging.getLogger("benotified")
+logger = logging.getLogger("notifier")
 
-ensure_database_exists(config.BENOTIFIED_DATABASE_URL)
-init_database(config.BENOTIFIED_DATABASE_URL, config.LOG_LEVEL == "debug")
+ensure_database_exists(config.NOTIFIER_DATABASE_URL)
+init_database(config.NOTIFIER_DATABASE_URL, config.LOG_LEVEL == "debug")
 init_db()
 
 app = FastAPI(
-    title="BeNotified",
-    description="Internal alerting service for BeObservant",
+    title="Notifier",
+    description="Internal alerting service for Watchdog",
     version="1.0.0",
     docs_url="/docs" if config.ENABLE_API_DOCS else None,
     redoc_url="/redoc" if config.ENABLE_API_DOCS else None,
@@ -77,7 +77,7 @@ async def require_internal_service_token(
     }:
         return await call_next(request)
 
-    expected = config.get_secret("BENOTIFIED_EXPECTED_SERVICE_TOKEN") or config.get_secret("GATEWAY_INTERNAL_SERVICE_TOKEN")
+    expected = config.get_secret("NOTIFIER_EXPECTED_SERVICE_TOKEN") or config.get_secret("GATEWAY_INTERNAL_SERVICE_TOKEN")
     if not expected:
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -100,7 +100,7 @@ app.include_router(alertmanager_webhook_router, prefix="/internal/v1/alertmanage
 
 @app.get("/health")
 async def health() -> dict[str, str]:
-    return {"status": "healthy", "service": "benotified"}
+    return {"status": "healthy", "service": "notifier"}
 
 
 @app.get("/ready", response_model=None)

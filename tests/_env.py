@@ -15,5 +15,5 @@ def ensure_test_env() -> None:
     service_root = Path(__file__).resolve().parents[1]
     if str(service_root) not in sys.path:
         sys.path.insert(0, str(service_root))
-    os.environ.setdefault("DATABASE_URL", "postgresql://safeuser:safePass_123@db:5432/beobservant")
+    os.environ.setdefault("DATABASE_URL", "postgresql://safeuser:safePass_123@db:5432/watchdog")
     os.environ.setdefault("JWT_ALGORITHM", "RS256")

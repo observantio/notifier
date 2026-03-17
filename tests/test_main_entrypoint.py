@@ -54,14 +54,14 @@ def _load_main(monkeypatch, *, enable_docs: bool = False, secret_value: str | No
     monkeypatch.setattr(config_module.config, "MAX_REQUEST_BYTES", 1024)
     monkeypatch.setattr(config_module.config, "MAX_CONCURRENT_REQUESTS", 2)
     monkeypatch.setattr(config_module.config, "CONCURRENCY_ACQUIRE_TIMEOUT", 0.1)
-    monkeypatch.setattr(config_module.config, "BENOTIFIED_DATABASE_URL", "sqlite://")
+    monkeypatch.setattr(config_module.config, "NOTIFIER_DATABASE_URL", "sqlite://")
     monkeypatch.setattr(config_module.config, "LOG_LEVEL", "info")
     monkeypatch.setattr(config_module.config, "HOST", "127.0.0.1")
     monkeypatch.setattr(config_module.config, "PORT", 4319)
     monkeypatch.setattr(
         config_module.config,
         "get_secret",
-        lambda key: secret_value if key in {"BENOTIFIED_EXPECTED_SERVICE_TOKEN", "GATEWAY_INTERNAL_SERVICE_TOKEN"} else None,
+        lambda key: secret_value if key in {"NOTIFIER_EXPECTED_SERVICE_TOKEN", "GATEWAY_INTERNAL_SERVICE_TOKEN"} else None,
     )
 
     return importlib.import_module("main")
@@ -110,7 +110,7 @@ async def test_require_internal_service_token_reports_missing_configuration(monk
 @pytest.mark.asyncio
 async def test_health_and_ready_routes(monkeypatch):
     main_module = _load_main(monkeypatch)
-    assert await main_module.health() == {"status": "healthy", "service": "benotified"}
+    assert await main_module.health() == {"status": "healthy", "service": "notifier"}
 
     monkeypatch.setattr(main_module, "connection_test", lambda: True)
     ready = await main_module.ready()

@@ -45,7 +45,7 @@ def _extract_bearer_token(request: Request, credentials: HTTPAuthorizationCreden
 
 def _compare_service_token(request: Request) -> None:
     expected = (
-        config.get_secret("BENOTIFIED_EXPECTED_SERVICE_TOKEN")
+        config.get_secret("NOTIFIER_EXPECTED_SERVICE_TOKEN")
         or config.get_secret("GATEWAY_INTERNAL_SERVICE_TOKEN")
     )
     if not expected:
@@ -57,15 +57,15 @@ def _compare_service_token(request: Request) -> None:
 
 def _verify_context_token(token: str) -> TokenData:
     key = (
-        config.get_secret("BENOTIFIED_CONTEXT_VERIFY_KEY")
-        or config.get_secret("BENOTIFIED_CONTEXT_SIGNING_KEY")
+        config.get_secret("NOTIFIER_CONTEXT_VERIFY_KEY")
+        or config.get_secret("NOTIFIER_CONTEXT_SIGNING_KEY")
     )
     if not key:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Context verification key not configured")
 
-    algorithm = str(getattr(config, "BENOTIFIED_CONTEXT_ALGORITHM", "HS256")).strip().upper()
-    audience = config.get_secret("BENOTIFIED_CONTEXT_AUDIENCE") or "benotified"
-    issuer = config.get_secret("BENOTIFIED_CONTEXT_ISSUER") or "beobservant-main"
+    algorithm = str(getattr(config, "NOTIFIER_CONTEXT_ALGORITHM", "HS256")).strip().upper()
+    audience = config.get_secret("NOTIFIER_CONTEXT_AUDIENCE") or "notifier"
+    issuer = config.get_secret("NOTIFIER_CONTEXT_ISSUER") or "watchdog-main"
 
     try:
         payload = jwt.decode(
@@ -131,7 +131,7 @@ def _normalize_group_ids(group_ids: list[object] | None) -> list[str]:
 
 def _assert_jti_not_replayed(jti: str) -> None:
     now = time.monotonic()
-    ttl = int(getattr(config, "BENOTIFIED_CONTEXT_REPLAY_TTL_SECONDS", 180) or 180)
+    ttl = int(getattr(config, "NOTIFIER_CONTEXT_REPLAY_TTL_SECONDS", 180) or 180)
     with _jti_lock:
         expired = [k for k, ts in _jti_cache.items() if now - ts > ttl]
         for k in expired:

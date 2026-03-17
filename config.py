@@ -139,16 +139,16 @@ class Config:
 
     VAULT_SECRET_KEYS: tuple[str, ...] = (
         "DATABASE_URL",
-        "BENOTIFIED_DATABASE_URL",
+        "NOTIFIER_DATABASE_URL",
         "DATA_ENCRYPTION_KEY",
         "JWT_SECRET_KEY",
         "JWT_PRIVATE_KEY",
         "JWT_PUBLIC_KEY",
         "INBOUND_WEBHOOK_TOKEN",
         "GATEWAY_INTERNAL_SERVICE_TOKEN",
-        "BENOTIFIED_EXPECTED_SERVICE_TOKEN",
-        "BENOTIFIED_CONTEXT_VERIFY_KEY",
-        "BENOTIFIED_CONTEXT_SIGNING_KEY",
+        "NOTIFIER_EXPECTED_SERVICE_TOKEN",
+        "NOTIFIER_CONTEXT_VERIFY_KEY",
+        "NOTIFIER_CONTEXT_SIGNING_KEY",
     )
 
     def __init__(self) -> None:
@@ -166,7 +166,7 @@ class Config:
         self.MIMIR_URL: str = os.getenv("MIMIR_URL", "http://mimir:9009")
 
         self.DATABASE_URL: str = os.getenv("DATABASE_URL", self.EXAMPLE_DATABASE_URL)
-        self.BENOTIFIED_DATABASE_URL: str = os.getenv("BENOTIFIED_DATABASE_URL", self.DATABASE_URL)
+        self.NOTIFIER_DATABASE_URL: str = os.getenv("NOTIFIER_DATABASE_URL", self.DATABASE_URL)
 
         self.DATA_ENCRYPTION_KEY: Optional[str] = os.getenv("DATA_ENCRYPTION_KEY")
 
@@ -207,19 +207,19 @@ class Config:
         self.GRAFANA_PROXY_IP_ALLOWLIST: Optional[str] = os.getenv("GRAFANA_PROXY_IP_ALLOWLIST")
         self.INBOUND_WEBHOOK_TOKEN: Optional[str] = os.getenv("INBOUND_WEBHOOK_TOKEN")
         self.GATEWAY_INTERNAL_SERVICE_TOKEN: Optional[str] = os.getenv("GATEWAY_INTERNAL_SERVICE_TOKEN")
-        self.BENOTIFIED_EXPECTED_SERVICE_TOKEN: Optional[str] = os.getenv("BENOTIFIED_EXPECTED_SERVICE_TOKEN")
-        self.BENOTIFIED_CONTEXT_VERIFY_KEY: Optional[str] = os.getenv("BENOTIFIED_CONTEXT_VERIFY_KEY")
-        self.BENOTIFIED_CONTEXT_SIGNING_KEY: Optional[str] = os.getenv("BENOTIFIED_CONTEXT_SIGNING_KEY")
-        self.BENOTIFIED_CONTEXT_ISSUER: str = os.getenv("BENOTIFIED_CONTEXT_ISSUER", "beobservant-main")
-        self.BENOTIFIED_CONTEXT_AUDIENCE: str = os.getenv("BENOTIFIED_CONTEXT_AUDIENCE", "benotified")
-        self.BENOTIFIED_CONTEXT_ALGORITHM: str = (
-            os.getenv("BENOTIFIED_CONTEXT_ALGORITHM") or os.getenv("BENOTIFIED_CONTEXT_ALGORITHMS") or "HS256"
+        self.NOTIFIER_EXPECTED_SERVICE_TOKEN: Optional[str] = os.getenv("NOTIFIER_EXPECTED_SERVICE_TOKEN")
+        self.NOTIFIER_CONTEXT_VERIFY_KEY: Optional[str] = os.getenv("NOTIFIER_CONTEXT_VERIFY_KEY")
+        self.NOTIFIER_CONTEXT_SIGNING_KEY: Optional[str] = os.getenv("NOTIFIER_CONTEXT_SIGNING_KEY")
+        self.NOTIFIER_CONTEXT_ISSUER: str = os.getenv("NOTIFIER_CONTEXT_ISSUER", "watchdog-main")
+        self.NOTIFIER_CONTEXT_AUDIENCE: str = os.getenv("NOTIFIER_CONTEXT_AUDIENCE", "notifier")
+        self.NOTIFIER_CONTEXT_ALGORITHM: str = (
+            os.getenv("NOTIFIER_CONTEXT_ALGORITHM") or os.getenv("NOTIFIER_CONTEXT_ALGORITHMS") or "HS256"
         ).strip().upper()
-        self.BENOTIFIED_CONTEXT_ALGORITHMS: str = self.BENOTIFIED_CONTEXT_ALGORITHM
-        self.BENOTIFIED_CONTEXT_REPLAY_TTL_SECONDS: int = int(
-            os.getenv("BENOTIFIED_CONTEXT_REPLAY_TTL_SECONDS", "180")
+        self.NOTIFIER_CONTEXT_ALGORITHMS: str = self.NOTIFIER_CONTEXT_ALGORITHM
+        self.NOTIFIER_CONTEXT_REPLAY_TTL_SECONDS: int = int(
+            os.getenv("NOTIFIER_CONTEXT_REPLAY_TTL_SECONDS", "180")
         )
-        self.BENOTIFIED_TLS_ENABLED: bool = _to_bool(os.getenv("BENOTIFIED_TLS_ENABLED"), default=False)
+        self.NOTIFIER_TLS_ENABLED: bool = _to_bool(os.getenv("NOTIFIER_TLS_ENABLED"), default=False)
 
         self.DEFAULT_ORG_ID: str = os.getenv("DEFAULT_ORG_ID", "default")
 
@@ -380,22 +380,22 @@ class Config:
         if any(origin.strip() == "*" for origin in self.CORS_ORIGINS) and self.CORS_ALLOW_CREDENTIALS:
             raise ValueError("CORS_ORIGINS cannot contain '*' when CORS_ALLOW_CREDENTIALS is enabled.")
 
-        if self.BENOTIFIED_CONTEXT_ALGORITHM not in self.ALLOWED_CONTEXT_ALGORITHMS:
+        if self.NOTIFIER_CONTEXT_ALGORITHM not in self.ALLOWED_CONTEXT_ALGORITHMS:
             raise ValueError(
-                f"Unsupported BENOTIFIED_CONTEXT_ALGORITHM '{self.BENOTIFIED_CONTEXT_ALGORITHM}'. "
+                f"Unsupported NOTIFIER_CONTEXT_ALGORITHM '{self.NOTIFIER_CONTEXT_ALGORITHM}'. "
                 f"Allowed values: {sorted(self.ALLOWED_CONTEXT_ALGORITHMS)}"
             )
-        if self.BENOTIFIED_CONTEXT_REPLAY_TTL_SECONDS <= 0:
-            raise ValueError("BENOTIFIED_CONTEXT_REPLAY_TTL_SECONDS must be greater than 0")
+        if self.NOTIFIER_CONTEXT_REPLAY_TTL_SECONDS <= 0:
+            raise ValueError("NOTIFIER_CONTEXT_REPLAY_TTL_SECONDS must be greater than 0")
 
         if self.IS_PRODUCTION:
             required_production_secrets = {
                 "INBOUND_WEBHOOK_TOKEN": self.INBOUND_WEBHOOK_TOKEN,
-                "BENOTIFIED_EXPECTED_SERVICE_TOKEN": (
-                    self.BENOTIFIED_EXPECTED_SERVICE_TOKEN or self.GATEWAY_INTERNAL_SERVICE_TOKEN
+                "NOTIFIER_EXPECTED_SERVICE_TOKEN": (
+                    self.NOTIFIER_EXPECTED_SERVICE_TOKEN or self.GATEWAY_INTERNAL_SERVICE_TOKEN
                 ),
-                "BENOTIFIED_CONTEXT_VERIFY_KEY": (
-                    self.BENOTIFIED_CONTEXT_VERIFY_KEY or self.BENOTIFIED_CONTEXT_SIGNING_KEY
+                "NOTIFIER_CONTEXT_VERIFY_KEY": (
+                    self.NOTIFIER_CONTEXT_VERIFY_KEY or self.NOTIFIER_CONTEXT_SIGNING_KEY
                 ),
                 "GATEWAY_INTERNAL_SERVICE_TOKEN": self.GATEWAY_INTERNAL_SERVICE_TOKEN,
             }

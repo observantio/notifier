@@ -207,7 +207,7 @@ spec:
             severity: invalid
           annotations:
             description: bad
-          beobservant:
+          watchdog:
             visibility: public
             channels: [slack]
             sharedGroupIds: [g1, ""]
@@ -288,9 +288,9 @@ async def test_email_providers_and_payload_helpers(monkeypatch):
         "annotations": {
             "summary": "CPU high",
             "description": "Investigate",
-            "beobservantCreatedByUsername": "alice",
-            "beobservantProductName": "api",
-            "beobservantRuleName": "CPUHigh",
+            "WatchDogCreatedByUsername": "alice",
+            "WatchDogProductName": "api",
+            "WatchdDogRuleName": "CPUHigh",
         },
     })
     assert payloads.get_alert_text(rich_alert) == "CPU high\nInvestigate"

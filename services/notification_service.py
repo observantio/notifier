@@ -116,7 +116,7 @@ class NotificationService:
         msg["From"] = smtp_from
         msg["To"] = recipient_email
         msg.set_content(
-            f"You have been assigned an incident in Be Observant.\n\n"
+            f"You have been assigned an incident in Watchdog.\n\n"
             f"Title: {incident_title}\n"
             f"Status: {incident_status}\n"
             f"Severity: {incident_severity}\n"

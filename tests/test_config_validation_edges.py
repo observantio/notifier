@@ -65,8 +65,8 @@ def _ec_keypair_pem() -> tuple[str, str]:
 def _valid_dev_env() -> dict[str, str]:
     return {
         "APP_ENV": "development",
-        "DATABASE_URL": "postgresql://safeuser:safePass_123@db:5432/benotified",
-        "BENOTIFIED_DATABASE_URL": "postgresql://safeuser:safePass_123@db:5432/benotified",
+        "DATABASE_URL": "postgresql://safeuser:safePass_123@db:5432/notifier",
+        "NOTIFIER_DATABASE_URL": "postgresql://safeuser:safePass_123@db:5432/notifier",
         "CORS_ORIGINS": "http://localhost:5173",
         "CORS_ALLOW_CREDENTIALS": "true",
         "JWT_ALGORITHM": "RS256",
@@ -74,8 +74,8 @@ def _valid_dev_env() -> dict[str, str]:
         "JWT_PUBLIC_KEY": "",
         "JWT_AUTO_GENERATE_KEYS": "true",
         "VAULT_ENABLED": "false",
-        "BENOTIFIED_CONTEXT_ALGORITHM": "HS256",
-        "BENOTIFIED_CONTEXT_REPLAY_TTL_SECONDS": "180",
+        "NOTIFIER_CONTEXT_ALGORITHM": "HS256",
+        "NOTIFIER_CONTEXT_REPLAY_TTL_SECONDS": "180",
         "MAX_QUERY_LIMIT": "1000",
         "DEFAULT_QUERY_LIMIT": "20",
     }
@@ -85,8 +85,8 @@ def _valid_prod_env() -> dict[str, str]:
     private_key, public_key = _rsa_keypair_pem()
     return {
         "APP_ENV": "production",
-        "DATABASE_URL": "postgresql://safeuser:safePass_123@db:5432/benotified",
-        "BENOTIFIED_DATABASE_URL": "postgresql://safeuser:safePass_123@db:5432/benotified",
+        "DATABASE_URL": "postgresql://safeuser:safePass_123@db:5432/notifier",
+        "NOTIFIER_DATABASE_URL": "postgresql://safeuser:safePass_123@db:5432/notifier",
         "CORS_ORIGINS": "https://app.example.com",
         "CORS_ALLOW_CREDENTIALS": "true",
         "JWT_ALGORITHM": "RS256",
@@ -96,11 +96,11 @@ def _valid_prod_env() -> dict[str, str]:
         "DATA_ENCRYPTION_KEY": Fernet.generate_key().decode("utf-8"),
         "INBOUND_WEBHOOK_TOKEN": "strong_webhook_token_123",
         "GATEWAY_INTERNAL_SERVICE_TOKEN": "strong_gateway_token_123",
-        "BENOTIFIED_EXPECTED_SERVICE_TOKEN": "strong_expected_token_123",
-        "BENOTIFIED_CONTEXT_VERIFY_KEY": "strong_verify_key_123",
-        "BENOTIFIED_CONTEXT_SIGNING_KEY": "strong_signing_key_123",
-        "BENOTIFIED_CONTEXT_ALGORITHM": "HS256",
-        "BENOTIFIED_CONTEXT_REPLAY_TTL_SECONDS": "180",
+        "NOTIFIER_EXPECTED_SERVICE_TOKEN": "strong_expected_token_123",
+        "NOTIFIER_CONTEXT_VERIFY_KEY": "strong_verify_key_123",
+        "NOTIFIER_CONTEXT_SIGNING_KEY": "strong_signing_key_123",
+        "NOTIFIER_CONTEXT_ALGORITHM": "HS256",
+        "NOTIFIER_CONTEXT_REPLAY_TTL_SECONDS": "180",
         "ALLOWLIST_FAIL_OPEN": "false",
         "MAX_QUERY_LIMIT": "1000",
         "DEFAULT_QUERY_LIMIT": "20",
@@ -198,8 +198,8 @@ def test_config_loads_vault_values_and_get_secret_falls_back(monkeypatch):
     class FakeVaultSecretProvider:
         def __init__(self, **kwargs):
             self.values = {
-                "DATABASE_URL": "postgresql://vaultuser:vaultpass@db:5432/benotified",
-                "BENOTIFIED_CONTEXT_VERIFY_KEY": "vault-verify",
+                "DATABASE_URL": "postgresql://vaultuser:vaultpass@db:5432/notifier",
+                "NOTIFIER_CONTEXT_VERIFY_KEY": "vault-verify",
             }
 
         def get(self, key: str) -> str | None:
@@ -219,9 +219,9 @@ def test_config_loads_vault_values_and_get_secret_falls_back(monkeypatch):
         ctx.setenv("VAULT_ADDR", "http://vault:8200")
         ctx.setitem(sys.modules, "services.secrets.vault_client", fake_module)
         module = _reload_config_module()
-        assert module.config.DATABASE_URL == "postgresql://vaultuser:vaultpass@db:5432/benotified"
-        assert module.config.BENOTIFIED_CONTEXT_VERIFY_KEY == "vault-verify"
-        assert module.config.get_secret("BENOTIFIED_CONTEXT_VERIFY_KEY") == "vault-verify"
+        assert module.config.DATABASE_URL == "postgresql://vaultuser:vaultpass@db:5432/notifier"
+        assert module.config.NOTIFIER_CONTEXT_VERIFY_KEY == "vault-verify"
+        assert module.config.get_secret("NOTIFIER_CONTEXT_VERIFY_KEY") == "vault-verify"
 
         module.config.MISSING_VALUE = None
         module.config._secret_provider = types.SimpleNamespace(get=lambda key: "fallback-secret" if key == "MISSING_VALUE" else None)
@@ -273,8 +273,8 @@ def test_apply_security_defaults_rejects_unknown_auto_key_algorithm():
         ({"APP_ENV": "production", "DATA_ENCRYPTION_KEY": ""}, "DATA_ENCRYPTION_KEY must be configured in production"),
         ({"DATA_ENCRYPTION_KEY": "not-a-fernet-key"}, "DATA_ENCRYPTION_KEY must be a valid Fernet key"),
         ({"CORS_ORIGINS": "*", "CORS_ALLOW_CREDENTIALS": "true"}, "CORS_ORIGINS cannot contain '*'"),
-        ({"BENOTIFIED_CONTEXT_ALGORITHM": "HS384"}, "Unsupported BENOTIFIED_CONTEXT_ALGORITHM"),
-        ({"BENOTIFIED_CONTEXT_REPLAY_TTL_SECONDS": "0"}, "BENOTIFIED_CONTEXT_REPLAY_TTL_SECONDS must be greater than 0"),
+        ({"NOTIFIER_CONTEXT_ALGORITHM": "HS384"}, "Unsupported NOTIFIER_CONTEXT_ALGORITHM"),
+        ({"NOTIFIER_CONTEXT_REPLAY_TTL_SECONDS": "0"}, "NOTIFIER_CONTEXT_REPLAY_TTL_SECONDS must be greater than 0"),
         ({"APP_ENV": "production", "INBOUND_WEBHOOK_TOKEN": "changeme"}, "INBOUND_WEBHOOK_TOKEN must be set to a strong non-placeholder secret in production"),
         ({"APP_ENV": "production", "ALLOWLIST_FAIL_OPEN": "true"}, "ALLOWLIST_FAIL_OPEN must be false in production"),
         ({"MAX_QUERY_LIMIT": "0"}, "MAX_QUERY_LIMIT must be greater than 0"),
@@ -298,4 +298,4 @@ def test_config_accepts_valid_production_environment(monkeypatch):
             ctx.setenv(key, value)
         module = _reload_config_module()
         assert module.config.IS_PRODUCTION is True
-        assert module.config.get_secret("BENOTIFIED_EXPECTED_SERVICE_TOKEN") == "strong_expected_token_123"
+        assert module.config.get_secret("NOTIFIER_EXPECTED_SERVICE_TOKEN") == "strong_expected_token_123"

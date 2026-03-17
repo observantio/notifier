@@ -1,4 +1,4 @@
-# Be Observant Control Plane Dependencies
+# Watchdog Control Plane Dependencies
 
 # FastAPI and server
 fastapi==0.129.0

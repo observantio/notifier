@@ -261,7 +261,7 @@ async def test_alertmanager_service_helpers_and_delete_silence(monkeypatch):
     assert exc.value.status_code == 500
 
     monkeypatch.setattr(config, "INBOUND_WEBHOOK_TOKEN", "secret")
-    svc.enforce_webhook_security(_request(headers=[(b"x-beobservant-webhook-token", b"secret")]), scope="alerts")
+    svc.enforce_webhook_security(_request(headers=[(b"x-watchdog-webhook-token", b"secret")]), scope="alerts")
     svc.enforce_webhook_security(_request(headers=[(b"authorization", b"Bearer secret")]), scope="alerts")
     with pytest.raises(HTTPException) as exc:
         svc.enforce_webhook_security(_request(), scope="alerts")

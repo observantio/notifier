@@ -50,7 +50,7 @@ def _normalize_rule_entry(
     if not expr:
         raise RuleImportError(f"Rule '{alert_name}' is missing required field 'expr'")
 
-    be_meta_raw = rule_data.get("beobservant")
+    be_meta_raw = rule_data.get("watchdog")
     be_meta: JSONDict = be_meta_raw if isinstance(be_meta_raw, dict) else {}
 
     labels = _as_str_map(rule_data.get("labels"))
