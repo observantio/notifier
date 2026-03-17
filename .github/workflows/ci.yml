@@ -1,4 +1,4 @@
-name: Be Notified CI
+name: Notifier CI
 
 on:
   pull_request:
