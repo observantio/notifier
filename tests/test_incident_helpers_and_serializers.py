@@ -208,7 +208,7 @@ def test_storage_serializers_cover_rule_channel_and_incident_payloads():
     assert incident_model.visibility == "group"
     assert incident_model.shared_group_ids == ["g1"]
     assert incident_model.jira_ticket_key == "ABC-1"
-    assert incident_model.annotations["beobservantCorrelationId"] == "corr-1"
+    assert incident_model.annotations["WatchdogCorrelationId"] == "corr-1"
     assert serializers_mod.incident_to_pydantic(
         SimpleNamespace(
             id="inc-2",

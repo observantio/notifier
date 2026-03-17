@@ -83,22 +83,22 @@ def _context_value(alert: Alert, *keys: str) -> str:
 def _human_context(alert: Alert) -> list[tuple[str, str]]:
     correlation_id = _context_value(
         alert,
-        "beobservantCorrelationId",
+        "watchdogCorrelationId",
         "correlation_id",
         "correlationId",
         "group",
     )
     created_by = _context_value(
         alert,
-        "beobservantCreatedByUsername",
+        "watchdogCreatedByUsername",
         "created_by_username",
         "createdByUsername",
-        "beobservantCreatedBy",
+        "watchdogCreatedBy",
         "created_by",
         "createdBy",
     )
-    product_name = _context_value(alert, "beobservantProductName", "product")
-    rule_name = _context_value(alert, "beobservantRuleName")
+    product_name = _context_value(alert, "watchdogProductName", "product")
+    rule_name = _context_value(alert, "watchdogRuleName")
     context: list[tuple[str, str]] = []
     if rule_name:
         context.append(("Rule", rule_name))
@@ -183,22 +183,22 @@ def build_slack_payload(alert: Alert, action: str) -> JSONDict:
     fields: list[JSONDict] = [
         {"title": "Severity", "value": severity or "unknown", "short": True},
         {"title": "Status", "value": status_text, "short": True},
-        {"title": "Correlation ID", "value": _context_value(alert, "beobservantCorrelationId", "correlation_id", "correlationId", "group") or NO_VALUE, "short": True},
+        {"title": "Correlation ID", "value": _context_value(alert, "watchdogCorrelationId", "correlation_id", "correlationId", "group") or NO_VALUE, "short": True},
         {
             "title": "Created by",
             "value": _context_value(
                 alert,
-                "beobservantCreatedByUsername",
+                "watchdogCreatedByUsername",
                 "created_by_username",
                 "createdByUsername",
-                "beobservantCreatedBy",
+                "watchdogCreatedBy",
                 "created_by",
                 "createdBy",
             )
             or NO_VALUE,
             "short": True,
         },
-        {"title": "Product", "value": _context_value(alert, "beobservantProductName", "product") or NO_VALUE, "short": True},
+        {"title": "Product", "value": _context_value(alert, "watchdogProductName", "product") or NO_VALUE, "short": True},
         {"title": "Summary", "value": get_annotation(alert, "summary") or NO_VALUE, "short": False},
         {"title": "Description", "value": get_annotation(alert, "description") or NO_VALUE, "short": False},
     ]
@@ -238,21 +238,21 @@ def build_teams_payload(alert: Alert, action: str) -> JSONDict:
             "facts": [
                 {"name": "Severity", "value": severity or "unknown"},
                 {"name": "Status", "value": status_text},
-                {"name": "Correlation ID", "value": _context_value(alert, "beobservantCorrelationId", "correlation_id", "correlationId", "group") or NO_VALUE},
+                {"name": "Correlation ID", "value": _context_value(alert, "watchdogCorrelationId", "correlation_id", "correlationId", "group") or NO_VALUE},
                 {
                     "name": "Created by",
                     "value": _context_value(
                         alert,
-                        "beobservantCreatedByUsername",
+                        "watchdogCreatedByUsername",
                         "created_by_username",
                         "createdByUsername",
-                        "beobservantCreatedBy",
+                        "watchdogCreatedBy",
                         "created_by",
                         "createdBy",
                     )
                     or NO_VALUE,
                 },
-                {"name": "Product", "value": _context_value(alert, "beobservantProductName", "product") or NO_VALUE},
+                {"name": "Product", "value": _context_value(alert, "watchdogProductName", "product") or NO_VALUE},
                 {"name": "Started", "value": _fmt(alert.starts_at)},
                 {"name": "Summary", "value": get_annotation(alert, "summary") or NO_VALUE},
                 {"name": "Description", "value": get_annotation(alert, "description") or NO_VALUE},

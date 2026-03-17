@@ -72,7 +72,7 @@ from services.common.http_client import create_async_client
 logger = logging.getLogger(__name__)
 
 LABELS_JSON_ERROR = "Invalid filter_labels JSON"
-MIMIR_RULES_NAMESPACE = "beobservant"
+MIMIR_RULES_NAMESPACE = "watchdog"
 MIMIR_RULER_CONFIG_BASEPATH = "/prometheus/config/v1/rules"
 
 class AlertManagerService:
@@ -119,7 +119,7 @@ class AlertManagerService:
                     detail="INBOUND_WEBHOOK_TOKEN is required in production",
                 )
             return
-        provided_header = request.headers.get("x-beobservant-webhook-token")
+        provided_header = request.headers.get("x-watchdog-webhook-token")
         if provided_header and compare_digest(provided_header, expected):
             return
         auth_header = request.headers.get("Authorization", "")

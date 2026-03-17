@@ -116,7 +116,7 @@ async def delete_alerts(service: AlertManagerService, filter_labels: Optional[Di
         matchers=matchers,
         startsAt=now.replace(microsecond=0).isoformat().replace("+00:00", "Z"),
         endsAt=end.replace(microsecond=0).isoformat().replace("+00:00", "Z"),
-        createdBy="beobservant",
+        createdBy="watchdog",
         comment="Alert deletion via API",
     )
 

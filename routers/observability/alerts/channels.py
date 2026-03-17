@@ -142,7 +142,7 @@ async def test_notification_channel(
         "labels": {"alertname": "InvokableTestAlert", "severity": "INFO"},
         "annotations": {
             "summary": "You have invoked a test alert",
-            "description": "This is a test notification from BeObservant. Please ignore this alert if you didn't expect it.",
+            "description": "This is a test notification from Watchdog. Please ignore this alert if you didn't expect it.",
         },
         "startsAt": datetime.now(timezone.utc).isoformat(),
         "endsAt": None,

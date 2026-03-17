@@ -1,5 +1,5 @@
 """
-Middleware components for BeNotified API.
+Middleware components for Notifier API.
 
 Copyright (c) 2026 Stefan Kumarasinghe
 

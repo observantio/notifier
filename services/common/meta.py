@@ -14,7 +14,7 @@ from json import JSONDecodeError
 
 from custom_types.json import JSONDict, is_json_object
 
-INCIDENT_META_KEY = "beobservant_meta"
+INCIDENT_META_KEY = "watchdog_meta"
 
 def parse_meta(annotations: object) -> JSONDict:
     if not isinstance(annotations, dict):

@@ -1,5 +1,5 @@
 """
-Group-share revocation helpers for BeNotified resources.
+Group-share revocation helpers for Notifier resources.
 """
 
 from __future__ import annotations

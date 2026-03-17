@@ -1,5 +1,5 @@
 """
-Incident helper functions for BeNotified service.
+Incident helper functions for Notifier service.
 
 Copyright (c) 2026 Stefan Kumarasinghe
 

@@ -1,10 +1,10 @@
-# Be Notified
+# Notifier
 
-Be Notified is the internal alerting and incident-management service in the Observantio stack. It sits behind the main control plane and owns the alerting domain that needs durable state and workflow logic: alert rules, silences, notification channels, incidents, Jira integrations, and inbound Alertmanager webhooks.
+Notifier is the internal alerting and incident-management service in the Observantio stack. It sits behind the main control plane and owns the alerting domain that needs durable state and workflow logic: alert rules, silences, notification channels, incidents, Jira integrations, and inbound Alertmanager webhooks.
 
-In practice, Be Notified is the service that turns alert traffic into something operators can work with. It keeps rule state in sync with Mimir, stores incident history, enforces tenant and group visibility, and handles side effects such as incident assignment emails and Jira synchronization.
+In practice, Notifier is the service that turns alert traffic into something operators can work with. It keeps rule state in sync with Mimir, stores incident history, enforces tenant and group visibility, and handles side effects such as incident assignment emails and Jira synchronization.
 
-![BeNotified](assets/beobservant.png)
+![Notifier](assets/watchdog.png)
 
 ## What This Service Owns
 
@@ -13,7 +13,7 @@ In practice, Be Notified is the service that turns alert traffic into something 
 - Notification channel management for email, Slack, Teams, webhook, and PagerDuty.
 - Incident lifecycle management, including assignee changes, notes, summary views, and state transitions.
 - Jira integration discovery, configuration, issue linking, and comment synchronization.
-- Internal-only request validation between BeObservant and BeNotified.
+- Internal-only request validation between Watchdog and Notifier.
 
 ## Runtime Overview
 
@@ -21,7 +21,7 @@ Be Notified is intended to run on the internal network only.
 
 | Detail | Value |
 | --- | --- |
-| Service name | `BeNotified` |
+| Service name | `Notifier` |
 | Default host | `127.0.0.1` |
 | Default port | `4319` |
 | Docs path | `/docs` when `ENABLE_API_DOCS=true` |
@@ -30,7 +30,7 @@ Be Notified is intended to run on the internal network only.
 | Main API prefix | `/internal/v1/api/alertmanager` |
 | Webhook prefix | `/internal/v1/alertmanager` |
 
-The service initializes its database on startup, wires request-size and concurrency middleware, then exposes the internal API used by the main BeObservant control plane.
+The service initializes its database on startup, wires request-size and concurrency middleware, then exposes the internal API used by the main Watchdog control plane.
 
 ## Security Model
 
@@ -38,7 +38,7 @@ Most requests must come from another trusted internal service.
 
 Required controls:
 
-- `X-Service-Token`: must match `BENOTIFIED_EXPECTED_SERVICE_TOKEN` or `GATEWAY_INTERNAL_SERVICE_TOKEN`.
+- `X-Service-Token`: must match `NOTIFIER_EXPECTED_SERVICE_TOKEN` or `GATEWAY_INTERNAL_SERVICE_TOKEN`.
 - `Authorization: Bearer <context-jwt>`: required by permission-protected routes so tenant, user, role, and group context can be enforced.
 - `INBOUND_WEBHOOK_TOKEN`: required for public-style Alertmanager webhook ingress and validated by the alerting service.
 
@@ -88,8 +88,8 @@ The full configuration surface lives in `config.py`. These are the variables mos
 
 ```env
 DATABASE_URL=postgresql://user:strongPassword@db:5432/observantio
-BENOTIFIED_DATABASE_URL=postgresql://user:strongPassword@db:5432/observantio
-BENOTIFIED_EXPECTED_SERVICE_TOKEN=replace-with-a-long-random-shared-secret
+NOTIFIER_DATABASE_URL=postgresql://user:strongPassword@db:5432/observantio
+NOTIFIER_EXPECTED_SERVICE_TOKEN=replace-with-a-long-random-shared-secret
 INBOUND_WEBHOOK_TOKEN=replace-with-a-long-random-webhook-secret
 GATEWAY_INTERNAL_SERVICE_TOKEN=replace-with-a-long-random-shared-secret
 MIMIR_URL=http://mimir:9009
@@ -114,12 +114,12 @@ RATE_LIMIT_PUBLIC_PER_MINUTE=120
 ### Internal Context JWT Settings
 
 ```env
-BENOTIFIED_CONTEXT_VERIFY_KEY=replace-with-shared-jwt-verification-key
-BENOTIFIED_CONTEXT_SIGNING_KEY=replace-with-shared-jwt-signing-key
-BENOTIFIED_CONTEXT_ISSUER=beobservant-main
-BENOTIFIED_CONTEXT_AUDIENCE=benotified
-BENOTIFIED_CONTEXT_ALGORITHM=HS256
-BENOTIFIED_CONTEXT_REPLAY_TTL_SECONDS=180
+NOTIFIER_CONTEXT_VERIFY_KEY=replace-with-shared-jwt-verification-key
+NOTIFIER_CONTEXT_SIGNING_KEY=replace-with-shared-jwt-signing-key
+NOTIFIER_CONTEXT_ISSUER=watchdog-main
+NOTIFIER_CONTEXT_AUDIENCE=notifier
+NOTIFIER_CONTEXT_ALGORITHM=HS256
+NOTIFIER_CONTEXT_REPLAY_TTL_SECONDS=180
 ```
 
 ### Email Settings
@@ -196,12 +196,12 @@ The service `pyproject.toml` now carries the developer-facing pytest, coverage, 
 Build and run the service locally:
 
 ```bash
-docker build -t benotified:latest .
+docker build -t notifier:latest .
 docker run --rm -it \
     -p 4319:4319 \
     --env-file .env \
-    --name benotified \
-    benotified:latest
+    --name notifier \
+    notifier:latest
 ```
 
 In the mono-repo, prefer the root `docker-compose.yml` and root environment files as the deployment source of truth.
@@ -229,7 +229,7 @@ Typical incident flow:
 
 Common startup issues:
 
-- `Service token not configured`: set `BENOTIFIED_EXPECTED_SERVICE_TOKEN` or `GATEWAY_INTERNAL_SERVICE_TOKEN`.
+- `Service token not configured`: set `NOTIFIER_EXPECTED_SERVICE_TOKEN` or `GATEWAY_INTERNAL_SERVICE_TOKEN`.
 - `Unsafe DATABASE_URL detected`: replace placeholder credentials with a real credentialed DSN.
 - Readiness returns `503`: database connectivity is failing.
 - Webhooks return `401`: `INBOUND_WEBHOOK_TOKEN` does not match the incoming header or bearer token.

@@ -32,7 +32,7 @@ def _with_creator_username(rule: AlertRuleCreate, current_user: TokenData) -> Al
     annotations = dict(rule.annotations or {})
     creator_username = str(getattr(current_user, "username", "") or getattr(current_user, "user_id", "") or "").strip()
     if creator_username:
-        annotations["beobservantCreatedByUsername"] = creator_username
+        annotations["watchdogCreatedByUsername"] = creator_username
     return rule.model_copy(update={"annotations": annotations})
 
 
@@ -278,17 +278,33 @@ async def test_alert_rule(
             "annotations": {
                 "summary": rule.annotations.get("summary", f"Test alert for {rule.name}"),
                 "description": rule.annotations.get("description", rule.expr),
-                "beobservantCorrelationId": str(getattr(rule, "group", "") or ""),
-                "beobservantCreatedBy": str(getattr(rule, "created_by", "") or ""),
-                "beobservantCreatedByUsername": str(
-                    (rule.annotations or {}).get("beobservantCreatedByUsername")
+                "watchdogCorrelationId": str(getattr(rule, "group", "") or ""),
+                "WatchdogCorrelationId": str(getattr(rule, "group", "") or ""),
+                "watchdogCreatedBy": str(getattr(rule, "created_by", "") or ""),
+                "WatchdogCreatedBy": str(getattr(rule, "created_by", "") or ""),
+                "watchdogCreatedByUsername": str(
+                    (rule.annotations or {}).get("watchdogCreatedByUsername")
                     or getattr(current_user, "username", "")
                     or getattr(rule, "created_by", "")
                     or ""
                 ),
-                "beobservantRuleName": str(getattr(rule, "name", "") or ""),
-                "beobservantProductName": str(
-                    rule.annotations.get("beobservantProductName")
+                "WatchdogCreatedByUsername": str(
+                    (rule.annotations or {}).get("watchdogCreatedByUsername")
+                    or getattr(current_user, "username", "")
+                    or getattr(rule, "created_by", "")
+                    or ""
+                ),
+                "watchdogRuleName": str(getattr(rule, "name", "") or ""),
+                "WatchdogRuleName": str(getattr(rule, "name", "") or ""),
+                "watchdogProductName": str(
+                    rule.annotations.get("watchdogProductName")
+                    or rule.annotations.get("productName")
+                    or rule.annotations.get("product_name")
+                    or (rule.labels or {}).get("product")
+                    or ""
+                ),
+                "WatchdogProductName": str(
+                    rule.annotations.get("watchdogProductName")
                     or rule.annotations.get("productName")
                     or rule.annotations.get("product_name")
                     or (rule.labels or {}).get("product")

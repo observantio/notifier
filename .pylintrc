@@ -41,7 +41,7 @@ disable=
     no-member
 
 [BASIC]
-module-rgx=(BeObservant|[a-z_][a-z0-9_]*)$
+module-rgx=(watchdog|[a-z_][a-z0-9_]*)$
 attr-rgx=(_?[a-z][a-z0-9_]*|_?[A-Z][A-Z0-9_]*)$
 const-rgx=(_?[a-z][a-z0-9_]*|_?[A-Z][A-Z0-9_]*)$
 class-const-rgx=(_?[a-z][a-z0-9_]*|_?[A-Z][A-Z0-9_]*)$

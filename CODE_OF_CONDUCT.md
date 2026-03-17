@@ -1,12 +1,12 @@
-# 🔔 BeNotified | Code of Conduct
+# 🔔 Notifier | Code of Conduct
 
-> **Our Commitment:** To ensure that the `BeNotified` service remains a reliable, respectful, and secure environment for all contributors, developers, and users.
+> **Our Commitment:** To ensure that the `Notifier` service remains a reliable, respectful, and secure environment for all contributors, developers, and users.
 
 ---
 
 ## 🔍 Scope
 
-This Code of Conduct applies to all technical and social interactions within the `BeNotified` ecosystem, including:
+This Code of Conduct applies to all technical and social interactions within the `Notifier` ecosystem, including:
 
 * **Code & Development:** Pull requests, issues, code reviews, and commit messages.
 * **Operational Discourse:** Discussions regarding incident response, silences, and integrations.
@@ -40,7 +40,7 @@ To maintain a safe and productive environment, the following behaviors are stric
 
 ## 🛠 Service-Specific Expectations
 
-Because `BeNotified` is a critical alerting service, we hold our contributors to an elevated standard of operational caution:
+Because `Notifier` is a critical alerting service, we hold our contributors to an elevated standard of operational caution:
 
 1. **Safety First:** Treat alerting and notification reliability as a direct user-safety concern.
 2. **No Noise:** Avoid changes that could spam, suppress, or misroute alerts without a formal review.

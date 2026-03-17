@@ -89,9 +89,9 @@ async def test_notify_for_alerts_covers_skip_suppressed_and_dispatch_paths(monke
     await channels_ops.notify_for_alerts(service, "tenant", alerts, storage_service, notification_service)
     assert len(sent) == 4
     assert sent[0][2] == "firing"
-    assert sent[0][1].annotations["beobservantCorrelationId"] == "infra"
-    assert sent[0][1].annotations["beobservantCreatedByUsername"] == "alice"
-    assert sent[0][1].annotations["beobservantProductName"] == "payments"
+    assert sent[0][1].annotations["WatchdogCorrelationId"] == "infra"
+    assert sent[0][1].annotations["WatchdogCreatedByUsername"] == "alice"
+    assert sent[0][1].annotations["WatchdogProductName"] == "payments"
     assert sent[2][2] == "resolved"
 
     storage_service.get_notification_channels_for_rule_name = lambda *_args, **_kwargs: []

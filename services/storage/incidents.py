@@ -57,7 +57,7 @@ def _shared_group_ids(db_obj: object) -> List[str]:
 
 
 INCIDENT_META_KEY_IDENTITY = "incident_key"
-METRIC_STATES_ANNOTATION_KEY = "beobservantMetricStates"
+METRIC_STATES_ANNOTATION_KEY = "watchdogMetricStates"
 
 
 def incident_scope_hint_from_labels(labels: Mapping[str, object]) -> str:

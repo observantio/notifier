@@ -1,8 +1,8 @@
-name: Publish BeNotified Image
+name: Publish Notifier Image
 
 on:
   workflow_run:
-    workflows: ["BeNotified CI"]
+    workflows: ["Notifier CI"]
     types: [completed]
 
 jobs:
@@ -52,12 +52,12 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push benotified
+      - name: Build and push notifier
         uses: docker/build-push-action@v6
         with:
           context: .
           file: ./Dockerfile
           push: true
           tags: |
-            ghcr.io/observantio/benotified:stable
-            ghcr.io/observantio/benotified:${{ github.event.workflow_run.id }}
+            ghcr.io/observantio/notifier:stable
+            ghcr.io/observantio/notifier:${{ github.event.workflow_run.id }}

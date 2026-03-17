@@ -113,25 +113,33 @@ async def notify_for_alerts(
         annotations = _string_dict(incoming_alert.get("annotations") or {})
         if matched_rule:
             enriched_annotations = dict(annotations)
-            enriched_annotations.setdefault("beobservantCorrelationId", str(getattr(matched_rule, "group", "") or ""))
-            enriched_annotations.setdefault("beobservantCreatedBy", str(getattr(matched_rule, "created_by", "") or ""))
+            corr = str(getattr(matched_rule, "group", "") or "")
+            enriched_annotations.setdefault("watchdogCorrelationId", corr)
+            enriched_annotations.setdefault("WatchdogCorrelationId", corr)
+            created_by = str(getattr(matched_rule, "created_by", "") or "")
+            enriched_annotations.setdefault("watchdogCreatedBy", created_by)
+            enriched_annotations.setdefault("WatchdogCreatedBy", created_by)
             rule_annotations = _string_dict(getattr(matched_rule, "annotations", {}) or {})
             created_by_username = (
-                rule_annotations.get("beobservantCreatedByUsername")
+                rule_annotations.get("watchdogCreatedByUsername")
                 or rule_annotations.get("createdByUsername")
                 or rule_annotations.get("created_by_username")
             )
             if created_by_username:
-                enriched_annotations.setdefault("beobservantCreatedByUsername", str(created_by_username))
-            enriched_annotations.setdefault("beobservantRuleName", str(getattr(matched_rule, "name", "") or ""))
+                enriched_annotations.setdefault("watchdogCreatedByUsername", str(created_by_username))
+                enriched_annotations.setdefault("WatchdogCreatedByUsername", str(created_by_username))
+            rule_name = str(getattr(matched_rule, "name", "") or "")
+            enriched_annotations.setdefault("watchdogRuleName", rule_name)
+            enriched_annotations.setdefault("WatchdogRuleName", rule_name)
             product_name = (
-                rule_annotations.get("beobservantProductName")
+                rule_annotations.get("watchdogProductName")
                 or rule_annotations.get("productName")
                 or rule_annotations.get("product_name")
                 or labels.get("product")
             )
             if product_name:
-                enriched_annotations.setdefault("beobservantProductName", str(product_name))
+                enriched_annotations.setdefault("watchdogProductName", str(product_name))
+                enriched_annotations.setdefault("WatchdogProductName", str(product_name))
             annotations = enriched_annotations
 
         alert_model = Alert(

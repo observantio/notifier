@@ -90,10 +90,15 @@ def incident_to_pydantic(incident: AlertIncidentDB) -> AlertIncidentPydantic:
         visibility_value = "public"
 
     safe_annotations = {str(k): str(v) for k, v in annotations.items() if k != INCIDENT_META_KEY and v is not None}
-    if "beobservantCorrelationId" not in safe_annotations:
+    if "watchdogCorrelationId" not in safe_annotations:
         corr = str(meta.get("correlation_id") or meta.get("incident_key") or "").strip()
         if corr:
-            safe_annotations["beobservantCorrelationId"] = corr
+            safe_annotations["watchdogCorrelationId"] = corr
+            safe_annotations["WatchdogCorrelationId"] = corr
+    elif "WatchdogCorrelationId" not in safe_annotations:
+        # Preserve backwards-compatible casing in case only lowercase is present
+        if "watchdogCorrelationId" in safe_annotations:
+            safe_annotations["WatchdogCorrelationId"] = safe_annotations["watchdogCorrelationId"]
 
     payload = {
         "id": incident.id,
