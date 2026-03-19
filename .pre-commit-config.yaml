@@ -6,7 +6,8 @@ repos:
         language: system
         entry: bash -lc 'python -m pytest -q'
         pass_filenames: false
-        always_run: true
+        files: \.py$
+        types: [python]
 
       - id: notifier-mypy
         name: Notifier mypy
@@ -25,9 +26,9 @@ repos:
           NOTIFIER_CONTEXT_SIGNING_KEY=ci_notifier_context_signing_key_12345678901234567890
           INBOUND_WEBHOOK_TOKEN=ci_inbound_webhook_token_123456789
           PYTHONPATH=$PWD
-          mypy --config-file "$PWD/mypy.ini" .'
-        pass_filenames: false
-        always_run: true
+          mypy --config-file "$PWD/mypy.ini" "$@"' --
+        files: \.py$
+        types: [python]
 
       - id: notifier-pylint
         name: Notifier pylint
@@ -46,6 +47,6 @@ repos:
           NOTIFIER_CONTEXT_SIGNING_KEY=ci_notifier_context_signing_key_12345678901234567890
           INBOUND_WEBHOOK_TOKEN=ci_inbound_webhook_token_123456789
           PYTHONPATH=$PWD
-          pylint --rcfile "$PWD/.pylintrc" $(find . -maxdepth 1 -mindepth 1 \( -type d -o -name "*.py" \) ! -name tests ! -name __pycache__ ! -name build ! -name dist ! -name tmp ! -name vendor | sort)'
-        pass_filenames: false
-        always_run: true
+          pylint --rcfile "$PWD/.pylintrc" "$@"' --
+        files: \.py$
+        types: [python]

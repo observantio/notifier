@@ -23,6 +23,26 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 2
+
+      - name: Detect changed Python files
+        id: py_changes
+        run: |
+          set -euo pipefail
+          sha="${{ github.event.workflow_run.head_sha }}"
+          parent="$(git rev-parse "${sha}^" 2>/dev/null || true)"
+          if [ -z "${parent}" ]; then
+            echo "notifier=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          files="$(git diff --name-only "${parent}" "${sha}")"
+          echo "Changed files:"
+          echo "${files}"
+          if echo "${files}" | grep -Eq '\.py$'; then
+            echo "notifier=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "notifier=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Ensure trigger actor has maintainer-level access
         uses: actions/github-script@v7
@@ -53,6 +73,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push notifier
+        if: steps.py_changes.outputs.notifier == 'true'
         uses: docker/build-push-action@v6
         with:
           context: .

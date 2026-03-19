@@ -2,9 +2,13 @@ name: Notifier CI
 
 on:
   pull_request:
+    paths:
+      - "**/*.py"
   push:
     branches:
       - "**"
+    paths:
+      - "**/*.py"
 
 jobs:
   test:
