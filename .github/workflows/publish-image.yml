@@ -1,66 +1,28 @@
 name: Publish Notifier Image
 
 on:
-  workflow_run:
-    workflows: ["Notifier CI"]
-    types: [completed]
+  push:
+    tags:
+      - "v*"
 
 jobs:
   publish:
     name: Build and publish GHCR image
     runs-on: ubuntu-latest
-    if: >
-      github.event.workflow_run.conclusion == 'success' &&
-      github.event.workflow_run.event == 'push' &&
-      github.event.workflow_run.head_branch == 'main' &&
-      github.event.workflow_run.repository.private == false
     permissions:
-      contents: read
+      contents: write
       packages: write
-    environment: docker-public
+    env:
+      VERSION: ${{ github.ref_name }}
     steps:
-      - name: Checkout workflow commit
+      - name: Checkout release tag
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
-          fetch-depth: 2
+          ref: ${{ env.VERSION }}
 
-      - name: Detect changed Python files
-        id: py_changes
-        run: |
-          set -euo pipefail
-          sha="${{ github.event.workflow_run.head_sha }}"
-          parent="$(git rev-parse "${sha}^" 2>/dev/null || true)"
-          if [ -z "${parent}" ]; then
-            echo "notifier=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          files="$(git diff --name-only "${parent}" "${sha}")"
-          echo "Changed files:"
-          echo "${files}"
-          if echo "${files}" | grep -Eq '\.py$'; then
-            echo "notifier=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "notifier=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Ensure trigger actor has maintainer-level access
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const owner = context.payload.workflow_run.repository.owner.login;
-            const repo = context.payload.workflow_run.repository.name;
-            const username = context.payload.workflow_run.actor.login;
-            const allowed = new Set(["admin", "maintain", "write"]);
-            const { data } = await github.rest.repos.getCollaboratorPermissionLevel({
-              owner,
-              repo,
-              username,
-            });
-            core.info(`Actor ${username} permission: ${data.permission}`);
-            if (!allowed.has(data.permission)) {
-              core.setFailed(`Publishing blocked: actor ${username} must have admin/maintain/write permission.`);
-            }
+      - name: Normalize owner for GHCR
+        id: owner
+        run: echo "owner_lc=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_OUTPUT"
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -73,12 +35,17 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push notifier
-        if: steps.py_changes.outputs.notifier == 'true'
         uses: docker/build-push-action@v6
         with:
           context: .
           file: ./Dockerfile
+          platforms: linux/amd64,linux/arm64
           push: true
-          tags: |
-            ghcr.io/observantio/notifier:stable
-            ghcr.io/observantio/notifier:${{ github.event.workflow_run.id }}
+          tags: ghcr.io/${{ steps.owner.outputs.owner_lc }}/notifier:${{ env.VERSION }}
+
+      - name: Create or update release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.VERSION }}
+          name: ${{ env.VERSION }}
+          generate_release_notes: true
