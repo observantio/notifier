@@ -43,9 +43,36 @@ jobs:
           push: true
           tags: ghcr.io/${{ steps.owner.outputs.owner_lc }}/notifier:${{ env.VERSION }}
 
+      - name: Extract changelog entry for this version
+        run: |
+          set -euo pipefail
+          if [ ! -f CHANGELOG.md ]; then
+            echo "CHANGELOG.md not found at repository root." >&2
+            exit 1
+          fi
+          awk -v version="$VERSION" '
+            BEGIN { in_section=0; found=0 }
+            /^## \[/ {
+              if ($0 ~ "^## \\[" version "\\]") {
+                in_section=1
+                found=1
+                print
+                next
+              }
+              if (in_section==1) exit
+            }
+            in_section==1 { print }
+            END {
+              if (!found) {
+                print "No changelog entry found for " version > "/dev/stderr"
+                exit 1
+              }
+            }
+          ' CHANGELOG.md > release-notes.md
+
       - name: Create or update release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.VERSION }}
           name: ${{ env.VERSION }}
-          generate_release_notes: true
+          body_path: release-notes.md
