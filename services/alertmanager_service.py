@@ -31,8 +31,11 @@ from services.notification_service import NotificationService
 from custom_types.json import JSONDict
 from services.alerting.alerts_ops import (
     delete_alerts as delete_alerts_ops,
+    evaluate_promql as evaluate_promql_ops,
     get_alert_groups as get_alert_groups_ops,
     get_alerts as get_alerts_ops,
+    list_label_names as list_label_names_ops,
+    list_label_values as list_label_values_ops,
     list_metric_names as list_metric_names_ops,
     post_alerts as post_alerts_ops,
 )
@@ -173,6 +176,15 @@ class AlertManagerService:
 
     async def list_metric_names(self, org_id: str) -> List[str]:
         return await list_metric_names_ops(self, org_id)
+
+    async def list_label_names(self, org_id: str) -> List[str]:
+        return await list_label_names_ops(self, org_id)
+
+    async def list_label_values(self, org_id: str, label: str, metric_name: Optional[str] = None) -> List[str]:
+        return await list_label_values_ops(self, org_id, label, metric_name)
+
+    async def evaluate_promql(self, org_id: str, query: str, sample_limit: int = 5) -> JSONDict:
+        return await evaluate_promql_ops(self, org_id, query, sample_limit)
 
     async def sync_mimir_rules_for_org(self, org_id: str, rules: List[AlertRule]) -> None:
         return await sync_mimir_rules_for_org_ops(self, org_id, rules)

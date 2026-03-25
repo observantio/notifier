@@ -132,8 +132,16 @@ async def patch_incident(
     if not updated:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Incident not found")
 
-    if updated.assignee and updated.assignee != existing.assignee:
-        assignment_note = f"Assignment updated by {current_user.username or current_user.user_id}"
+    previous_assignee = str(getattr(existing, "assignee", "") or "").strip()
+    next_assignee = str(getattr(updated, "assignee", "") or "").strip()
+    assignee_changed = previous_assignee != next_assignee
+    if assignee_changed:
+        actor_label = current_user.username or current_user.user_id
+        assignment_note = (
+            f"{actor_label} assigned incident to {next_assignee}"
+            if next_assignee
+            else f"{actor_label} unassigned this incident"
+        )
         try:
             await run_in_threadpool(
                 storage_service.update_incident,
@@ -151,19 +159,20 @@ async def patch_incident(
             current_user=current_user,
             note_text=assignment_note,
         )
-        await move_incident_ticket_to_in_progress(
-            updated,
-            tenant_id=current_user.tenant_id,
-            current_user=current_user,
-        )
+        if next_assignee:
+            await move_incident_ticket_to_in_progress(
+                updated,
+                tenant_id=current_user.tenant_id,
+                current_user=current_user,
+            )
 
-        await notification_service.send_incident_assignment_email(
-            recipient_email=updated.assignee,
-            incident_title=updated.alert_name,
-            incident_status=updated.status,
-            incident_severity=updated.severity,
-            actor=current_user.username or current_user.user_id,
-        )
+            await notification_service.send_incident_assignment_email(
+                recipient_email=next_assignee,
+                incident_title=updated.alert_name,
+                incident_status=updated.status,
+                incident_severity=updated.severity,
+                actor=current_user.username or current_user.user_id,
+            )
 
     if payload.note:
         await sync_note_to_jira_comment(

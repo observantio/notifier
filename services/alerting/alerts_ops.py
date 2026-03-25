@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone, timedelta
 from collections.abc import Mapping, Sequence
-from typing import TYPE_CHECKING, Dict, List, Optional
+from typing import TYPE_CHECKING, Dict, List, Optional, Any
 from models.alerting.alerts import Alert, AlertGroup
 from models.alerting.silences import Matcher, SilenceCreate
 import httpx
@@ -39,6 +39,121 @@ async def list_metric_names(service: AlertManagerService, org_id: str) -> List[s
         )
     metrics = payload.get("data") or []
     return metrics if isinstance(metrics, list) else []
+
+
+async def list_label_names(service: AlertManagerService, org_id: str) -> List[str]:
+    response = await service._mimir_client.get(
+        f"{config.MIMIR_URL.rstrip('/')}/prometheus/api/v1/labels",
+        headers={"X-Scope-OrgID": org_id},
+    )
+    response.raise_for_status()
+    payload = response.json()
+    if payload.get("status") != "success":
+        raise httpx.HTTPStatusError(
+            "Mimir returned non-success status",
+            request=response.request,
+            response=response,
+        )
+    labels = payload.get("data") or []
+    return labels if isinstance(labels, list) else []
+
+
+async def list_label_values(
+    service: AlertManagerService,
+    org_id: str,
+    label: str,
+    metric_name: Optional[str] = None,
+) -> List[str]:
+    params: Dict[str, str] = {}
+    if metric_name:
+        metric = str(metric_name).strip()
+        if metric:
+            params["match[]"] = metric
+    response = await service._mimir_client.get(
+        f"{config.MIMIR_URL.rstrip('/')}/prometheus/api/v1/label/{label}/values",
+        headers={"X-Scope-OrgID": org_id},
+        params=params or None,
+    )
+    response.raise_for_status()
+    payload = response.json()
+    if payload.get("status") != "success":
+        raise httpx.HTTPStatusError(
+            "Mimir returned non-success status",
+            request=response.request,
+            response=response,
+        )
+    values = payload.get("data") or []
+    return values if isinstance(values, list) else []
+
+
+async def evaluate_promql(
+    service: AlertManagerService,
+    org_id: str,
+    query: str,
+    sample_limit: int = 5,
+) -> Dict[str, Any]:
+    response = await service._mimir_client.get(
+        f"{config.MIMIR_URL.rstrip('/')}/prometheus/api/v1/query",
+        headers={"X-Scope-OrgID": org_id},
+        params={"query": query},
+    )
+
+    payload = response.json() if response.content else {}
+    if response.status_code >= 400:
+        return {
+            "valid": False,
+            "error": str(payload.get("error") or f"Mimir query failed with status {response.status_code}"),
+            "errorType": str(payload.get("errorType") or ""),
+            "resultType": None,
+            "sampleCount": 0,
+            "samples": [],
+            "currentValue": None,
+        }
+
+    if payload.get("status") != "success":
+        return {
+            "valid": False,
+            "error": str(payload.get("error") or "Mimir returned non-success status"),
+            "errorType": str(payload.get("errorType") or ""),
+            "resultType": None,
+            "sampleCount": 0,
+            "samples": [],
+            "currentValue": None,
+        }
+
+    data = payload.get("data") or {}
+    result_type = data.get("resultType")
+    result = data.get("result") or []
+    capped_limit = max(1, min(int(sample_limit or 5), 20))
+    samples: List[Dict[str, Any]] = []
+    current_value: Optional[str] = None
+
+    if result_type == "vector" and isinstance(result, list):
+        for item in result[:capped_limit]:
+            metric = item.get("metric") or {}
+            value = item.get("value") or []
+            samples.append(
+                {
+                    "metric": metric if isinstance(metric, dict) else {},
+                    "timestamp": value[0] if isinstance(value, list) and len(value) >= 2 else None,
+                    "value": value[1] if isinstance(value, list) and len(value) >= 2 else None,
+                }
+            )
+        if samples:
+            current_value = str(samples[0].get("value", ""))
+    elif result_type in {"scalar", "string"} and isinstance(result, list) and len(result) >= 2:
+        current_value = str(result[1])
+        samples.append({"metric": {}, "timestamp": result[0], "value": result[1]})
+
+    return {
+        "valid": True,
+        "error": None,
+        "errorType": None,
+        "resultType": result_type,
+        "sampleCount": len(result) if isinstance(result, list) else 0,
+        "samples": samples,
+        "currentValue": current_value,
+    }
 
 
 async def get_alerts(

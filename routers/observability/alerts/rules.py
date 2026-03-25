@@ -155,6 +155,76 @@ async def list_metric_names(
     return {"orgId": tenant_org_id, "metrics": await alertmanager_service.list_metric_names(tenant_org_id)}
 
 
+@router.get("/metrics/query")
+@handle_route_errors(bad_gateway_detail="Failed to evaluate PromQL against Mimir")
+async def evaluate_promql(
+    query: str = Query(..., min_length=1),
+    org_id: Optional[str] = Query(None, alias="orgId"),
+    sample_limit: int = Query(5, alias="sampleLimit", ge=1, le=20),
+    current_user: TokenData = Depends(
+        require_any_permission_with_scope(
+            [Permission.READ_METRICS, Permission.CREATE_RULES, Permission.UPDATE_RULES, Permission.WRITE_ALERTS],
+            "alertmanager",
+        )
+    ),
+) -> JSONDict:
+    tenant_org_id = org_id or getattr(current_user, "org_id", None)
+    if not tenant_org_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No org_id available to query metrics. Set a product / API key first.",
+        )
+    payload = await alertmanager_service.evaluate_promql(tenant_org_id, query, sample_limit)
+    return {"orgId": tenant_org_id, "query": query, **payload}
+
+
+@router.get("/metrics/labels")
+@handle_route_errors(bad_gateway_detail="Failed to fetch label names from Mimir")
+async def list_metric_labels(
+    org_id: Optional[str] = Query(None, alias="orgId"),
+    current_user: TokenData = Depends(
+        require_any_permission_with_scope(
+            [Permission.READ_METRICS, Permission.CREATE_RULES, Permission.UPDATE_RULES, Permission.WRITE_ALERTS],
+            "alertmanager",
+        )
+    ),
+) -> JSONDict:
+    tenant_org_id = org_id or getattr(current_user, "org_id", None)
+    if not tenant_org_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No org_id available to query labels. Set a product / API key first.",
+        )
+    return {"orgId": tenant_org_id, "labels": await alertmanager_service.list_label_names(tenant_org_id)}
+
+
+@router.get("/metrics/label-values/{label}")
+@handle_route_errors(bad_gateway_detail="Failed to fetch label values from Mimir")
+async def list_metric_label_values(
+    label: str,
+    org_id: Optional[str] = Query(None, alias="orgId"),
+    metric_name: Optional[str] = Query(None, alias="metricName"),
+    current_user: TokenData = Depends(
+        require_any_permission_with_scope(
+            [Permission.READ_METRICS, Permission.CREATE_RULES, Permission.UPDATE_RULES, Permission.WRITE_ALERTS],
+            "alertmanager",
+        )
+    ),
+) -> JSONDict:
+    tenant_org_id = org_id or getattr(current_user, "org_id", None)
+    if not tenant_org_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No org_id available to query label values. Set a product / API key first.",
+        )
+    return {
+        "orgId": tenant_org_id,
+        "label": label,
+        "metricName": metric_name,
+        "values": await alertmanager_service.list_label_values(tenant_org_id, label, metric_name),
+    }
+
+
 @router.get("/rules/{rule_id}", response_model=AlertRule)
 async def get_alert_rule(
     rule_id: str,

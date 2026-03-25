@@ -698,8 +698,9 @@ class IncidentStorageService:
             ):
                 return None
 
-            if payload.assignee is not None:
-                requested_assignee = payload.assignee.strip() or None
+            fields_set = set(getattr(payload, "model_fields_set", set()) or getattr(payload, "__fields_set__", set()) or [])
+            if "assignee" in fields_set:
+                requested_assignee = str(payload.assignee or "").strip() or None
                 if requested_assignee and visibility == "private" and requested_assignee != user_id:
                     raise HTTPException(
                         status_code=http_status.HTTP_403_FORBIDDEN,
