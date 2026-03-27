@@ -15,6 +15,14 @@ All notable changes to this project will be documented in this file.
 - Improved incident assignment auditing so assignment and unassignment actions are explicitly logged with the acting user.
 - Updated incident assignment side effects so auto move-to-in-progress and assignment email notifications only run when an assignee is present.
 - Updated incident patch storage handling to respect explicitly provided `assignee` fields, enabling reliable unassign behavior when clearing assignee values.
+- Updated pre-commit type/lint hooks to read config from `pyproject.toml` (mypy + pylint), replacing file-specific config path references.
+- Switched notifier DB session creation to a cached `sessionmaker` factory with stricter initialization checks and explicit factory teardown on dispose.
+- Refined middleware/alert-service implementation details for cleaner lint behavior (structured logging formatting and explicit unused dependency markers).
+
+### Fixed
+
+- Fixed DB session guard behavior for partially-initialized database state (`_engine` present while session factory is missing).
+- Fixed resilience and notification-sender edge-case coverage for retry/HTTP error handling paths.
 
 ## [v0.0.1] - 2026-03-20
 

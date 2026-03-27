@@ -50,14 +50,20 @@ def with_retry(
                         jitter = wait_time * max(0.0, config.RETRY_JITTER)
                         wait_time = max(0.0, wait_time + random.uniform(-jitter, jitter))
                         logger.warning(
-                            f"Attempt {attempt + 1}/{max_retries + 1} failed for "
-                            f"{func.__name__}: {exc}. Retrying in {wait_time}s..."
+                            "Attempt %d/%d failed for %s: %s. Retrying in %ss...",
+                            attempt + 1,
+                            max_retries + 1,
+                            func.__name__,
+                            exc,
+                            wait_time,
                         )
                         await asyncio.sleep(wait_time)
                     else:
                         logger.error(
-                            f"All {max_retries + 1} attempts failed for "
-                            f"{func.__name__}: {exc}"
+                            "All %d attempts failed for %s: %s",
+                            max_retries + 1,
+                            func.__name__,
+                            exc,
                         )
                 except (httpx.RequestError, asyncio.TimeoutError) as exc:
                     last_exception = exc
@@ -66,19 +72,27 @@ def with_retry(
                         jitter = wait_time * max(0.0, config.RETRY_JITTER)
                         wait_time = max(0.0, wait_time + random.uniform(-jitter, jitter))
                         logger.warning(
-                            f"Attempt {attempt + 1}/{max_retries + 1} failed for "
-                            f"{func.__name__}: {exc}. Retrying in {wait_time}s..."
+                            "Attempt %d/%d failed for %s: %s. Retrying in %ss...",
+                            attempt + 1,
+                            max_retries + 1,
+                            func.__name__,
+                            exc,
+                            wait_time,
                         )
                         await asyncio.sleep(wait_time)
                     else:
                         logger.error(
-                            f"All {max_retries + 1} attempts failed for "
-                            f"{func.__name__}: {exc}"
+                            "All %d attempts failed for %s: %s",
+                            max_retries + 1,
+                            func.__name__,
+                            exc,
                         )
 
             if last_exception is not None:
                 raise last_exception
-            raise RuntimeError(f"Retry wrapper exited without result or captured exception for {func.__name__}")
+            raise RuntimeError(
+                f"Retry wrapper exited without result or captured exception for {func.__name__}"
+            )
 
         return wrapper
     return decorator
@@ -91,7 +105,7 @@ def with_timeout(timeout: float = config.DEFAULT_TIMEOUT) -> Callable[[AsyncFunc
             try:
                 return await asyncio.wait_for(func(*args, **kwargs), timeout=timeout)
             except asyncio.TimeoutError:
-                logger.error(f"Timeout after {timeout}s for {func.__name__}")
+                logger.error("Timeout after %ss for %s", timeout, func.__name__)
                 raise
 
         return wrapper

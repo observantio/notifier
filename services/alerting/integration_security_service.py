@@ -394,6 +394,7 @@ def validate_shared_group_ids_for_user(
     shared_group_ids: List[str],
     current_user: TokenData,
 ) -> List[str]:
+    _ = tenant_id
     normalized = [str(gid).strip() for gid in (shared_group_ids or []) if str(gid).strip()]
     if not normalized:
         return []

@@ -58,6 +58,7 @@ async def notify_for_alerts(
     storage_service: DatabaseStorageService,
     notification_service: NotificationService,
 ) -> None:
+    _ = service
     for incoming_alert in alerts_list:
         labels = _string_dict(incoming_alert.get("labels") or {})
         alertname = labels.get("alertname")

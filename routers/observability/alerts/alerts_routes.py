@@ -63,6 +63,7 @@ async def get_alert_groups(
     filter_labels: Optional[str] = Query(None),
     current_user: TokenData = Depends(require_permission_with_scope(Permission.READ_ALERTS, "alertmanager")),
 ) -> List[AlertGroup]:
+    _ = current_user
     return await alertmanager_service.get_alert_groups(filter_labels=alertmanager_service.parse_filter_labels(filter_labels))
 
 
@@ -73,6 +74,7 @@ async def post_alerts(
         require_any_permission_with_scope([Permission.CREATE_ALERTS, Permission.WRITE_ALERTS], "alertmanager")
     ),
 ) -> JSONDict:
+    _ = current_user
     if not await alertmanager_service.post_alerts(alerts):
         raise HTTPException(status_code=500, detail="Failed to post alerts")
     return {"status": "success", "count": len(alerts)}
@@ -84,6 +86,7 @@ async def delete_alerts(
     filter_labels: str = Query(...),
     current_user: TokenData = Depends(require_permission_with_scope(Permission.DELETE_ALERTS, "alertmanager")),
 ) -> JSONDict:
+    _ = current_user
     labels = alertmanager_service.parse_filter_labels(filter_labels)
     if not labels:
         raise HTTPException(status_code=400, detail="filter_labels cannot be empty")

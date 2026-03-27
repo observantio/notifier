@@ -22,4 +22,5 @@ router = APIRouter()
 async def get_integration_channel_types(
     current_user: TokenData = Depends(require_permission_with_scope(Permission.READ_CHANNELS, "alertmanager")),
 ) -> JSONDict:
+    _ = current_user
     return {"allowedTypes": allowed_channel_types()}

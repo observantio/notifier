@@ -153,6 +153,7 @@ def _incident_access_allowed(
     user_group_ids: List[str],
     require_write: bool = False,
 ) -> bool:
+    _ = require_write
     # Group incidents are always group-membership scoped, even for original creator.
     if visibility == "group":
         return bool(set(shared_group_ids) & set(user_group_ids))

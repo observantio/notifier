@@ -25,6 +25,7 @@ router = APIRouter()
 async def get_status(
     current_user: TokenData = Depends(require_permission_with_scope(Permission.READ_ALERTS, "alertmanager")),
 ) -> AlertManagerStatus:
+    _ = current_user
     result = await alertmanager_service.get_status()
     if not result:
         raise HTTPException(status_code=500, detail="Failed to fetch AlertManager status")
@@ -35,4 +36,5 @@ async def get_status(
 async def get_receivers(
     current_user: TokenData = Depends(require_permission_with_scope(Permission.READ_ALERTS, "alertmanager")),
 ) -> List[str]:
+    _ = current_user
     return await alertmanager_service.get_receivers()

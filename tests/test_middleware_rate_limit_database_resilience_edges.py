@@ -171,6 +171,18 @@ def test_database_module_paths(monkeypatch):
     db_mod.dispose_database()
     assert db_mod._engine is None
 
+    # Cover guard paths where one side of initialization is missing.
+    db_mod._engine = object()
+    db_mod._session_local = None
+    with pytest.raises(RuntimeError):
+        with db_mod.get_db_session():
+            pass
+
+    db_mod._engine = object()
+    db_mod._session_local = None
+    with pytest.raises(RuntimeError):
+        next(db_mod.get_db())
+
     with pytest.raises(RuntimeError):
         db_mod.init_db()
 

@@ -27,7 +27,7 @@ repos:
           NOTIFIER_CONTEXT_SIGNING_KEY=ci_notifier_context_signing_key_12345678901234567890
           INBOUND_WEBHOOK_TOKEN=ci_inbound_webhook_token_123456789
           PYTHONPATH=$PWD
-          mypy --config-file "$PWD/mypy.ini" "$@"' --
+          mypy --config-file "$PWD/pyproject.toml" "$@"' --
         files: \.py$
         exclude: (^|/)tests/
         types: [python]
@@ -49,7 +49,7 @@ repos:
           NOTIFIER_CONTEXT_SIGNING_KEY=ci_notifier_context_signing_key_12345678901234567890
           INBOUND_WEBHOOK_TOKEN=ci_inbound_webhook_token_123456789
           PYTHONPATH=$PWD
-          pylint --rcfile "$PWD/.pylintrc" "$@"' --
+          pylint --rcfile "$PWD/pyproject.toml" "$@"' --
         files: \.py$
         exclude: (^|/)tests/
         types: [python]

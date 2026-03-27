@@ -707,3 +707,23 @@ def _async_value(value):
         return value
 
     return _inner()
+
+
+def test_notification_senders_unexpected_http_error_branch(monkeypatch):
+    senders = notif_mod.notification_senders
+
+    monkeypatch.setattr(senders, "is_safe_http_url", lambda _url: True)
+
+    async def raise_generic_http_error(*_args, **_kwargs):
+        raise httpx.HTTPError("unexpected")
+
+    monkeypatch.setattr(senders.transport, "post_with_retry", raise_generic_http_error)
+
+    result = asyncio.run(
+        senders._send_json(
+            client=object(),
+            url="https://hooks.example.test/notify",
+            payload={"ok": True},
+        )
+    )
+    assert result is False

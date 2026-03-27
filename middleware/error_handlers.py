@@ -59,7 +59,7 @@ def validation_exception_handler(
     request: Request,
     exc: Exception,
 ) -> JSONResponse:
-    logger.warning(f"Request validation error for {request.url}: {exc}")
+    logger.warning("Request validation error for %s: %s", request.url, exc)
     detail = exc.errors() if hasattr(exc, "errors") else [{"msg": str(exc)}]
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -71,7 +71,7 @@ def general_exception_handler(
     request: Request,
     exc: Exception,
 ) -> JSONResponse:
-    logger.exception(f"Unhandled exception for {request.url}: {exc}")
+    logger.exception("Unhandled exception for %s: %s", request.url, exc)
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content={"detail": "Internal server error"},
