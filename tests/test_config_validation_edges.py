@@ -160,6 +160,16 @@ def test_build_secret_provider_prefers_env_and_supports_role_secret_sources(monk
     try:
         with monkeypatch.context() as ctx:
             ctx.setenv("VAULT_ADDR", "http://vault:8200")
+            ctx.delenv("VAULT_ROLE_ID", raising=False)
+            ctx.delenv("VAULT_SECRET_ID_FILE", raising=False)
+            ctx.delenv("VAULT_SECRET_ID", raising=False)
+            ctx.setitem(sys.modules, "services.secrets.vault_client", fake_module)
+            provider = module.build_secret_provider()
+            assert isinstance(provider, FakeVaultSecretProvider)
+            assert fake_calls["secret_id_fn"] is None
+
+        with monkeypatch.context() as ctx:
+            ctx.setenv("VAULT_ADDR", "http://vault:8200")
             ctx.setenv("VAULT_ROLE_ID", "role-id")
             ctx.setenv("VAULT_SECRET_ID_FILE", temp_name)
             ctx.setenv("VAULT_PREFIX", "kv")
@@ -299,3 +309,135 @@ def test_config_accepts_valid_production_environment(monkeypatch):
         module = _reload_config_module()
         assert module.config.IS_PRODUCTION is True
         assert module.config.get_secret("NOTIFIER_EXPECTED_SERVICE_TOKEN") == "strong_expected_token_123"
+
+
+def test_config_init_handles_nonfatal_vault_load_failure(monkeypatch):
+    module = _reload_config_module()
+    original_loader = module.Config._load_vault_secrets
+    try:
+        with monkeypatch.context() as ctx:
+            for key, value in _valid_dev_env().items():
+                ctx.setenv(key, value)
+            ctx.setenv("VAULT_ENABLED", "true")
+
+            def failing_loader(self):
+                raise ValueError("vault unavailable")
+
+            module.Config._load_vault_secrets = failing_loader
+            cfg = module.Config()
+            assert cfg.VAULT_ENABLED is True
+            assert cfg._secret_provider is not None
+    finally:
+        module.Config._load_vault_secrets = original_loader
+
+
+def test_load_vault_secrets_requires_addr_and_secret_source(monkeypatch):
+    module = _reload_config_module()
+
+    cfg = module.Config.__new__(module.Config)
+    cfg.VAULT_ENABLED = True
+    cfg.VAULT_ADDR = None
+    with pytest.raises(ValueError, match="VAULT_ADDR must be set"):
+        module.Config._load_vault_secrets(cfg)
+
+    fake_module = types.SimpleNamespace(
+        VaultClientError=RuntimeError,
+        VaultSecretProvider=lambda **_kwargs: types.SimpleNamespace(get=lambda _key: None),
+    )
+
+    cfg = module.Config.__new__(module.Config)
+    cfg.VAULT_ENABLED = True
+    cfg.VAULT_ADDR = "http://vault:8200"
+    cfg.VAULT_TOKEN = None
+    cfg.VAULT_ROLE_ID = "role-id"
+    cfg.VAULT_SECRET_ID = None
+    cfg.VAULT_SECRET_ID_FILE = None
+    cfg.VAULT_SECRETS_PREFIX = "secret"
+    cfg.VAULT_KV_VERSION = 2
+    cfg.VAULT_TIMEOUT = 2.0
+    cfg.VAULT_CACERT = None
+    cfg.VAULT_CACHE_TTL = 30.0
+    cfg.VAULT_SECRET_KEYS = ()
+    with monkeypatch.context() as ctx:
+        ctx.setitem(sys.modules, "services.secrets.vault_client", fake_module)
+        with pytest.raises(RuntimeError, match="neither VAULT_SECRET_ID nor VAULT_SECRET_ID_FILE"):
+            module.Config._load_vault_secrets(cfg)
+
+
+def test_config_validate_warns_when_jwt_secret_key_set(monkeypatch):
+    with monkeypatch.context() as ctx:
+        for key, value in _valid_dev_env().items():
+            ctx.setenv(key, value)
+        ctx.setenv("JWT_SECRET_KEY", "legacy-secret")
+        module = _reload_config_module()
+        assert module.config.JWT_SECRET_KEY == "legacy-secret"
+
+
+def test_config_init_raises_when_vault_required_and_load_fails(monkeypatch):
+    module = _reload_config_module()
+
+    with monkeypatch.context() as ctx:
+        for key, value in _valid_dev_env().items():
+            ctx.setenv(key, value)
+        ctx.setenv("VAULT_ENABLED", "true")
+        ctx.setenv("VAULT_FAIL_ON_MISSING", "true")
+
+        def failing_loader(self):
+            raise ValueError("vault load failed")
+
+        ctx.setattr(module.Config, "_load_vault_secrets", failing_loader)
+        with pytest.raises(ValueError, match="vault load failed"):
+            module.Config()
+
+
+def test_load_vault_secrets_selects_file_and_literal_secret_callbacks(monkeypatch):
+    module = _reload_config_module()
+    captured: list[dict[str, object]] = []
+
+    class FakeVaultSecretProvider:
+        def __init__(self, **kwargs):
+            captured.append(kwargs)
+
+        def get(self, _key: str):
+            return None
+
+    fake_module = types.SimpleNamespace(
+        VaultClientError=RuntimeError,
+        VaultSecretProvider=FakeVaultSecretProvider,
+    )
+
+    cfg = module.Config.__new__(module.Config)
+    cfg.VAULT_ENABLED = True
+    cfg.VAULT_ADDR = "http://vault:8200"
+    cfg.VAULT_TOKEN = None
+    cfg.VAULT_ROLE_ID = "role-1"
+    cfg.VAULT_CACERT = None
+    cfg.VAULT_SECRETS_PREFIX = "secret"
+    cfg.VAULT_KV_VERSION = 2
+    cfg.VAULT_TIMEOUT = 2.0
+    cfg.VAULT_CACHE_TTL = 30.0
+    cfg.VAULT_SECRET_KEYS = ()
+
+    with tempfile.NamedTemporaryFile("w", encoding="utf-8", delete=False) as handle:
+        handle.write("file-secret\n")
+        secret_file = handle.name
+
+    try:
+        with monkeypatch.context() as ctx:
+            ctx.setitem(sys.modules, "services.secrets.vault_client", fake_module)
+            cfg.VAULT_SECRET_ID_FILE = secret_file
+            cfg.VAULT_SECRET_ID = None
+            module.Config._load_vault_secrets(cfg)
+            assert callable(captured[-1]["secret_id_fn"])
+            assert captured[-1]["secret_id_fn"]() == "file-secret"
+
+        with monkeypatch.context() as ctx:
+            ctx.setitem(sys.modules, "services.secrets.vault_client", fake_module)
+            cfg.VAULT_SECRET_ID_FILE = None
+            cfg.VAULT_SECRET_ID = "inline-secret"
+            module.Config._load_vault_secrets(cfg)
+            assert callable(captured[-1]["secret_id_fn"])
+            assert captured[-1]["secret_id_fn"]() == "inline-secret"
+    finally:
+        os.unlink(secret_file)
+        sys.modules.pop("services.secrets.vault_client", None)

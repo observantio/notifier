@@ -19,6 +19,7 @@ class UrlUtilsTests(unittest.TestCase):
     def test_accepts_http_and_https_urls(self):
         self.assertTrue(is_safe_http_url("http://example.com/path"))
         self.assertTrue(is_safe_http_url("https://example.com"))
+        self.assertTrue(is_safe_http_url("https://8.8.8.8/health"))
 
     def test_rejects_invalid_or_non_http_urls(self):
         self.assertFalse(is_safe_http_url(""))

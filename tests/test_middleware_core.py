@@ -148,6 +148,14 @@ async def test_request_size_limit_middleware_paths():
     assert sent_messages[0]["type"] == "http.response.start"
 
     sent_messages.clear()
+    await middleware(
+        {"type": "http", "headers": [(b"content-length", b"2")]},
+        receive_small,
+        send,
+    )
+    assert sent_messages[0]["type"] == "http.response.start"
+
+    sent_messages.clear()
     chunks = iter(
         [
             {"type": "http.request", "body": b"abc", "more_body": True},
@@ -160,6 +168,31 @@ async def test_request_size_limit_middleware_paths():
 
     await middleware({"type": "http", "headers": []}, receive_large_stream, send)
     assert sent_messages[0]["status"] == 413
+
+    sent_messages.clear()
+    disconnect_chunks = iter([
+        {"type": "http.disconnect", "more_body": False},
+    ])
+
+    async def receive_disconnect():
+        return next(disconnect_chunks)
+
+    await middleware({"type": "http", "headers": []}, receive_disconnect, send)
+    assert sent_messages[0]["type"] == "http.response.start"
+
+    sent_messages.clear()
+
+    async def app_starts_then_reads(scope, receive, send):
+        await send({"type": "http.response.start", "status": 200, "headers": []})
+        await receive()
+
+    middleware_started = RequestSizeLimitMiddleware(app_starts_then_reads, max_bytes=1)
+
+    async def receive_too_large_once():
+        return {"type": "http.request", "body": b"abcd", "more_body": False}
+
+    await middleware_started({"type": "http", "headers": []}, receive_too_large_once, send)
+    assert sent_messages == [{"type": "http.response.start", "status": 200, "headers": []}]
 
 
 @pytest.mark.asyncio

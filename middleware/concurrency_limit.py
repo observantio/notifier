@@ -23,9 +23,9 @@ _concurrency_busy_total = 0
 
 
 def _inc_concurrency_busy() -> int:
-    global _concurrency_busy_total
-    _concurrency_busy_total += 1
-    return _concurrency_busy_total
+    total = _concurrency_busy_total + 1
+    globals()["_concurrency_busy_total"] = total
+    return total
 
 
 class ConcurrencyLimitMiddleware:

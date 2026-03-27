@@ -42,7 +42,7 @@ def rule_to_pydantic(r: AlertRuleDB) -> AlertRulePydantic:
         "sharedGroupIds": [g.id for g in r.shared_groups] if getattr(r, "shared_groups", None) else [],
         "isHidden": bool(getattr(r, "is_hidden", False)),
     }
-    return AlertRulePydantic.parse_obj(payload)
+    return AlertRulePydantic.model_validate(payload)
 
 
 def channel_to_pydantic(ch: NotificationChannelDB) -> NotificationChannelPydantic:
@@ -62,7 +62,7 @@ def channel_to_pydantic_for_viewer(ch: NotificationChannelDB, viewer_user_id: ob
         "sharedGroupIds": [g.id for g in ch.shared_groups] if getattr(ch, "shared_groups", None) else [],
         "isHidden": bool(getattr(ch, "is_hidden", False)),
     }
-    return NotificationChannelPydantic.parse_obj(payload)
+    return NotificationChannelPydantic.model_validate(payload)
 
 
 def incident_to_pydantic(incident: AlertIncidentDB) -> AlertIncidentPydantic:
@@ -97,8 +97,7 @@ def incident_to_pydantic(incident: AlertIncidentDB) -> AlertIncidentPydantic:
             safe_annotations["WatchdogCorrelationId"] = corr
     elif "WatchdogCorrelationId" not in safe_annotations:
         # Preserve backwards-compatible casing in case only lowercase is present
-        if "watchdogCorrelationId" in safe_annotations:
-            safe_annotations["WatchdogCorrelationId"] = safe_annotations["watchdogCorrelationId"]
+        safe_annotations["WatchdogCorrelationId"] = safe_annotations["watchdogCorrelationId"]
 
     payload = {
         "id": incident.id,
@@ -123,4 +122,4 @@ def incident_to_pydantic(incident: AlertIncidentDB) -> AlertIncidentPydantic:
         "userManaged": bool(meta.get("user_managed")),
         "hideWhenResolved": bool(meta.get("hide_when_resolved")),
     }
-    return AlertIncidentPydantic.parse_obj(payload)
+    return AlertIncidentPydantic.model_validate(payload)

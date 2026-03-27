@@ -14,8 +14,6 @@ import logging
 import time
 from typing import Optional
 
-from fastapi import HTTPException
-
 from .in_memory import InMemoryRateLimiter
 from .models import RateLimitHitResult
 from .observability import record_fallback_event
@@ -49,8 +47,6 @@ class HybridRateLimiter:
         if self._redis_limiter is not None:
             try:
                 return self._redis_limiter.hit(key, limit=limit, window_seconds=window_seconds)
-            except HTTPException:
-                raise
             except (ConnectionError, OSError, RuntimeError, TimeoutError, ValueError) as exc:
                 now = time.monotonic()
                 if now - self._last_warning > 30:

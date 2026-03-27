@@ -85,6 +85,10 @@ def test_resolve_groups_handles_empty_missing_and_membership_paths():
         access._resolve_groups(db, "tenant", ["g4"], actor_group_ids=["other"])
     assert exc.value.status_code == 403
 
+    db = FakeDB(groups=[SimpleNamespace(id="g5", tenant_id="tenant")])
+    groups = access._resolve_groups(db, "tenant", ["g5"], actor_group_ids=[], enforce_membership=False)
+    assert [group.id for group in groups] == ["g5"]
+
 
 def test_assign_shared_groups_and_access_matrix(monkeypatch):
     resolved = [SimpleNamespace(id="g1")]

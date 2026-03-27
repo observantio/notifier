@@ -115,5 +115,5 @@ async def send_smtp_with_retry(
                     **kwargs,
                 )
     except Exception as exc:
-        logger.warning("SMTP send failed, retrying: %s:%s", hostname, port, exc_info=exc)
+        logger.warning("SMTP send failed, retrying: %s:%s (%s)", hostname, port, exc)
         raise

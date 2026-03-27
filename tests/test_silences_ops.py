@@ -159,6 +159,10 @@ async def test_get_silences_get_single_create_and_update(monkeypatch):
     assert [item.id for item in silences] == ["keep"]
     assert client.calls[0][2] == {"filter": ['severity="critical"']}
 
+    monkeypatch.setattr(sil_mod, "get_db_session", lambda: _Ctx(_DB([], error=SQLAlchemyError("db"))))
+    silences = await sil_mod.get_silences(service)
+    assert [item.id for item in silences] == ["keep", "purged"]
+
     client.get_payload = _silence(id="single").model_dump(by_alias=True)
     single = await sil_mod.get_silence(service, "single")
     assert single and single.id == "single"

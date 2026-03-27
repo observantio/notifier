@@ -26,7 +26,8 @@ ensure_test_env()
 from models.access.auth_models import Role, TokenData
 from models.alerting.alerts import Alert, AlertState, AlertStatus
 from models.alerting.incidents import AlertIncident, IncidentStatus
-from services.alerting import rule_import_service, silence_metadata, suppression
+from services.alerting import rule_import_service, rules_ops, ruler_yaml, silence_metadata, suppression
+from services.incidents import helpers as incident_helpers
 from services.common import encryption, meta, url_utils
 from services.jira import helpers as jira_helpers
 from services.jira_service import JiraError
@@ -326,6 +327,23 @@ async def test_notification_validators_senders_and_transport(monkeypatch):
     assert validators.validate_channel_config("teams", {"webhook_url": "http://localhost/hook"})
     assert validators.validate_channel_config("webhook", {"url": "javascript:alert(1)"})
     assert validators.validate_channel_config("pagerduty", {}) == ["PagerDuty channel requires 'routing_key'"]
+    assert validators.validate_channel_config(
+        "email",
+        {"to": "a@b.com", "email_provider": "smtp", "smtp_host": "smtp.example.com", "smtp_port": 587},
+    ) == []
+    assert validators.validate_channel_config(
+        "email",
+        {"to": "a@b.com", "email_provider": "sendgrid", "sendgrid_api_key": "sg-key"},
+    ) == []
+    assert validators.validate_channel_config(
+        "email",
+        {"to": "a@b.com", "email_provider": "resend", "resend_api_key": "rs-key"},
+    ) == []
+    assert validators.validate_channel_config("slack", {"webhook_url": "https://hooks.slack.com/services/x"}) == []
+    assert validators.validate_channel_config("teams", {"webhook_url": "https://tenant.webhook.office.com/x"}) == []
+    assert validators.validate_channel_config("webhook", {"url": "https://example.com/hook"}) == []
+    assert validators.validate_channel_config("pagerduty", {"routing_key": "rk"}) == []
+    assert validators.validate_channel_config("sms", {}) == []
 
     assert senders._is_allowed_host("https://hooks.slack.com/services/x", allowed_hosts=senders.SLACK_ALLOWED_HOSTS) is True
     assert senders._is_allowed_host("https://tenant.webhook.office.com/x", allowed_suffixes=senders.TEAMS_ALLOWED_SUFFIXES) is True
@@ -357,6 +375,14 @@ async def test_notification_validators_senders_and_transport(monkeypatch):
     assert await senders._send_json(_Client(), "https://example.com/hook", {"x": 1}) is False
     monkeypatch.setattr(senders.transport, "post_with_retry", error_post)
     assert await senders._send_json(_Client(), "https://example.com/hook", {"x": 1}) is False
+
+    alert_with_sparse_context = _alert().model_copy(
+        update={
+            "annotations": {"watchdogCorrelationId": "   "},
+            "labels": {"correlationId": "corr-2", "alertname": "CPUHigh", "severity": "warning"},
+        }
+    )
+    assert payloads._context_value(alert_with_sparse_context, "watchdogCorrelationId", "correlationId") == "corr-2"
 
     monkeypatch.setattr(senders.payloads, "build_slack_payload", lambda alert, action: {"kind": "slack", "action": action})
     monkeypatch.setattr(senders.payloads, "build_teams_payload", lambda alert, action: {"kind": "teams", "action": action})
@@ -395,6 +421,238 @@ async def test_notification_validators_senders_and_transport(monkeypatch):
     monkeypatch.setattr(transport.aiosmtplib, "send", fail_send)
     with pytest.raises(RuntimeError, match="smtp down"):
         await transport.send_smtp_with_retry(SimpleNamespace(), "smtp.example.com", 25)
+
+
+def test_rule_import_ruler_and_rules_ops_more_edges():
+    with pytest.raises(rule_import_service.RuleImportError, match="Unsupported YAML structure"):
+        rule_import_service.parse_rules_yaml("true")
+
+    with pytest.raises(rule_import_service.RuleImportError, match="missing required field 'alert'"):
+        rule_import_service.parse_rules_yaml(
+            """
+groups:
+  - name: api
+    rules:
+      - expr: up == 0
+"""
+        )
+
+    with pytest.raises(rule_import_service.RuleImportError, match="missing required field 'expr'"):
+        rule_import_service.parse_rules_yaml(
+            """
+groups:
+  - name: api
+    rules:
+      - alert: CPUHigh
+"""
+        )
+
+    with pytest.raises(rule_import_service.RuleImportError, match="No valid alert rules"):
+        rule_import_service.parse_rules_yaml(
+            """
+- not-a-dict
+- name: g1
+  rules: bad
+- name: g2
+  rules:
+    - 123
+"""
+        )
+
+    assert ruler_yaml.extract_mimir_group_names("") == []
+    assert ruler_yaml.extract_mimir_group_names('- name: ""\n- name: "Team-A"\n') == ["Team-A"]
+
+    class _MimirClient:
+        async def get(self, *_args, **_kwargs):
+            return SimpleNamespace(status_code=500, text="", request=httpx.Request("GET", "https://mimir.example.com"))
+
+        async def delete(self, *_args, **_kwargs):
+            raise AssertionError("delete should not be called")
+
+        async def post(self, *_args, **_kwargs):
+            raise AssertionError("post should not be called")
+
+    class _Svc:
+        MIMIR_RULES_NAMESPACE = "watchdog"
+        MIMIR_RULER_CONFIG_BASEPATH = "/ruler/api/v1/rules"
+        _mimir_client = _MimirClient()
+
+        @staticmethod
+        def _group_enabled_rules(_rules):
+            return {}
+
+        @staticmethod
+        def _extract_mimir_group_names(_text):
+            return []
+
+        @staticmethod
+        def _build_ruler_group_yaml(_group_name, _group_rules):
+            return ""
+
+    import asyncio
+    asyncio.run(rules_ops.sync_mimir_rules_for_org(_Svc(), "org-a", []))
+
+
+def test_common_helpers_additional_edges(monkeypatch):
+    assert meta.parse_meta({meta.INCIDENT_META_KEY: "[]"}) == {}
+
+    long_url = "https://" + ("a" * 2100)
+    assert url_utils.is_safe_http_url(long_url) is False
+
+    monkeypatch.setattr(url_utils, "urlparse", lambda _v: (_ for _ in ()).throw(ValueError("bad parse")))
+    assert url_utils.is_safe_http_url("https://example.com") is False
+
+    class _BadEncryptor:
+        def encrypt(self, _payload):
+            raise Exception("boom")
+
+    monkeypatch.setattr(encryption, "_get_fernet", lambda: _BadEncryptor())
+    with pytest.raises(ValueError, match="Failed to encrypt"):
+        encryption.encrypt_config({"x": 1})
+
+    monkeypatch.setattr(encryption, "_get_fernet", lambda: (_ for _ in ()).throw(RuntimeError("missing key")))
+    with pytest.raises(RuntimeError, match="missing key"):
+        encryption.encrypt_config({"x": 1})
+    with pytest.raises(RuntimeError, match="missing key"):
+        encryption.decrypt_config({"__encrypted__": "abc"})
+
+
+@pytest.mark.asyncio
+async def test_jira_and_incident_helper_more_edges(monkeypatch):
+    integration = {"id": "jira-1", "enabled": True}
+
+    def missing_access(*args, **kwargs):
+        raise HTTPException(status_code=403, detail="forbidden")
+
+    monkeypatch.setattr(jira_helpers, "resolve_jira_integration", missing_access)
+    monkeypatch.setattr(jira_helpers, "load_tenant_jira_integrations", lambda _tenant_id: [])
+    with pytest.raises(HTTPException) as not_found_issue_types:
+        await jira_helpers.jira_issue_types_via_integration("tenant-a", "jira-1", "OPS", _token_data())
+    assert not_found_issue_types.value.status_code == 404
+
+    monkeypatch.setattr(jira_helpers, "resolve_jira_integration", lambda *args, **kwargs: integration)
+    monkeypatch.setattr(
+        jira_helpers,
+        "jira_integration_credentials",
+        lambda _item: {"base_url": "https://tenant.atlassian.net", "auth_mode": "bearer"},
+    )
+    with pytest.raises(HTTPException) as cloud_issue_types:
+        await jira_helpers.jira_issue_types_via_integration("tenant-a", "jira-1", "OPS", _token_data())
+    assert cloud_issue_types.value.status_code == 400
+
+    assert incident_helpers.format_incident_description(
+        SimpleNamespace(annotations={"description": "only-description"}, alert_name="A"),
+        None,
+    ) == "only-description"
+    assert incident_helpers.format_incident_description(
+        SimpleNamespace(annotations={"summary": "only-summary"}, alert_name="A"),
+        None,
+    ) == "only-summary"
+    assert incident_helpers.format_note_for_jira_comment("", "alice") == ""
+
+    incident_with_none_notes = SimpleNamespace(notes=[None])
+    assert incident_helpers.build_formatted_incident_note_bodies(incident_with_none_notes, _token_data()) == []
+
+    no_key_incident = SimpleNamespace(jira_ticket_key="", id="inc-1")
+    await incident_helpers.move_incident_ticket_to_todo(no_key_incident, tenant_id="tenant-a", current_user=_token_data())
+    await incident_helpers.move_incident_ticket_to_done(no_key_incident, tenant_id="tenant-a", current_user=_token_data())
+
+    monkeypatch.setattr(incident_helpers, "resolve_incident_jira_credentials", lambda *args, **kwargs: None)
+    with_key = SimpleNamespace(jira_ticket_key="OPS-1", id="inc-2")
+    await incident_helpers.move_incident_ticket_to_todo(with_key, tenant_id="tenant-a", current_user=_token_data())
+    await incident_helpers.move_incident_ticket_to_in_progress(with_key, tenant_id="tenant-a", current_user=_token_data())
+    await incident_helpers.move_incident_ticket_to_done(with_key, tenant_id="tenant-a", current_user=_token_data())
+
+
+@pytest.mark.asyncio
+async def test_notification_provider_sender_validator_transport_more_edges(monkeypatch):
+    request = httpx.Request("POST", "https://example.com")
+    response = httpx.Response(422, request=request)
+
+    async def raise_request_error(*args, **kwargs):
+        raise httpx.RequestError("boom", request=request)
+
+    async def raise_status_error(*args, **kwargs):
+        raise httpx.HTTPStatusError("bad", request=request, response=response)
+
+    monkeypatch.setattr(email_providers.transport, "post_with_retry", raise_request_error)
+    assert await email_providers.send_via_sendgrid(SimpleNamespace(), "key", "subj", "body", ["ops@example.com"], "from@example.com") is False
+    monkeypatch.setattr(email_providers.transport, "post_with_retry", raise_status_error)
+    assert await email_providers.send_via_resend(SimpleNamespace(), "key", "subj", "body", ["ops@example.com"], "from@example.com") is False
+
+    async def smtp_os_error(*args, **kwargs):
+        raise OSError("smtp down")
+
+    msg = email_providers.build_smtp_message("Subject", "Body", "from@example.com", ["ops@example.com"])
+    original_send_smtp_with_retry = transport.send_smtp_with_retry
+    monkeypatch.setattr(email_providers.transport, "send_smtp_with_retry", smtp_os_error)
+    assert await email_providers.send_via_smtp(msg, "smtp.example.com", 587, None, None, True, False) is False
+    monkeypatch.setattr(transport, "send_smtp_with_retry", original_send_smtp_with_retry)
+
+    assert senders._is_allowed_host(None, allowed_hosts=senders.SLACK_ALLOWED_HOSTS) is False  # type: ignore[arg-type]
+
+    monkeypatch.setattr(
+        senders,
+        "_serialize_alert",
+        lambda _alert_obj: {
+            "labels": {"alertname": "CPUHigh"},
+            "annotations": {},
+            "startsAt": "2026-01-01T00:00:00Z",
+            "endsAt": None,
+            "status": {"state": "active"},
+            "fingerprint": "fp-1",
+        },
+    )
+    coerced = senders._coerce_alert(SimpleNamespace())
+    assert isinstance(coerced, Alert)
+
+    class _Client:
+        pass
+
+    assert await senders.send_teams(_Client(), {"webhook_url": "https://example.com/nope"}, _alert(), "fire") is False
+
+    assert validators._as_int(None) is None
+    errors = validators.validate_channel_config(
+        "email",
+        {
+            "to": "ops@example.com",
+            "email_provider": "smtp",
+            "smtp_host": "smtp.example.com",
+            "smtp_port": "70000",
+        },
+    )
+    assert "between 1 and 65535" in " ".join(errors)
+
+    async def smtp_type_error(*args, **kwargs):
+        raise TypeError("unexpected type")
+
+    monkeypatch.setattr(transport.aiosmtplib, "send", smtp_type_error)
+    with pytest.raises(TypeError, match="unexpected type"):
+        await transport.send_smtp_with_retry(SimpleNamespace(), "smtp.example.com", 25)
+
+
+def test_payloads_remaining_line_paths():
+    alert = _alert()
+    assert payloads._fmt(datetime(2026, 1, 1, tzinfo=timezone.utc)).startswith("2026-01-01T")
+
+    no_start = alert.model_copy(update={"starts_at": ""})
+    assert payloads._alert_start_timestamp(no_start) is None
+
+    with_rule_name = alert.model_copy(
+        update={
+            "annotations": {
+                "watchdogRuleName": "CPUHigh",
+                "summary": "summary",
+                "description": "description",
+            },
+            "labels": {"alertname": "CPUHigh", "severity": "critical"},
+        }
+    )
+    context = payloads._human_context(with_rule_name)
+    assert ("Rule", "CPUHigh") in context
+
+    slack_resolved = payloads.build_slack_payload(with_rule_name, "resolved")
+    assert slack_resolved["attachments"][0]["color"] == "good"
 
 
 async def _resolved(value):

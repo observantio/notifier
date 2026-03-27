@@ -22,9 +22,9 @@ _rate_limit_fallback_by_mode: Dict[str, int] = {"memory": 0, "deny": 0, "allow":
 
 
 def record_fallback_event(mode: str, reason: str) -> None:
-    global _rate_limit_fallback_total
     with _fallback_lock:
-        _rate_limit_fallback_total += 1
+        total = _rate_limit_fallback_total + 1
+        globals()["_rate_limit_fallback_total"] = total
         _rate_limit_fallback_by_mode[mode] = _rate_limit_fallback_by_mode.get(mode, 0) + 1
     logger.warning(
         "rate_limit_fallback_event total=%s mode=%s reason=%s",

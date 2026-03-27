@@ -41,14 +41,14 @@ filterwarnings = [
 [tool.coverage.run]
 branch = true
 omit = [
-  "tests/*",
-  "*/__init__.py",
+  "tests/*"
 ]
 
 [tool.coverage.report]
 exclude_also = [
   "if TYPE_CHECKING:",
 ]
+fail_under = 100
 show_missing = true
 skip_covered = false
 
@@ -114,23 +114,14 @@ disable = [
   "too-many-statements",
   "too-many-return-statements",
   "too-many-lines",
-  "global-statement",
-  "global-variable-not-assigned",
   "import-outside-toplevel",
   "wrong-import-order",
   "ungrouped-imports",
   "protected-access",
   "unused-argument",
   "logging-fstring-interpolation",
-  "no-else-return",
-  "no-else-continue",
-  "try-except-raise",
-  "simplifiable-condition",
-  "consider-merging-isinstance",
   "too-many-nested-blocks",
-  "trailing-whitespace",
-  "trailing-newlines",
-  "missing-final-newline",
+  "invalid-name",
 ]
 
 [tool.pylint.format]

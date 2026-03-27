@@ -8,6 +8,7 @@ You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2
 
 from __future__ import annotations
 
+import json
 from datetime import datetime, timezone
 from types import SimpleNamespace
 
@@ -152,6 +153,10 @@ def test_rule_helpers_and_delivery_lookup(monkeypatch):
     fallback_rule = _rule(id="rule-fallback", org_id=None)
     db = FakeDB([fallback_rule, org_rule])
     monkeypatch.setattr(rules_mod, "get_db_session", lambda: FakeCtx(db))
+    assert svc.get_alert_rule_by_name_for_delivery("tenant", "CPUHigh") == {"id": "rule-fallback", "org_id": None}
+
+    db = FakeDB([fallback_rule, org_rule])
+    monkeypatch.setattr(rules_mod, "get_db_session", lambda: FakeCtx(db))
     assert svc.get_alert_rule_by_name_for_delivery("tenant", "CPUHigh", org_id="org-1") == {"id": "rule-org", "org_id": "org-1"}
 
 
@@ -190,6 +195,13 @@ def test_rule_storage_crud_and_visibility(monkeypatch):
     assert len(missing_db.added) == 1
     assert svc.toggle_rule_hidden("tenant", "user", "rule-show", False) is True
     assert len(missing_db.deleted) == 1
+
+    noop_db = FakeDB(_rule(id="rule-existing-hidden"), SimpleNamespace(id="already-hidden"), _rule(id="rule-not-hidden"), None)
+    monkeypatch.setattr(rules_mod, "get_db_session", lambda: FakeCtx(noop_db))
+    assert svc.toggle_rule_hidden("tenant", "user", "rule-existing-hidden", True) is True
+    assert svc.toggle_rule_hidden("tenant", "user", "rule-not-hidden", False) is True
+    assert noop_db.added == []
+    assert noop_db.deleted == []
 
     assign_calls = []
     monkeypatch.setattr(rules_mod, "ensure_tenant_exists", lambda *_args: assign_calls.append("tenant"))
@@ -279,6 +291,10 @@ def test_channel_helpers_and_storage_branches(monkeypatch):
     assert listed == [{"id": "chan-1", "user": "user", "config": {"token": "enc", "decrypted": True}}]
     assert svc.get_notification_channel("chan-1", "tenant", "user", ["g1"])["id"] == "chan-1"
 
+    missing_db = FakeDB(None)
+    monkeypatch.setattr(channels_mod, "get_db_session", lambda: FakeCtx(missing_db))
+    assert svc.get_notification_channel("missing", "tenant", "user", ["g1"]) is None
+
     denied_db = FakeDB(group_channel)
     monkeypatch.setattr(channels_mod, "get_db_session", lambda: FakeCtx(denied_db))
     assert svc.get_notification_channel("chan-2", "tenant", "user", ["g2"]) is None
@@ -326,6 +342,10 @@ def test_channel_helpers_and_storage_branches(monkeypatch):
     delete_db = FakeDB(_channel(id="chan-1", created_by="owner"), _channel(id="chan-3", created_by="other"), _channel(id="chan-4", created_by="owner"))
     monkeypatch.setattr(channels_mod, "get_db_session", lambda: FakeCtx(delete_db))
     assert svc.delete_notification_channel("chan-1", "tenant", "owner") is True
+    assert svc.delete_notification_channel("chan-3", "tenant", "owner") is False
+
+    owner_db = FakeDB(_channel(id="chan-3", created_by="other"), _channel(id="chan-4", created_by="owner"))
+    monkeypatch.setattr(channels_mod, "get_db_session", lambda: FakeCtx(owner_db))
     assert svc.is_notification_channel_owner("chan-3", "tenant", "owner") is False
     assert svc.is_notification_channel_owner("chan-4", "tenant", "owner") is True
 
@@ -348,6 +368,70 @@ def test_channel_helpers_and_storage_branches(monkeypatch):
         {"id": "chan-3", "config": {"token": "enc", "decrypted": True}},
         {"id": "chan-4", "config": {"token": "enc", "decrypted": True}},
     ]
+
+    no_rules_db = FakeDB([])
+    monkeypatch.setattr(channels_mod, "get_db_session", lambda: FakeCtx(no_rules_db))
+    assert svc.get_notification_channels_for_rule_name("tenant", "MissingRule") == []
+
+    incompatible_rule = _rule(id="rule-incompatible", notification_channels=["chan-x"], visibility="private", created_by="owner")
+    incompatible_channel = _channel(id="chan-x", visibility="private", created_by="someone-else", enabled=True)
+    incompatible_db = FakeDB([incompatible_rule], [incompatible_channel])
+    monkeypatch.setattr(channels_mod, "get_db_session", lambda: FakeCtx(incompatible_db))
+    assert svc.get_notification_channels_for_rule_name("tenant", "CPUHigh") == []
+
+
+def test_rule_storage_additional_edges(monkeypatch):
+    svc = rules_mod.RuleStorageService()
+    monkeypatch.setattr(rules_mod, "rule_to_pydantic", lambda obj: {"id": obj.id, "name": obj.name, "org": getattr(obj, "org_id", None)})
+
+    db = FakeDB([_rule(id="r-org", org_id="org-1", name="CPUHigh")])
+    monkeypatch.setattr(rules_mod, "get_db_session", lambda: FakeCtx(db))
+    assert svc.get_alert_rules_for_org("tenant", "org-1") == [{"id": "r-org", "name": "CPUHigh", "org": "org-1"}]
+
+    db = FakeDB(None)
+    monkeypatch.setattr(rules_mod, "get_db_session", lambda: FakeCtx(db))
+    assert svc.get_alert_rule("missing", "tenant", "user", ["g1"]) is None
+
+    monkeypatch.setattr(rules_mod, "has_access", lambda *_args, **_kwargs: True)
+    db = FakeDB(_rule(id="r-visible", name="Visible"))
+    monkeypatch.setattr(rules_mod, "get_db_session", lambda: FakeCtx(db))
+    assert svc.get_alert_rule("r-visible", "tenant", "user", ["g1"]) == {"id": "r-visible", "name": "Visible", "org": None}
+
+    db = FakeDB(None)
+    monkeypatch.setattr(rules_mod, "get_db_session", lambda: FakeCtx(db))
+    assert svc.update_alert_rule(
+        "missing",
+        AlertRuleCreate.model_validate({"name": "New", "expression": "up", "severity": "warning", "groupName": "g"}),
+        "tenant",
+        "user",
+        ["g1"],
+    ) is None
+
+    monkeypatch.setattr(rules_mod, "has_access", lambda *_args, **_kwargs: False)
+    db = FakeDB(_rule(id="r-no-read"))
+    monkeypatch.setattr(rules_mod, "get_db_session", lambda: FakeCtx(db))
+    assert svc.update_alert_rule(
+        "r-no-read",
+        AlertRuleCreate.model_validate({"name": "New", "expression": "up", "severity": "warning", "groupName": "g"}),
+        "tenant",
+        "user",
+        ["g1"],
+    ) is None
+
+    monkeypatch.setattr(rules_mod, "has_access", lambda *_args, **kwargs: not kwargs.get("require_write", False))
+    db = FakeDB(_rule(id="r-no-write"))
+    monkeypatch.setattr(rules_mod, "get_db_session", lambda: FakeCtx(db))
+    assert svc.update_alert_rule(
+        "r-no-write",
+        AlertRuleCreate.model_validate({"name": "New", "expression": "up", "severity": "warning", "groupName": "g"}),
+        "tenant",
+        "user",
+        ["g1"],
+    ) is None
+
+    db = FakeDB(None)
+    monkeypatch.setattr(rules_mod, "get_db_session", lambda: FakeCtx(db))
+    assert svc.delete_alert_rule("missing", "tenant", "user", ["g1"]) is False
 
 
 def test_incident_run_async_falls_back_to_new_loop(monkeypatch):
@@ -481,3 +565,140 @@ def test_incident_update_private_assignment_guard(monkeypatch):
             [],
         )
     assert exc.value.status_code == 403
+
+
+def test_incident_storage_additional_edges(monkeypatch):
+    svc = incidents_mod.IncidentStorageService()
+
+    fallback_incident = SimpleNamespace(annotations={}, labels={}, alert_name="", fingerprint="fp-fallback")
+    assert incidents_mod.incident_activity_token_from_row(fallback_incident) == "fp:fp-fallback"
+
+    alert_name_fallback_incident = SimpleNamespace(annotations={}, labels={}, alert_name="CPUHigh")
+    assert incidents_mod.incident_key_from_db_row(alert_name_fallback_incident) == "rule:CPUHigh|scope:*"
+
+    monkeypatch.setattr(incidents_mod, "load_tenant_jira_integrations", lambda _tenant: [{"id": "other"}])
+    monkeypatch.setattr(incidents_mod, "get_effective_jira_credentials", lambda _tenant: {})
+    assert incidents_mod._resolve_incident_jira_credentials("tenant", "target") is None
+
+    no_ticket_incident = SimpleNamespace(annotations={incidents_mod.INCIDENT_META_KEY: "{}"})
+    incidents_mod._move_reopened_incident_jira_ticket_to_todo("tenant", no_ticket_incident)
+    incidents_mod._sync_reopened_incident_note_to_jira(
+        "tenant",
+        no_ticket_incident,
+        note_text="ignored",
+        created_at=datetime.now(timezone.utc),
+    )
+
+    summary_incident = SimpleNamespace(
+        annotations={incidents_mod.INCIDENT_META_KEY: '{"visibility":"weird","created_by":"owner"}'},
+        status="open",
+        assignee=None,
+    )
+    summary_db = FakeDB([summary_incident])
+    monkeypatch.setattr(incidents_mod, "get_db_session", lambda: FakeCtx(summary_db))
+    monkeypatch.setattr(incidents_mod, "_incident_access_allowed", lambda **_kwargs: False)
+    summary = svc.get_incident_summary("tenant", "user", ["g1"])
+    assert summary["open_total"] == 0
+
+    existing_incident = SimpleNamespace(
+        id="inc-1",
+        tenant_id="tenant",
+        alert_name="CPU",
+        severity="warning",
+        status="open",
+        labels={"alertname": "CPU"},
+        annotations={incidents_mod.INCIDENT_META_KEY: '{"incident_key":"rule:CPU|scope:*"}'},
+        starts_at=None,
+        last_seen_at=None,
+        resolved_at=None,
+        notes=[],
+        assignee=None,
+        fingerprint="fp-1",
+    )
+    managed_incident = SimpleNamespace(
+        annotations={incidents_mod.INCIDENT_META_KEY: '{"user_managed": true}'},
+        status="open",
+        resolved_at=None,
+        labels={},
+        alert_name="",
+        fingerprint="fp-managed",
+    )
+    sync_db = FakeDB([existing_incident], None, [managed_incident])
+    monkeypatch.setattr(incidents_mod, "get_db_session", lambda: FakeCtx(sync_db))
+    monkeypatch.setattr(incidents_mod, "ensure_tenant_exists", lambda *_args: None)
+    monkeypatch.setattr(incidents_mod, "_is_alert_suppressed", lambda _alert: False)
+
+    svc.sync_incidents_from_alerts(
+        "tenant",
+        [{"labels": {"alertname": "CPU"}, "annotations": {}, "startsAt": "2026-01-01T00:00:00Z"}],
+        resolve_missing=True,
+    )
+    assert existing_incident.starts_at is not None
+
+    incident_private = SimpleNamespace(
+        id="inc-private",
+        annotations={incidents_mod.INCIDENT_META_KEY: '{"visibility":"private","created_by":"owner"}'},
+        status="open",
+        updated_at=datetime.now(timezone.utc),
+    )
+    list_db = FakeDB([incident_private])
+    monkeypatch.setattr(incidents_mod, "get_db_session", lambda: FakeCtx(list_db))
+    monkeypatch.setattr(incidents_mod, "cap_pagination", lambda limit, offset: (limit or 50, offset))
+    monkeypatch.setattr(incidents_mod, "_incident_access_allowed", lambda **_kwargs: False)
+    assert svc.list_incidents("tenant", "user", ["g1"]) == []
+
+    incident_public = SimpleNamespace(
+        id="inc-public",
+        annotations={incidents_mod.INCIDENT_META_KEY: '{"visibility":"public","created_by":"owner"}'},
+        status="open",
+        updated_at=datetime.now(timezone.utc),
+    )
+    list_db = FakeDB([incident_public])
+    monkeypatch.setattr(incidents_mod, "get_db_session", lambda: FakeCtx(list_db))
+    monkeypatch.setattr(incidents_mod, "_incident_access_allowed", lambda **_kwargs: True)
+    monkeypatch.setattr(incidents_mod, "incident_to_pydantic", lambda incident: {"id": incident.id})
+    assert svc.list_incidents("tenant", "user", ["g1"], group_id=None) == [{"id": "inc-public"}]
+    assert svc.list_incidents("tenant", "user", ["g1"], group_id="g1") == []
+
+    invalid_visibility_incident = SimpleNamespace(
+        id="inc-invalid-visibility",
+        annotations={incidents_mod.INCIDENT_META_KEY: '{"visibility":"invalid","created_by":"owner"}'},
+    )
+    get_db = FakeDB(invalid_visibility_incident)
+    monkeypatch.setattr(incidents_mod, "get_db_session", lambda: FakeCtx(get_db))
+    monkeypatch.setattr(incidents_mod, "_incident_access_allowed", lambda **_kwargs: True)
+    monkeypatch.setattr(incidents_mod, "incident_to_pydantic", lambda incident: {"id": incident.id})
+    assert svc.get_incident_for_user("inc-invalid-visibility", "tenant", user_id="user") == {"id": "inc-invalid-visibility"}
+
+    incident_for_update = SimpleNamespace(
+        id="inc-update",
+        tenant_id="tenant",
+        status="open",
+        assignee=None,
+        annotations={},
+        notes=[],
+        resolved_at=None,
+    )
+    update_db = FakeDB(incident_for_update)
+    monkeypatch.setattr(incidents_mod, "get_db_session", lambda: FakeCtx(update_db))
+    monkeypatch.setattr(incidents_mod, "normalize_storage_visibility", lambda value: value)
+    monkeypatch.setattr(incidents_mod, "_incident_access_allowed", lambda **_kwargs: True)
+    monkeypatch.setattr(incidents_mod, "incident_to_pydantic", lambda incident: {"status": incident.status, "annotations": incident.annotations})
+
+    payload = SimpleNamespace(
+        status="IncidentStatus.resolved",
+        assignee=None,
+        model_fields_set=set(),
+        __fields_set__=set(),
+        hide_when_resolved=None,
+        jira_ticket_key=None,
+        jira_ticket_url=None,
+        jira_integration_id=None,
+        note=None,
+        actor_username=None,
+    )
+    updated = svc.update_incident("inc-update", "tenant", "owner", payload, [])
+    assert updated is not None
+    assert updated["status"] == "resolved"
+    meta_payload = json.loads(updated["annotations"][incidents_mod.INCIDENT_META_KEY])
+    assert meta_payload["created_by"] == "owner"

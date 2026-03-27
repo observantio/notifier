@@ -58,3 +58,34 @@ async def test_prune_removed_member_group_silences_updates_matching_owner(monkey
     assert updated == 1
     assert calls["silence_id"] == "s1"
     assert calls["comment"].startswith("private||")
+
+
+@pytest.mark.asyncio
+async def test_prune_removed_member_group_silences_skips_increment_when_update_returns_none(monkeypatch):
+    svc = _Svc()
+    silence = Silence(
+        id="s2",
+        matchers=[{"name": "alertname", "value": "CPUHigh", "isRegex": False, "isEqual": True}],
+        startsAt="2026-01-01T00:00:00Z",
+        endsAt="2026-01-01T01:00:00Z",
+        createdBy="owner",
+        comment="maintenance",
+        status={"state": "active"},
+    )
+
+    async def _fake_get_silences(*_args, **_kwargs):
+        return [silence]
+
+    async def _fake_update(*_args, **_kwargs):
+        return None
+
+    monkeypatch.setattr(silences_ops, "get_silences", _fake_get_silences)
+    monkeypatch.setattr(silences_ops, "update_silence", _fake_update)
+
+    updated = await silences_ops.prune_removed_member_group_silences(
+        svc,
+        group_id="g1",
+        removed_user_ids=["owner"],
+        removed_usernames=[],
+    )
+    assert updated == 0

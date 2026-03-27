@@ -71,10 +71,10 @@ async def send_via_sendgrid(
         return True
     except httpx.HTTPStatusError as e:
         logger.error("SendGrid rejected request", extra={"status": e.response.status_code})
-    except httpx.HTTPError:
-        logger.exception("SendGrid transport failure")
-    except Exception:  # pylint: disable=broad-exception-caught
-        logger.exception("SendGrid unexpected failure")
+    except httpx.HTTPError as exc:
+        logger.error("SendGrid transport failure: %s", exc)
+    except Exception as exc:  # pylint: disable=broad-exception-caught
+        logger.error("SendGrid unexpected failure: %s", exc)
 
     return False
 
@@ -111,10 +111,10 @@ async def send_via_resend(
         return True
     except httpx.HTTPStatusError as e:
         logger.error("Resend rejected request", extra={"status": e.response.status_code})
-    except httpx.HTTPError:
-        logger.exception("Resend transport failure")
-    except Exception:  # pylint: disable=broad-exception-caught
-        logger.exception("Resend unexpected failure")
+    except httpx.HTTPError as exc:
+        logger.error("Resend transport failure: %s", exc)
+    except Exception as exc:  # pylint: disable=broad-exception-caught
+        logger.error("Resend unexpected failure: %s", exc)
 
     return False
 
@@ -141,9 +141,9 @@ async def send_via_smtp(
             use_tls=use_tls,
         )
         return True
-    except (aiosmtplib.errors.SMTPException, OSError, TimeoutError, ValueError):
-        logger.exception("SMTP delivery failed")
+    except (aiosmtplib.errors.SMTPException, OSError, TimeoutError, ValueError) as exc:
+        logger.error("SMTP delivery failed: %s", exc)
         return False
-    except Exception:  # pylint: disable=broad-exception-caught
-        logger.exception("SMTP unexpected failure")
+    except Exception as exc:  # pylint: disable=broad-exception-caught
+        logger.error("SMTP unexpected failure: %s", exc)
         return False

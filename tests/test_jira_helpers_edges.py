@@ -93,6 +93,17 @@ async def test_jira_projects_and_issue_types_via_integration_paths(monkeypatch):
     assert await jira_helpers.jira_projects_via_integration("tenant", "int-1", current_user) == {"enabled": True, "projects": [{"key": "OPS"}]}
     assert await jira_helpers.jira_issue_types_via_integration("tenant", "int-1", "OPS", current_user) == {"enabled": True, "issueTypes": [{"id": "10001", "name": "Bug"}]}
 
+    monkeypatch.setattr(
+        jira_helpers,
+        "resolve_jira_integration",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(HTTPException(status_code=403, detail="forbidden")),
+    )
+    monkeypatch.setattr(jira_helpers, "_find_integration", lambda *_args: {"id": "int-1"})
+    monkeypatch.setattr(jira_helpers, "jira_integration_credentials", lambda _integration: {"base_url": "https://jira.example.com", "auth_mode": "api_token"})
+    monkeypatch.setattr(jira_helpers, "integration_is_usable", lambda _integration: True)
+    assert await jira_helpers.jira_projects_via_integration("tenant", "int-1", current_user) == {"enabled": True, "projects": [{"key": "OPS"}]}
+    assert await jira_helpers.jira_issue_types_via_integration("tenant", "int-1", "OPS", current_user) == {"enabled": True, "issueTypes": [{"id": "10001", "name": "Bug"}]}
+
 
 def test_resolve_incident_jira_credentials_paths(monkeypatch):
     current_user = _user()

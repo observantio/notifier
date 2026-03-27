@@ -180,7 +180,7 @@ class Config:
         self.RATE_LIMIT_STALE_AFTER_SECONDS: int = int(os.getenv("RATE_LIMIT_STALE_AFTER_SECONDS", "300"))
         self.RATE_LIMIT_MAX_STATES: int = int(os.getenv("RATE_LIMIT_MAX_STATES", "10000"))
         self.RATE_LIMIT_FALLBACK_MODE: str = os.getenv("RATE_LIMIT_FALLBACK_MODE", "memory").strip().lower()
-        
+
         self.HTTP_CLIENT_MAX_CONNECTIONS: int = int(os.getenv("HTTP_CLIENT_MAX_CONNECTIONS", "100"))
         self.HTTP_CLIENT_MAX_KEEPALIVE_CONNECTIONS: int = int(os.getenv("HTTP_CLIENT_MAX_KEEPALIVE_CONNECTIONS", "40"))
         self.HTTP_CLIENT_KEEPALIVE_EXPIRY: float = float(os.getenv("HTTP_CLIENT_KEEPALIVE_EXPIRY", "30"))
@@ -370,7 +370,7 @@ class Config:
 
         if self.IS_PRODUCTION and not self.DATA_ENCRYPTION_KEY:
             raise ValueError("DATA_ENCRYPTION_KEY must be configured in production")
-        
+
         if self.DATA_ENCRYPTION_KEY:
             try:
                 Fernet(self.DATA_ENCRYPTION_KEY)

@@ -388,71 +388,70 @@ class IncidentStorageService:
                 incident: Optional[AlertIncidentDB] = None
                 if incident_key:
                     alert_name = str(labels.get("alertname") or "").strip()
-                    if alert_name:
-                        candidates = (
-                            db.query(AlertIncidentDB)
-                            .filter(
-                                AlertIncidentDB.tenant_id == tenant_id,
-                                AlertIncidentDB.alert_name == alert_name,
-                            )
-                            .order_by(AlertIncidentDB.updated_at.desc())
-                            .all()
+                    candidates = (
+                        db.query(AlertIncidentDB)
+                        .filter(
+                            AlertIncidentDB.tenant_id == tenant_id,
+                            AlertIncidentDB.alert_name == alert_name,
                         )
-                        matching_candidates = [
-                            item for item in candidates if incident_key_from_db_row(item) == incident_key
-                        ]
-                        if matching_candidates:
-                            canonical = matching_candidates[0]
-                            if len(matching_candidates) > 1:
-                                duplicate_ids = [str(item.id) for item in matching_candidates[1:]]
-                                logger.info(
-                                    "Deduplicating incidents for key=%s tenant=%s keeping=%s duplicates=%s",
-                                    incident_key,
-                                    tenant_id,
-                                    canonical.id,
-                                    duplicate_ids,
+                        .order_by(AlertIncidentDB.updated_at.desc())
+                        .all()
+                    )
+                    matching_candidates = [
+                        item for item in candidates if incident_key_from_db_row(item) == incident_key
+                    ]
+                    if matching_candidates:
+                        canonical = matching_candidates[0]
+                        if len(matching_candidates) > 1:
+                            duplicate_ids = [str(item.id) for item in matching_candidates[1:]]
+                            logger.info(
+                                "Deduplicating incidents for key=%s tenant=%s keeping=%s duplicates=%s",
+                                incident_key,
+                                tenant_id,
+                                canonical.id,
+                                duplicate_ids,
+                            )
+                            for duplicate in matching_candidates[1:]:
+                                duplicate_state = ""
+                                if isinstance(getattr(duplicate, "labels", None), dict):
+                                    duplicate_state = str(
+                                        duplicate.labels.get("state")
+                                        or duplicate.labels.get("metric_state")
+                                        or duplicate.labels.get("mem_state")
+                                        or ""
+                                    ).strip()
+                                state_text = duplicate_state or "unknown"
+                                dedupe_note = (
+                                    f"System deduplicated this incident into #{canonical.id} "
+                                    f"(correlation scope: {incident_key}; metric state: {state_text})"
                                 )
-                                for duplicate in matching_candidates[1:]:
-                                    duplicate_state = ""
-                                    if isinstance(getattr(duplicate, "labels", None), dict):
-                                        duplicate_state = str(
-                                            duplicate.labels.get("state")
-                                            or duplicate.labels.get("metric_state")
-                                            or duplicate.labels.get("mem_state")
-                                            or ""
-                                        ).strip()
-                                    state_text = duplicate_state or "unknown"
-                                    dedupe_note = (
-                                        f"System deduplicated this incident into #{canonical.id} "
-                                        f"(correlation scope: {incident_key}; metric state: {state_text})"
-                                    )
-                                    if str(duplicate.status or "").lower() != "resolved":
-                                        duplicate.status = "resolved"
-                                        duplicate.resolved_at = now
-                                    existing_notes = list(duplicate.notes or [])
-                                    existing_notes.append(
-                                        {
-                                            "author": "system",
-                                            "text": dedupe_note,
-                                            "createdAt": now.isoformat(),
-                                        }
-                                    )
-                                    duplicate.notes = existing_notes
-                                merged_states = _merge_metric_states(
-                                    canonical.annotations if isinstance(canonical.annotations, dict) else {},
-                                    *[
-                                        _extract_metric_state(item.labels if isinstance(item.labels, dict) else {})
-                                        for item in matching_candidates
-                                    ],
+                                if str(duplicate.status or "").lower() != "resolved":
+                                    duplicate.status = "resolved"
+                                    duplicate.resolved_at = now
+                                existing_notes = list(duplicate.notes or [])
+                                existing_notes.append(
+                                    {
+                                        "author": "system",
+                                        "text": dedupe_note,
+                                        "createdAt": now.isoformat(),
+                                    }
                                 )
-                                canonical_annotations = (
-                                    canonical.annotations if isinstance(canonical.annotations, dict) else {}
-                                )
-                                canonical.annotations = {
-                                    **canonical_annotations,
-                                    METRIC_STATES_ANNOTATION_KEY: merged_states,
-                                }
-                            incident = canonical
+                                duplicate.notes = existing_notes
+                            merged_states = _merge_metric_states(
+                                canonical.annotations if isinstance(canonical.annotations, dict) else {},
+                                *[
+                                    _extract_metric_state(item.labels if isinstance(item.labels, dict) else {})
+                                    for item in matching_candidates
+                                ],
+                            )
+                            canonical_annotations = (
+                                canonical.annotations if isinstance(canonical.annotations, dict) else {}
+                            )
+                            canonical.annotations = {
+                                **canonical_annotations,
+                                METRIC_STATES_ANNOTATION_KEY: merged_states,
+                            }
+                        incident = canonical
                 if not incident:
                     incident = (
                         db.query(AlertIncidentDB)
@@ -623,9 +622,6 @@ class IncidentStorageService:
                 ):
                     continue
 
-                if inc_visibility == "public" and group_id:
-                    continue
-
                 result.append(incident_to_pydantic(incident))
 
             return result
@@ -698,7 +694,7 @@ class IncidentStorageService:
             ):
                 return None
 
-            fields_set = set(getattr(payload, "model_fields_set", set()) or getattr(payload, "__fields_set__", set()) or [])
+            fields_set = set(getattr(payload, "model_fields_set", set()) or [])
             if "assignee" in fields_set:
                 requested_assignee = str(payload.assignee or "").strip() or None
                 if requested_assignee and visibility == "private" and requested_assignee != user_id:

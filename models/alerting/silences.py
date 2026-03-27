@@ -29,10 +29,10 @@ DESC_GROUP_IDS_SHARE_WITH = "Group IDs to share with"
 
 
 class Visibility(str, Enum):
-    PRIVATE = "private"  
-    GROUP = "group"      
-    TENANT = "tenant"    
-    PUBLIC = "public"    
+    PRIVATE = "private"
+    GROUP = "group"
+    TENANT = "tenant"
+    PUBLIC = "public"
 
 
 class Matcher(BaseModel):

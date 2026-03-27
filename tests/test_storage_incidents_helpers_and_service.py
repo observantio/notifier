@@ -150,6 +150,13 @@ def test_incident_storage_helper_functions(monkeypatch):
     row = _incident_row("inc-1", annotations={incidents_mod.INCIDENT_META_KEY: json.dumps({incidents_mod.INCIDENT_META_KEY_IDENTITY: "rule:CPUHigh|scope:*"})})
     assert incidents_mod.incident_key_from_db_row(row) == "rule:CPUHigh|scope:*"
     assert incidents_mod.incident_activity_token_from_row(row).startswith("k:")
+
+    row_no_key = _incident_row("inc-2", alert_name="", labels={})
+    assert incidents_mod.incident_key_from_db_row(row_no_key) is None
+    assert incidents_mod.incident_activity_token_from_row(row_no_key).startswith("fp:")
+
+    row_fallback = _incident_row("inc-3", annotations={incidents_mod.INCIDENT_META_KEY: "{}"}, labels={"alertname": "DiskFull"})
+    assert incidents_mod.incident_key_from_db_row(row_fallback) == "rule:DiskFull|scope:*"
     assert incidents_mod._extract_metric_state({"mem_state": "critical"}) == "critical"
     assert incidents_mod._parse_metric_states("high,high, low ") == ["high", "low"]
     assert incidents_mod._merge_metric_states({incidents_mod.METRIC_STATES_ANNOTATION_KEY: "high"}, "low", "high") == "high,low"
@@ -188,6 +195,154 @@ def test_resolve_incident_jira_credentials(monkeypatch):
         "base_url": "https://jira.example.com",
         "token": "y",
     }
+
+    monkeypatch.setattr(incidents_mod, "get_effective_jira_credentials", lambda tenant_id: {})
+    assert incidents_mod._resolve_incident_jira_credentials("tenant-a", None) is None
+
+
+def test_resolve_rule_by_alertname_and_jira_side_effect_error_paths(monkeypatch):
+    class _BrokenQuery:
+        def filter(self, *_args, **_kwargs):
+            raise ValueError("bad filter")
+
+    class _BrokenDB:
+        def query(self, *_args, **_kwargs):
+            return _BrokenQuery()
+
+    monkeypatch.setattr(incidents_mod, "AlertRuleDB", SimpleNamespace(tenant_id="tenant_id", name="name", org_id=SimpleNamespace(is_=lambda *_: None, desc=lambda: None)))
+    assert incidents_mod._resolve_rule_by_alertname(_BrokenDB(), "tenant-a", {"alertname": "CPUHigh"}) is None
+    assert incidents_mod._resolve_rule_by_alertname(_BrokenDB(), "tenant-a", {}) is None
+
+    from services.jira_service import JiraError
+
+    monkeypatch.setattr(incidents_mod, "_resolve_incident_jira_credentials", lambda *_args: {"base_url": "https://jira"})
+
+    def _raise_jira(coro):
+        coro.close()
+        raise JiraError("boom")
+
+    monkeypatch.setattr(incidents_mod, "_run_async", _raise_jira)
+    warnings = []
+    monkeypatch.setattr(incidents_mod.logger, "warning", lambda msg, *args: warnings.append(msg % args))
+    incident = SimpleNamespace(annotations={incidents_mod.INCIDENT_META_KEY: json.dumps({"jira_ticket_key": "OPS-1", "jira_integration_id": "jira-1"})})
+    incidents_mod._move_reopened_incident_jira_ticket_to_todo("tenant-a", incident)
+    incidents_mod._sync_reopened_incident_note_to_jira(
+        "tenant-a",
+        incident,
+        note_text="reopened",
+        created_at=datetime.now(timezone.utc),
+    )
+    assert len(warnings) == 2
+
+
+def test_sync_incidents_from_alerts_dedupe_reopen_and_resolve_missing(monkeypatch):
+    service = incidents_mod.IncidentStorageService()
+    now = datetime.now(timezone.utc)
+
+    class _RuleObj:
+        def __init__(self):
+            self.visibility = "group"
+            self.created_by = "owner"
+            self.group = "grp-a"
+            self.shared_groups = [SimpleNamespace(id="g1")]
+
+    canonical = _incident_row(
+        "inc-canonical",
+        status="resolved",
+        labels={"alertname": "CPUHigh", "state": "critical"},
+        annotations={},
+    )
+    canonical.annotations[incidents_mod.INCIDENT_META_KEY] = json.dumps({"incident_key": "rule:CPUHigh|scope:org-a", "jira_ticket_key": "OPS-1"})
+    duplicate = _incident_row(
+        "inc-dup",
+        status="open",
+        labels={"alertname": "CPUHigh", "metric_state": "warning"},
+        annotations={},
+    )
+    duplicate.annotations[incidents_mod.INCIDENT_META_KEY] = json.dumps({"incident_key": "rule:CPUHigh|scope:org-a"})
+    stale_open = _incident_row(
+        "inc-stale",
+        status="open",
+        labels={"alertname": "DiskFull"},
+        annotations={},
+    )
+    stale_open.annotations[incidents_mod.INCIDENT_META_KEY] = json.dumps({"incident_key": "rule:DiskFull|scope:org-a"})
+
+    class _SyncQuery:
+        def __init__(self, db, model_name):
+            self.db = db
+            self.model_name = model_name
+
+        def filter(self, *args, **kwargs):
+            return self
+
+        def order_by(self, *args, **kwargs):
+            return self
+
+        def options(self, *args, **kwargs):
+            return self
+
+        def limit(self, *_args, **_kwargs):
+            return self
+
+        def first(self):
+            if self.model_name == "rule":
+                return self.db.rule
+            if self.model_name == "incident":
+                return None
+            return None
+
+        def all(self):
+            if self.model_name == "incident":
+                self.db.incident_all_calls += 1
+                if self.db.incident_all_calls == 1:
+                    return [canonical, duplicate]
+                return [canonical, stale_open]
+            return []
+
+    class _SyncDB:
+        def __init__(self):
+            self.rule = _RuleObj()
+            self.added = []
+            self.incident_all_calls = 0
+
+        def query(self, model):
+            if model is incidents_mod.AlertRuleDB:
+                return _SyncQuery(self, "rule")
+            return _SyncQuery(self, "incident")
+
+        def add(self, obj):
+            self.added.append(obj)
+
+        def flush(self):
+            return None
+
+    db = _SyncDB()
+    monkeypatch.setattr(incidents_mod, "get_db_session", lambda: _db_session(db))
+    monkeypatch.setattr(incidents_mod, "ensure_tenant_exists", lambda *_args: None)
+    monkeypatch.setattr(incidents_mod, "_is_alert_suppressed", lambda alert: False)
+    monkeypatch.setattr(incidents_mod, "_resolve_rule_by_alertname", lambda *_args: db.rule)
+    monkeypatch.setattr(incidents_mod, "_move_reopened_incident_jira_ticket_to_todo", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(incidents_mod, "_sync_reopened_incident_note_to_jira", lambda *_args, **_kwargs: None)
+
+    alerts = [
+        {
+            "labels": {"alertname": "CPUHigh", "org_id": "org-a", "severity": "critical", "state": "critical"},
+            "annotations": {"summary": "cpu"},
+            "startsAt": "invalid-date",
+            "fingerprint": "",
+        }
+    ]
+    service.sync_incidents_from_alerts("tenant-a", alerts, resolve_missing=True)
+
+    assert duplicate.status == "resolved"
+    assert duplicate.resolved_at is not None
+    assert any("deduplicated" in note["text"] for note in duplicate.notes)
+    assert canonical.status == "open"
+    assert canonical.resolved_at is None
+    assert any("reopened" in note["text"].lower() for note in canonical.notes)
+    assert stale_open.status == "resolved"
+    assert stale_open.resolved_at is not None
 
 
 def test_incident_service_summary_list_get_update_and_filter(monkeypatch):
@@ -275,3 +430,363 @@ def test_incident_service_summary_list_get_update_and_filter(monkeypatch):
         ],
     )
     assert len(visible_alerts) == 2
+
+
+def test_incident_service_unlink_and_update_edge_paths(monkeypatch):
+    service = incidents_mod.IncidentStorageService()
+
+    incident_a = _incident_row(
+        "inc-a",
+        annotations={},
+    )
+    incident_a.annotations[incidents_mod.INCIDENT_META_KEY] = json.dumps(
+        {
+            "jira_integration_id": "jira-1",
+            "jira_ticket_key": "OPS-1",
+            "jira_ticket_url": "https://jira/browse/OPS-1",
+        }
+    )
+    incident_b = _incident_row(
+        "inc-b",
+        annotations={},
+    )
+    incident_b.annotations[incidents_mod.INCIDENT_META_KEY] = json.dumps({"jira_integration_id": "jira-2"})
+
+    class _UnlinkQuery:
+        def __init__(self, rows):
+            self.rows = rows
+
+        def filter(self, *_args, **_kwargs):
+            return self
+
+        def all(self):
+            return list(self.rows)
+
+        def first(self):
+            return self.rows[0] if self.rows else None
+
+    class _UnlinkDB:
+        def __init__(self, rows):
+            self.rows = rows
+            self.flushed = 0
+
+        def query(self, *_args, **_kwargs):
+            return _UnlinkQuery(self.rows)
+
+        def flush(self):
+            self.flushed += 1
+
+    db = _UnlinkDB([incident_a, incident_b])
+    monkeypatch.setattr(incidents_mod, "get_db_session", lambda: _db_session(db))
+    assert service.unlink_jira_integration_from_incidents("tenant-a", "jira-1") == 1
+    meta_a = incidents_mod.parse_meta(incident_a.annotations)
+    assert "jira_integration_id" not in meta_a
+    assert db.flushed == 1
+    assert service.unlink_jira_integration_from_incidents("tenant-a", "") == 0
+
+    row = _incident_row("inc-u", visibility="private", created_by="u1", annotations={})
+    db = _FakeDB([row])
+    monkeypatch.setattr(incidents_mod, "get_db_session", lambda: _db_session(db))
+    monkeypatch.setattr(incidents_mod, "normalize_storage_visibility", lambda value: value)
+    monkeypatch.setattr(incidents_mod, "_incident_access_allowed", lambda **_kwargs: True)
+    monkeypatch.setattr(
+        incidents_mod,
+        "incident_to_pydantic",
+        lambda incident: SimpleNamespace(id=incident.id, status=incident.status, assignee=incident.assignee, annotations=incident.annotations, notes=incident.notes),
+    )
+
+    payload = AlertIncidentUpdateRequest.model_validate(
+        {
+            "status": "open",
+            "hideWhenResolved": False,
+            "jiraTicketKey": "",
+            "jiraTicketUrl": "",
+            "jiraIntegrationId": "",
+            "note": "note-1",
+        }
+    )
+    updated = service.update_incident("inc-u", "tenant-a", "u1", payload, ["g1"])
+    assert updated is not None
+    meta = incidents_mod.parse_meta(row.annotations)
+    assert meta.get("user_managed") is True
+    assert "hide_when_resolved" not in meta
+    assert "jira_ticket_key" not in meta
+    assert any(note["text"] == "note-1" for note in row.notes)
+
+    monkeypatch.setattr(incidents_mod, "_incident_access_allowed", lambda **_kwargs: False)
+    assert service.update_incident("inc-u", "tenant-a", "u1", AlertIncidentUpdateRequest(), ["g1"]) is None
+
+    missing_db = _FakeDB([])
+    monkeypatch.setattr(incidents_mod, "get_db_session", lambda: _db_session(missing_db))
+    assert service.update_incident("missing", "tenant-a", "u1", AlertIncidentUpdateRequest(), ["g1"]) is None
+
+
+def test_incident_list_and_filter_additional_edges(monkeypatch):
+    service = incidents_mod.IncidentStorageService()
+    rows = [
+        _incident_row("resolved-hidden", status="resolved", hide_when_resolved=True),
+        _incident_row("invalid-vis", visibility="unexpected", created_by="u1", shared_group_ids=[]),
+        _incident_row("group-row", visibility="group", created_by="u2", shared_group_ids=["g2"]),
+        _incident_row("public-row", visibility="public", created_by="u2"),
+    ]
+    db = _FakeDB(rows, [])
+    monkeypatch.setattr(incidents_mod, "get_db_session", lambda: _db_session(db))
+    monkeypatch.setattr(incidents_mod, "cap_pagination", lambda limit, offset: (limit or 50, offset))
+    monkeypatch.setattr(incidents_mod, "_incident_access_allowed", lambda **_kwargs: True)
+    monkeypatch.setattr(
+        incidents_mod,
+        "incident_to_pydantic",
+        lambda incident: SimpleNamespace(id=incident.id),
+    )
+
+    listed = service.list_incidents("tenant-a", "u1", ["g1"], status=None, visibility=None, group_id="g1")
+    assert [item.id for item in listed] == []
+
+    listed = service.list_incidents("tenant-a", "u1", ["g2"], status="open", visibility="group", group_id="g2")
+    assert any(item.id == "group-row" for item in listed)
+
+    # get_incident_for_user not found and access denied branches
+    missing_db = _FakeDB([])
+    monkeypatch.setattr(incidents_mod, "get_db_session", lambda: _db_session(missing_db))
+    assert service.get_incident_for_user("missing", "tenant-a", user_id="u1", group_ids=["g1"]) is None
+
+    denied_row = _incident_row("inc-denied", visibility="private", created_by="u2")
+    denied_db = _FakeDB([denied_row])
+    monkeypatch.setattr(incidents_mod, "get_db_session", lambda: _db_session(denied_db))
+    monkeypatch.setattr(incidents_mod, "_incident_access_allowed", lambda **_kwargs: False)
+    assert service.get_incident_for_user("inc-denied", "tenant-a", user_id="u1", group_ids=["g1"], require_write=True) is None
+
+    # filter_alerts_for_user empty alerts and no candidates
+    empty_db = _FakeDB([], [])
+    monkeypatch.setattr(incidents_mod, "get_db_session", lambda: _db_session(empty_db))
+    assert service.filter_alerts_for_user("tenant-a", "u1", ["g1"], []) == []
+    out = service.filter_alerts_for_user("tenant-a", "u1", ["g1"], [{"labels": {"alertname": "NoRule"}}])
+    assert out == []
+
+
+def test_sync_incidents_from_alerts_additional_branch_edges(monkeypatch):
+    service = incidents_mod.IncidentStorageService()
+    now = datetime.now(timezone.utc)
+
+    canonical = _incident_row(
+        "inc-canon",
+        status="open",
+        labels={"alertname": "CPUHigh", "state": "critical"},
+        annotations={},
+    )
+    canonical.annotations[incidents_mod.INCIDENT_META_KEY] = json.dumps(
+        {incidents_mod.INCIDENT_META_KEY_IDENTITY: "rule:CPUHigh|scope:org-a"}
+    )
+    duplicate_resolved = _incident_row(
+        "inc-resolved-dup",
+        status="resolved",
+        labels="not-a-dict",
+        annotations={},
+    )
+    duplicate_resolved.resolved_at = now
+    duplicate_resolved.annotations[incidents_mod.INCIDENT_META_KEY] = json.dumps(
+        {incidents_mod.INCIDENT_META_KEY_IDENTITY: "rule:CPUHigh|scope:org-a"}
+    )
+    existing_by_fp = _incident_row(
+        "inc-by-fp",
+        status="open",
+        labels={"severity": "warning"},
+        fingerprint="fp-no-key",
+        annotations={},
+    )
+    existing_by_fp.resolved_at = now
+    existing_by_fp.annotations[incidents_mod.INCIDENT_META_KEY] = json.dumps(
+        {"user_managed": True, "correlation_id": ""}
+    )
+
+    class _SyncQuery:
+        def __init__(self, db):
+            self._db = db
+
+        def filter(self, *_args, **_kwargs):
+            return self
+
+        def order_by(self, *_args, **_kwargs):
+            return self
+
+        def options(self, *_args, **_kwargs):
+            return self
+
+        def limit(self, *_args, **_kwargs):
+            return self
+
+        def all(self):
+            self._db.incident_all_calls += 1
+            if self._db.incident_all_calls == 1:
+                return [canonical, duplicate_resolved]
+            return []
+
+        def first(self):
+            self._db.incident_first_calls += 1
+            if self._db.incident_first_calls == 1:
+                return existing_by_fp
+            return None
+
+    class _SyncDB:
+        def __init__(self):
+            self.incident_all_calls = 0
+            self.incident_first_calls = 0
+
+        def query(self, *_args, **_kwargs):
+            return _SyncQuery(self)
+
+        def add(self, *_args, **_kwargs):
+            return None
+
+    db = _SyncDB()
+    rule = SimpleNamespace(visibility="group", created_by=None, group="", shared_groups=[])
+
+    monkeypatch.setattr(incidents_mod, "get_db_session", lambda: _db_session(db))
+    monkeypatch.setattr(incidents_mod, "ensure_tenant_exists", lambda *_args: None)
+    monkeypatch.setattr(incidents_mod, "_is_alert_suppressed", lambda *_args: False)
+    monkeypatch.setattr(incidents_mod, "_resolve_rule_by_alertname", lambda *_args: rule)
+
+    alerts = [
+        {
+            "labels": {"alertname": "CPUHigh", "org_id": "org-a", "severity": "critical"},
+            "annotations": {"summary": "cpu"},
+            "fingerprint": "fp-canon",
+        },
+        {
+            "labels": {"severity": "warning"},
+            "annotations": {"summary": "fallback"},
+            "fingerprint": "fp-no-key",
+        },
+    ]
+    service.sync_incidents_from_alerts("tenant-a", alerts, resolve_missing=False)
+
+    assert duplicate_resolved.resolved_at == now
+    assert any("metric state: unknown" in n["text"] for n in duplicate_resolved.notes)
+
+    fallback_meta = incidents_mod.parse_meta(existing_by_fp.annotations)
+    assert "user_managed" not in fallback_meta
+    assert "created_by" not in fallback_meta
+    assert existing_by_fp.assignee is None
+
+
+def test_incident_get_update_filter_remaining_branches(monkeypatch):
+    service = incidents_mod.IncidentStorageService()
+
+    row = _incident_row("inc-1", visibility="public", created_by="u1", annotations={})
+    db = _FakeDB([row])
+    monkeypatch.setattr(incidents_mod, "get_db_session", lambda: _db_session(db))
+    access_called = {"value": False}
+
+    def _access_probe(**_kwargs):
+        access_called["value"] = True
+        return True
+
+    monkeypatch.setattr(incidents_mod, "_incident_access_allowed", _access_probe)
+    monkeypatch.setattr(
+        incidents_mod,
+        "incident_to_pydantic",
+        lambda incident: SimpleNamespace(id=incident.id),
+    )
+    assert service.get_incident_for_user("inc-1", "tenant-a", user_id="", group_ids=["g1"]) is not None
+    assert access_called["value"] is False
+
+    resolved_row = _incident_row("inc-resolved", status="resolved", visibility="public", created_by="u1", annotations={})
+    resolved_row.notes = [{"author": "u1", "text": "existing", "createdAt": datetime.now(timezone.utc).isoformat()}]
+    db = _FakeDB([resolved_row])
+    monkeypatch.setattr(incidents_mod, "get_db_session", lambda: _db_session(db))
+    monkeypatch.setattr(incidents_mod, "normalize_storage_visibility", lambda value: value)
+    monkeypatch.setattr(incidents_mod, "_incident_access_allowed", lambda **_kwargs: True)
+    monkeypatch.setattr(
+        incidents_mod,
+        "incident_to_pydantic",
+        lambda incident: SimpleNamespace(id=incident.id, status=incident.status),
+    )
+    before_notes = list(resolved_row.notes)
+    updated = service.update_incident(
+        "inc-resolved",
+        "tenant-a",
+        "u1",
+        AlertIncidentUpdateRequest(status="resolved"),
+        ["g1"],
+    )
+    assert updated is not None
+    assert resolved_row.notes == before_notes
+
+    ack_row = _incident_row("inc-ack", status="open", visibility="public", created_by="u1", annotations={})
+    db = _FakeDB([ack_row])
+    monkeypatch.setattr(incidents_mod, "get_db_session", lambda: _db_session(db))
+    service.update_incident(
+        "inc-ack",
+        "tenant-a",
+        "u1",
+        AlertIncidentUpdateRequest(status="acknowledged"),
+        ["g1"],
+    )
+    ack_meta = incidents_mod.parse_meta(ack_row.annotations)
+    assert "user_managed" not in ack_meta
+    assert ack_row.status == "acknowledged"
+
+    no_status_row = _incident_row("inc-no-status", status="open", visibility="public", created_by="u1", annotations={})
+    db = _FakeDB([no_status_row])
+    monkeypatch.setattr(incidents_mod, "get_db_session", lambda: _db_session(db))
+    service.update_incident(
+        "inc-no-status",
+        "tenant-a",
+        "u1",
+        AlertIncidentUpdateRequest(),
+        ["g1"],
+    )
+    assert no_status_row.status == "open"
+
+    rule = SimpleNamespace(
+        tenant_id="tenant-a",
+        name="CPUHigh",
+        org_id=None,
+        enabled=True,
+        visibility="private",
+        created_by="owner",
+        shared_groups=[],
+    )
+    db = _FakeDB([], [rule])
+    monkeypatch.setattr(incidents_mod, "get_db_session", lambda: _db_session(db))
+    monkeypatch.setattr(incidents_mod, "has_access", lambda *_args, **_kwargs: False)
+    hidden = service.filter_alerts_for_user(
+        "tenant-a",
+        "u1",
+        ["g1"],
+        [{"labels": {"alertname": "CPUHigh"}}],
+    )
+    assert hidden == []
+
+
+def test_unlink_jira_integration_no_updates_keeps_count_zero(monkeypatch):
+    service = incidents_mod.IncidentStorageService()
+
+    incident = _incident_row("inc-x", annotations={})
+    incident.annotations[incidents_mod.INCIDENT_META_KEY] = json.dumps({"jira_integration_id": "jira-other"})
+
+    class _UnlinkQuery:
+        def __init__(self, rows):
+            self.rows = rows
+
+        def filter(self, *_args, **_kwargs):
+            return self
+
+        def all(self):
+            return list(self.rows)
+
+    class _UnlinkDB:
+        def __init__(self, rows):
+            self.rows = rows
+            self.flushed = 0
+
+        def query(self, *_args, **_kwargs):
+            return _UnlinkQuery(self.rows)
+
+        def flush(self):
+            self.flushed += 1
+
+    db = _UnlinkDB([incident])
+    monkeypatch.setattr(incidents_mod, "get_db_session", lambda: _db_session(db))
+    assert service.unlink_jira_integration_from_incidents("tenant-a", "jira-1") == 0
+    assert db.flushed == 0

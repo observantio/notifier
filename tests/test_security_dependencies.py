@@ -44,7 +44,7 @@ def _reset_replay_cache():
 
 
 def test_verify_context_token_rejects_missing_jti(monkeypatch):
-    key = "test-context-key"
+    key = "test-context-key-with-min-32-bytes!!"
     monkeypatch.setattr(config, "NOTIFIER_CONTEXT_VERIFY_KEY", key)
     monkeypatch.setattr(config, "NOTIFIER_CONTEXT_SIGNING_KEY", key)
     monkeypatch.setattr(config, "NOTIFIER_CONTEXT_ALGORITHM", "HS256")
@@ -74,7 +74,7 @@ def test_verify_context_token_rejects_missing_jti(monkeypatch):
 
 
 def test_verify_context_token_replay_detection(monkeypatch):
-    key = "test-context-key"
+    key = "test-context-key-with-min-32-bytes!!"
     monkeypatch.setattr(config, "NOTIFIER_CONTEXT_VERIFY_KEY", key)
     monkeypatch.setattr(config, "NOTIFIER_CONTEXT_SIGNING_KEY", key)
     monkeypatch.setattr(config, "NOTIFIER_CONTEXT_ALGORITHM", "HS256")
@@ -105,7 +105,7 @@ def test_verify_context_token_replay_detection(monkeypatch):
 
 
 def test_verify_context_token_unknown_role_falls_back_to_user(monkeypatch):
-    key = "test-context-key"
+    key = "test-context-key-with-min-32-bytes!!"
     monkeypatch.setattr(config, "NOTIFIER_CONTEXT_VERIFY_KEY", key)
     monkeypatch.setattr(config, "NOTIFIER_CONTEXT_SIGNING_KEY", key)
     monkeypatch.setattr(config, "NOTIFIER_CONTEXT_ALGORITHM", "HS256")

@@ -18,7 +18,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.responses import Response
 from config import config
-from database import connection_test, ensure_database_exists, init_database, init_db
+import database as database_module
 from middleware.headers import security_headers_middleware
 from middleware.error_handlers import general_exception_handler, validation_exception_handler
 from middleware.concurrency_limit import ConcurrencyLimitMiddleware
@@ -33,9 +33,12 @@ logging.basicConfig(
 )
 logger = logging.getLogger("notifier")
 
-ensure_database_exists(config.NOTIFIER_DATABASE_URL)
-init_database(config.NOTIFIER_DATABASE_URL, config.LOG_LEVEL == "debug")
-init_db()
+# Expose this name for route logic and tests that monkeypatch main.connection_test.
+connection_test = database_module.connection_test
+
+database_module.ensure_database_exists(config.NOTIFIER_DATABASE_URL)
+database_module.init_database(config.NOTIFIER_DATABASE_URL, config.LOG_LEVEL == "debug")
+database_module.init_db()
 
 app = FastAPI(
     title="Notifier",

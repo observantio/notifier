@@ -209,4 +209,3 @@ async def move_incident_ticket_to_done(
             incident.id,
             exc,
         )
-

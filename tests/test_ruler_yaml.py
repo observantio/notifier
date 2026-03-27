@@ -59,6 +59,24 @@ class RulerYamlTests(unittest.TestCase):
         namespace = 'groups:\n  - name: "infra"\n  - name: "app"\n'
         self.assertEqual(extract_mimir_group_names(namespace), ['infra', 'app'])
 
+    def test_build_yaml_without_labels_or_annotations_and_extract_unquoted(self):
+        rule = AlertRule(
+            name="bare",
+            expression="up == 0",
+            severity=RuleSeverity.WARNING,
+            groupName="infra",
+            enabled=True,
+            labels={},
+            annotations={},
+            duration="5m",
+        )
+        yaml_text = build_ruler_group_yaml("infra", [rule])
+        self.assertIn('severity: "warning"', yaml_text)
+        self.assertNotIn("annotations:\n", yaml_text)
+
+        namespace = "groups:\n  - name: infra\n"
+        self.assertEqual(extract_mimir_group_names(namespace), ["infra"])
+
 
 if __name__ == '__main__':
     unittest.main()

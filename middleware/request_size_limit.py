@@ -21,9 +21,9 @@ _request_size_rejections_total = 0
 
 
 def _inc_request_size_rejections() -> int:
-    global _request_size_rejections_total
-    _request_size_rejections_total += 1
-    return _request_size_rejections_total
+    total = _request_size_rejections_total + 1
+    globals()["_request_size_rejections_total"] = total
+    return total
 
 
 class _TooLarge(Exception):

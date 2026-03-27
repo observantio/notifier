@@ -10,7 +10,7 @@ You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2
 
 import logging
 import re
-from datetime import datetime
+from datetime import UTC, datetime
 from email.message import EmailMessage
 
 
@@ -121,7 +121,7 @@ class NotificationService:
             f"Status: {incident_status}\n"
             f"Severity: {incident_severity}\n"
             f"Updated by: {actor}\n"
-            f"Timestamp: {datetime.utcnow().isoformat()}Z\n"
+            f"Timestamp: {datetime.now(UTC).isoformat()}\n"
         )
         try:
             await self._send_smtp_with_retry(

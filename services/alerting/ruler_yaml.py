@@ -38,10 +38,9 @@ def build_ruler_group_yaml(group_name: str, rules: List[AlertRule]) -> str:
 
         labels = dict(rule.labels or {})
         labels["severity"] = rule.severity
-        if labels:
-            lines.append("    labels:")
-            for key in sorted(labels.keys()):
-                lines.append(f"      {key}: {yaml_quote(labels[key])}")
+        lines.append("    labels:")
+        for key in sorted(labels.keys()):
+            lines.append(f"      {key}: {yaml_quote(labels[key])}")
 
         annotations = rule.annotations or {}
         if annotations:

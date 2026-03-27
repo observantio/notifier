@@ -21,7 +21,7 @@ except ImportError:
 ensure_test_env()
 
 from models.access.auth_models import Role, TokenData
-from models.alerting.incidents import AlertIncident
+from models.alerting.incidents import AlertIncident, IncidentStatus
 from services.incidents import helpers as helpers_mod
 from services.storage import serializers as serializers_mod
 
@@ -88,6 +88,16 @@ def test_incident_helper_formatting_and_author_rewrites():
     bodies = helpers_mod.build_formatted_incident_note_bodies(incident, current_user)
     assert len(bodies) == 1
     assert "alice acknowledged incident" in bodies[0]
+
+
+def test_build_formatted_incident_note_bodies_skips_empty_formatted_body(monkeypatch):
+    incident = _incident(
+        notes=[
+            {"author": "u1", "text": "u1 updated", "createdAt": "2024-01-01T00:00:00Z"},
+        ]
+    )
+    monkeypatch.setattr(helpers_mod, "format_note_for_jira_comment", lambda *_args, **_kwargs: "")
+    assert helpers_mod.build_formatted_incident_note_bodies(incident, _user()) == []
 
 
 @pytest.mark.asyncio
@@ -227,3 +237,79 @@ def test_storage_serializers_cover_rule_channel_and_incident_payloads():
             updated_at=now,
         )
     ).visibility == "public"
+
+
+def test_storage_serializer_incident_status_enum_and_correlation_case_bridge():
+    now = datetime.now(timezone.utc)
+    incident = SimpleNamespace(
+        id="inc-3",
+        fingerprint="fp-3",
+        alert_name="MemoryHigh",
+        severity="warning",
+        status=IncidentStatus.OPEN,
+        assignee=None,
+        notes=[],
+        labels={},
+        annotations={"watchdogCorrelationId": "corr-lower"},
+        starts_at=now,
+        last_seen_at=now,
+        resolved_at=None,
+        created_at=now,
+        updated_at=now,
+    )
+
+    model = serializers_mod.incident_to_pydantic(incident)
+    assert model.status == "open"
+    assert model.annotations["watchdogCorrelationId"] == "corr-lower"
+    assert model.annotations["WatchdogCorrelationId"] == "corr-lower"
+
+
+def test_storage_serializer_incident_without_correlation_leaves_keys_absent():
+    now = datetime.now(timezone.utc)
+    incident = SimpleNamespace(
+        id="inc-4",
+        fingerprint="fp-4",
+        alert_name="NetworkDown",
+        severity="critical",
+        status="open",
+        assignee=None,
+        notes=[],
+        labels={},
+        annotations={},
+        starts_at=now,
+        last_seen_at=now,
+        resolved_at=None,
+        created_at=now,
+        updated_at=now,
+    )
+
+    model = serializers_mod.incident_to_pydantic(incident)
+    assert "watchdogCorrelationId" not in model.annotations
+    assert "WatchdogCorrelationId" not in model.annotations
+
+
+def test_storage_serializer_preserves_existing_dual_correlation_keys():
+    now = datetime.now(timezone.utc)
+    incident = SimpleNamespace(
+        id="inc-5",
+        fingerprint="fp-5",
+        alert_name="PacketLoss",
+        severity="warning",
+        status="open",
+        assignee=None,
+        notes=[],
+        labels={},
+        annotations={
+            "watchdogCorrelationId": "corr-a",
+            "WatchdogCorrelationId": "corr-b",
+        },
+        starts_at=now,
+        last_seen_at=now,
+        resolved_at=None,
+        created_at=now,
+        updated_at=now,
+    )
+
+    model = serializers_mod.incident_to_pydantic(incident)
+    assert model.annotations["watchdogCorrelationId"] == "corr-a"
+    assert model.annotations["WatchdogCorrelationId"] == "corr-b"

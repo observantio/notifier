@@ -97,6 +97,32 @@ async def test_notify_for_alerts_covers_skip_suppressed_and_dispatch_paths(monke
     storage_service.get_notification_channels_for_rule_name = lambda *_args, **_kwargs: []
     await channels_ops.notify_for_alerts(service, "tenant", alerts, storage_service, notification_service)
 
+    # cover matched-rule optional annotation branches and unmatched-rule path
+    sent.clear()
+    sparse_rule = SimpleNamespace(id="rule-2", group="infra", created_by="owner", name="CPUHigh", annotations={})
+    storage_service.get_notification_channels_for_rule_name = lambda *_args, **_kwargs: [SimpleNamespace(name="webhook")]
+    storage_service.get_alert_rule_by_name_for_delivery = lambda *_args, **_kwargs: sparse_rule
+    await channels_ops.notify_for_alerts(
+        service,
+        "tenant",
+        [{"labels": {"alertname": "CPUHigh"}, "annotations": {}, "status": {"state": "active"}}],
+        storage_service,
+        notification_service,
+    )
+    assert sent and "WatchdogCreatedByUsername" not in sent[-1][1].annotations
+    assert "WatchdogProductName" not in sent[-1][1].annotations
+
+    sent.clear()
+    storage_service.get_alert_rule_by_name_for_delivery = lambda *_args, **_kwargs: None
+    await channels_ops.notify_for_alerts(
+        service,
+        "tenant",
+        [{"labels": {"alertname": "CPUHigh"}, "annotations": {}, "status": "resolved"}],
+        storage_service,
+        notification_service,
+    )
+    assert sent and sent[-1][2] == "resolved"
+
 
 @pytest.mark.asyncio
 async def test_channels_status_and_receivers_helpers(monkeypatch):
@@ -124,6 +150,12 @@ async def test_channels_status_and_receivers_helpers(monkeypatch):
 
     monkeypatch.setattr(service._client, "get", raise_http_error, raising=False)
     assert await channels_ops.get_status(service) is None
+    assert await channels_ops.get_receivers(service) == []
+
+    async def status_with_non_list_receivers(*_args, **_kwargs):
+        return FakeResponse(payload={"cluster": {}, "config": {"receivers": "default"}, "version": "1", "versionInfo": {}, "configHash": "x", "uptime": "1s"})
+
+    monkeypatch.setattr(service._client, "get", status_with_non_list_receivers, raising=False)
     assert await channels_ops.get_receivers(service) == []
 
 

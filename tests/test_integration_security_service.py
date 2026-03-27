@@ -159,6 +159,36 @@ class IntegrationSecurityServiceTests(unittest.TestCase):
             inferred = infer_tenant_id_from_alerts(None, [{"labels": {"alertname": "CPU boom"}}])
         self.assertEqual(inferred, "default")
 
+    def test_infer_tenant_id_from_alerts_without_alert_name_keeps_base(self):
+        fake_db = self._FakeDB([("tenant-ignored",)])
+        with patch(
+            "services.alerting.integration_security_service.tenant_id_from_scope_header",
+            return_value="default",
+        ), patch(
+            "services.alerting.integration_security_service.get_db_session",
+            return_value=self._FakeCtx(fake_db),
+        ):
+            inferred = infer_tenant_id_from_alerts(None, [{"labels": {"org_id": "org-a"}}])
+        self.assertEqual(inferred, "default")
+
+    def test_validate_jira_credentials_bearer_mode_accepts_bearer_token(self):
+        validate_jira_credentials(
+            base_url="https://jira.example.com",
+            auth_mode="bearer",
+            email=None,
+            api_token=None,
+            bearer_token="token-123",
+        )
+
+    def test_validate_jira_credentials_unknown_mode_is_noop_after_url_check(self):
+        validate_jira_credentials(
+            base_url="https://jira.example.com",
+            auth_mode="custom",
+            email=None,
+            api_token=None,
+            bearer_token=None,
+        )
+
 
 if __name__ == '__main__':
     unittest.main()

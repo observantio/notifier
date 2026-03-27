@@ -25,6 +25,7 @@ except ImportError:
 ensure_test_env()
 
 from config import config
+import db_models as db_models_mod
 from models.access.auth_models import Role, TokenData
 from services import alertmanager_service as alert_mod
 from services.storage_db_service import DatabaseStorageService
@@ -178,6 +179,16 @@ def test_storage_service_hidden_resource_helpers(monkeypatch):
     assert svc.toggle_silence_hidden("tenant", "user", "sil-1", False) is True
     assert db.deleted == [existing]
 
+    db = _FakeDB(first_value=None)
+    monkeypatch.setattr("services.storage_db_service.get_db_session", lambda: _db_ctx(db))
+    assert svc.toggle_silence_hidden("tenant", "user", "sil-1", False) is True
+    assert db.deleted == []
+
+    db = _FakeDB(first_value=SimpleNamespace(id="already-hidden"))
+    monkeypatch.setattr("services.storage_db_service.get_db_session", lambda: _db_ctx(db))
+    assert svc.toggle_silence_hidden("tenant", "user", "sil-1", True) is True
+    assert db.added == []
+
     db = _FakeDB(rows=[("c1",)])
     monkeypatch.setattr("services.storage_db_service.get_db_session", lambda: _db_ctx(db))
     assert svc.get_hidden_channel_ids("tenant", "user") == ["c1"]
@@ -192,6 +203,16 @@ def test_storage_service_hidden_resource_helpers(monkeypatch):
     monkeypatch.setattr("services.storage_db_service.get_db_session", lambda: _db_ctx(db))
     assert svc.toggle_channel_hidden("tenant", "user", "ch-1", False) is True
     assert db.deleted == [existing]
+
+    db = _FakeDB(first_value=None)
+    monkeypatch.setattr("services.storage_db_service.get_db_session", lambda: _db_ctx(db))
+    assert svc.toggle_channel_hidden("tenant", "user", "ch-1", False) is True
+    assert db.deleted == []
+
+    db = _FakeDB(first_value=SimpleNamespace(id="already-hidden-channel"))
+    monkeypatch.setattr("services.storage_db_service.get_db_session", lambda: _db_ctx(db))
+    assert svc.toggle_channel_hidden("tenant", "user", "ch-1", True) is True
+    assert db.added == []
 
     pruned = {}
     db = _FakeDB()
@@ -230,6 +251,11 @@ def test_storage_service_hidden_resource_helpers(monkeypatch):
     assert svc.toggle_jira_integration_hidden("tenant", "user", "jira-1", False) is True
     assert db.deleted == [existing]
 
+    db = _FakeDB(first_value=None)
+    monkeypatch.setattr("services.storage_db_service.get_db_session", lambda: _db_ctx(db))
+    assert svc.toggle_jira_integration_hidden("tenant", "user", "jira-1", False) is True
+    assert db.deleted == []
+
 
 @pytest.mark.asyncio
 async def test_alertmanager_service_helpers_and_delete_silence(monkeypatch):
@@ -264,6 +290,9 @@ async def test_alertmanager_service_helpers_and_delete_silence(monkeypatch):
     svc.enforce_webhook_security(_request(headers=[(b"x-watchdog-webhook-token", b"secret")]), scope="alerts")
     svc.enforce_webhook_security(_request(headers=[(b"authorization", b"Bearer secret")]), scope="alerts")
     with pytest.raises(HTTPException) as exc:
+        svc.enforce_webhook_security(_request(headers=[(b"authorization", b"Bearer   ")]), scope="alerts")
+    assert exc.value.status_code == 401
+    with pytest.raises(HTTPException) as exc:
         svc.enforce_webhook_security(_request(), scope="alerts")
     assert exc.value.status_code == 401
 
@@ -295,6 +324,9 @@ async def test_alertmanager_service_helpers_and_delete_silence(monkeypatch):
 
     monkeypatch.setattr("services.alertmanager_service.notify_for_alerts_ops", lambda *_args: async_value(None))
     monkeypatch.setattr("services.alertmanager_service.list_metric_names_ops", lambda *_args: async_value(["metric"]))
+    monkeypatch.setattr("services.alertmanager_service.list_label_names_ops", lambda *_args: async_value(["label-a"]))
+    monkeypatch.setattr("services.alertmanager_service.list_label_values_ops", lambda *_args: async_value(["value-a"]))
+    monkeypatch.setattr("services.alertmanager_service.evaluate_promql_ops", lambda *_args: async_value({"valid": True}))
     monkeypatch.setattr("services.alertmanager_service.sync_mimir_rules_for_org_ops", lambda *_args: async_value(None))
     monkeypatch.setattr("services.alertmanager_service.get_alerts_ops", lambda *_args: async_value(["alert"]))
     monkeypatch.setattr("services.alertmanager_service.get_alert_groups_ops", lambda *_args: async_value(["group"]))
@@ -308,6 +340,9 @@ async def test_alertmanager_service_helpers_and_delete_silence(monkeypatch):
     monkeypatch.setattr("services.alertmanager_service.get_receivers_ops", lambda *_args: async_value(["receiver"]))
     assert await svc.notify_for_alerts("tenant", [], object(), object()) is None
     assert await svc.list_metric_names("org") == ["metric"]
+    assert await svc.list_label_names("org") == ["label-a"]
+    assert await svc.list_label_values("org", "job", "up") == ["value-a"]
+    assert (await svc.evaluate_promql("org", "up", 5))["valid"] is True
     assert await svc.sync_mimir_rules_for_org("org", []) is None
     assert await svc.get_alerts() == ["alert"]
     assert await svc.get_alert_groups() == ["group"]
@@ -344,3 +379,12 @@ async def test_alertmanager_service_helpers_and_delete_silence(monkeypatch):
 
     monkeypatch.setattr("services.alertmanager_service.get_db_session", broken_ctx)
     assert await svc.delete_silence("sil-1") is True
+
+
+def test_db_models_now_returns_timezone_aware_datetime():
+    generated = db_models_mod._uuid()
+    assert isinstance(generated, str)
+    assert generated
+
+    now = db_models_mod._now()
+    assert now.tzinfo is not None

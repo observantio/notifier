@@ -11,19 +11,18 @@ You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2
 import logging
 import os
 from contextlib import contextmanager
-from typing import Callable, Generator, Iterator, Optional
+from typing import Generator, Iterator, Optional
 
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.engine import Engine, make_url
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.orm import Session
 
 from db_models import Base
 
 logger = logging.getLogger(__name__)
 
 _engine: Optional[Engine] = None
-_session_local: Optional[Callable[[], Session]] = None
 
 
 def ensure_database_exists(database_url: str) -> None:
@@ -53,13 +52,11 @@ def init_database(
     echo: bool = False,
     pool_size: Optional[int] = None,
 ) -> None:
-    global _engine, _session_local
-
     if _engine is not None:
         logger.debug("Database already initialized; skipping re-init.")
         return
 
-    _engine = create_engine(
+    engine = create_engine(
         database_url,
         pool_pre_ping=True,
         pool_size=pool_size or int(os.getenv("DB_POOL_SIZE", "10")),
@@ -69,23 +66,15 @@ def init_database(
         echo=echo,
     )
 
-    _session_local = sessionmaker(
-        bind=_engine,
-        autocommit=False,
-        autoflush=False,
-        expire_on_commit=False,
-    )
-
-
-def _require_session_factory() -> Callable[[], Session]:
-    if _session_local is None:
-        raise RuntimeError("Database not initialized. Call init_database() first.")
-    return _session_local
+    globals()["_engine"] = engine
+    return
 
 
 @contextmanager
 def get_db_session() -> Iterator[Session]:
-    session: Session = _require_session_factory()()
+    if _engine is None:
+        raise RuntimeError("Database not initialized. Call init_database() first.")
+    session: Session = Session(bind=_engine, autoflush=False, expire_on_commit=False)
     try:
         yield session
         session.commit()
@@ -97,7 +86,9 @@ def get_db_session() -> Iterator[Session]:
 
 
 def get_db() -> Generator[Session, None, None]:
-    session: Session = _require_session_factory()()
+    if _engine is None:
+        raise RuntimeError("Database not initialized. Call init_database() first.")
+    session: Session = Session(bind=_engine, autoflush=False, expire_on_commit=False)
     try:
         yield session
         session.commit()
@@ -121,13 +112,11 @@ def connection_test() -> bool:
 
 
 def dispose_database() -> None:
-    global _engine, _session_local
-    _session_local = None
     if _engine is not None:
         try:
             _engine.dispose()
         finally:
-            _engine = None
+            globals()["_engine"] = None
 
 
 def init_db() -> None:

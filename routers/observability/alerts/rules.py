@@ -1,3 +1,13 @@
+"""
+Rules management endpoints for AlertManager integration, allowing users to create, update, delete, hide, and test alert rules, as well as import rules from YAML and query metrics for rule creation.
+
+Copyright (c) 2026 Stefan Kumarasinghe
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+"""
+
 import logging
 from datetime import datetime, timezone
 from typing import List, Optional

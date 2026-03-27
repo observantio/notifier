@@ -44,4 +44,3 @@ def ensure_tenant_exists(db: Session, tenant_id: Optional[str]) -> str:
             return existing.id
         raise
     return normalized
-

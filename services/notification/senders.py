@@ -96,8 +96,11 @@ async def _send_json(
     except httpx.HTTPStatusError as exc:
         logger.warning("Webhook failed [%s]: %s", exc.response.status_code, url)
         return False
+    except httpx.RequestError as exc:
+        logger.warning("Webhook transport error for %s: %s", url, exc)
+        return False
     except httpx.HTTPError:
-        logger.exception("Unexpected webhook error: %s", url)
+        logger.error("Unexpected webhook error: %s", url)
         return False
 
 
