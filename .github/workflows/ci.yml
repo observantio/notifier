@@ -42,7 +42,7 @@ jobs:
           python -m pip install pytest pytest-asyncio
 
       - name: Run tests
-        run: pytest -q tests
+        run: pytest -c "${{ github.workspace }}/pyproject.toml" -q tests
 
   quality:
     name: Python quality (mypy, pylint)
@@ -77,11 +77,11 @@ jobs:
           python -m pip install mypy pylint
 
       - name: Run mypy
-        run: mypy --config-file "${{ github.workspace }}/mypy.ini" .
+        run: mypy --config-file "${{ github.workspace }}/pyproject.toml" .
 
       - name: Run pylint
         run: |
-          pylint --rcfile "${{ github.workspace }}/.pylintrc" \
+          pylint --rcfile "${{ github.workspace }}/pyproject.toml" \
             $(find . -maxdepth 1 -mindepth 1 \
               \( -type d -o -name "*.py" \) \
               ! -name tests \
