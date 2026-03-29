@@ -25,7 +25,7 @@ ensure_test_env()
 
 from models.access.auth_models import Role, TokenData
 from models.alerting.alerts import Alert, AlertState, AlertStatus
-from models.alerting.incidents import AlertIncident, IncidentStatus
+from models.alerting.incidents import AlertIncident, IncidentStatus, IncidentVisibility
 from services.alerting import rule_import_service, rules_ops, ruler_yaml, silence_metadata, suppression
 from services.incidents import helpers as incident_helpers
 from services.common import encryption, meta, url_utils
@@ -67,12 +67,22 @@ def _incident(jira_integration_id: str | None = None) -> AlertIncident:
         alertName="HighLatency",
         severity="high",
         status=IncidentStatus.OPEN,
+        assignee=None,
+        notes=[],
         labels={"service": "api"},
         annotations={},
+        visibility=IncidentVisibility.PUBLIC,
+        sharedGroupIds=[],
+        jiraTicketKey=None,
+        jiraTicketUrl=None,
         jiraIntegrationId=jira_integration_id,
+        startsAt=None,
         lastSeenAt=now,
+        resolvedAt=None,
         createdAt=now,
         updatedAt=now,
+        userManaged=False,
+        hideWhenResolved=False,
     )
 
 

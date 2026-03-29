@@ -12,12 +12,14 @@ except ImportError:
     from tests._env import ensure_test_env
 ensure_test_env()
 
+from typing import Any
+
 from models.alerting.alerts import Alert
 from services.notification import payloads as notification_payloads
 
 
 def _make_alert(**kwargs) -> Alert:
-    base = {
+    base: dict[str, Any] = {
         "labels": {"alertname": "DiskFull", "severity": "critical", "instance": "srv1"},
         "annotations": {"summary": "disk almost full", "description": "root partition > 90%"},
         "startsAt": "2023-01-01T00:00:00Z",

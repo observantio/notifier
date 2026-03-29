@@ -11,6 +11,7 @@ from __future__ import annotations
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
+from typing import Any, cast
 
 import jwt
 import pytest
@@ -61,7 +62,7 @@ def _claims(**kwargs) -> TokenData:
         "group_ids": ["g1"],
     }
     payload.update(kwargs)
-    return TokenData(**payload)
+    return TokenData(**cast(dict[str, Any], payload))
 
 
 def test_dependencies_token_and_permission_edges(monkeypatch):

@@ -42,7 +42,7 @@ def _incident_row(
     labels: dict[str, object] | None = None,
     annotations: dict[str, object] | None = None,
 ) -> SimpleNamespace:
-    meta = {
+    meta: dict[str, object] = {
         "visibility": visibility,
         "created_by": created_by,
         "shared_group_ids": shared_group_ids or [],

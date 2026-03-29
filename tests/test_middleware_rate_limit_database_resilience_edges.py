@@ -11,6 +11,7 @@ from __future__ import annotations
 import asyncio
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
+from typing import Any, cast
 
 import httpx
 import jwt
@@ -66,7 +67,7 @@ def _user(**kwargs) -> TokenData:
         "is_superuser": False,
     }
     payload.update(kwargs)
-    return TokenData(**payload)
+    return TokenData(**cast(dict[str, Any], payload))
 
 
 class _FakeSession:
@@ -89,7 +90,7 @@ class _FakeConn:
     def __init__(self, *, exists=True, execute_error: Exception | None = None):
         self.exists = exists
         self.execute_error = execute_error
-        self.executed = []
+        self.executed: list[object] = []
 
     def execution_options(self, **_kwargs):
         return self

@@ -9,6 +9,7 @@ You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2
 from __future__ import annotations
 
 from types import SimpleNamespace
+from typing import Any, cast
 
 import httpx
 import pytest
@@ -107,7 +108,7 @@ def _user(**kwargs) -> TokenData:
         "is_superuser": False,
     }
     payload.update(kwargs)
-    return TokenData(**payload)
+    return TokenData(**cast(dict[str, Any], payload))
 
 
 def _silence(**kwargs) -> Silence:

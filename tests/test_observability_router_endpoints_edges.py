@@ -5,6 +5,7 @@ High-coverage router tests for observability endpoints.
 from __future__ import annotations
 
 from types import SimpleNamespace
+from typing import Any, cast
 
 import pytest
 from fastapi import HTTPException
@@ -60,7 +61,7 @@ def _user(**kwargs) -> TokenData:
         "is_superuser": False,
     }
     payload.update(kwargs)
-    return TokenData(**payload)
+    return TokenData(**cast(dict[str, Any], payload))
 
 
 def _request(headers: list[tuple[bytes, bytes]] | None = None, path: str = "/") -> Request:
@@ -158,7 +159,7 @@ def _silence(silence_id: str, *, owner: str = "u1", state: str = "active") -> Si
 
 
 def _incident(incident_id: str = "inc-1", **kwargs) -> AlertIncident:
-    base = {
+    base: dict[str, object] = {
         "id": incident_id,
         "fingerprint": "fp-1",
         "alertName": "CPUHigh",

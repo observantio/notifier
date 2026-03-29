@@ -31,7 +31,10 @@ def _alert() -> Alert:
         labels={"alertname": "CPUHigh"},
         annotations={"summary": "High CPU"},
         startsAt="2024-01-01T00:00:00Z",
+        endsAt=None,
+        generatorURL=None,
         status=AlertStatus(state=AlertState.ACTIVE),
+        fingerprint="fp-service",
     )
 
 

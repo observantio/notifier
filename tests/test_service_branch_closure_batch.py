@@ -11,6 +11,7 @@ from __future__ import annotations
 import asyncio
 import json
 from types import SimpleNamespace
+from typing import Any, cast
 
 import httpx
 import pytest
@@ -24,7 +25,7 @@ except ImportError:
 ensure_test_env()
 
 from models.access.auth_models import Role, TokenData
-from models.alerting.alerts import Alert, AlertStatus
+from models.alerting.alerts import Alert, AlertState, AlertStatus
 from models.alerting.channels import ChannelType, NotificationChannel
 from models.alerting.silences import Matcher, Silence, SilenceCreate
 from services import notification_service as notif_mod
@@ -47,7 +48,7 @@ def _user(**overrides) -> TokenData:
         "is_superuser": False,
     }
     payload.update(overrides)
-    return TokenData(**payload)
+    return TokenData(**cast(dict[str, Any], payload))
 
 
 def _alert() -> Alert:
@@ -55,7 +56,9 @@ def _alert() -> Alert:
         labels={"alertname": "CPUHigh", "severity": "critical"},
         annotations={"summary": "CPU high"},
         startsAt="2026-01-01T00:00:00Z",
-        status=AlertStatus(state="active"),
+        endsAt=None,
+        generatorURL=None,
+        status=AlertStatus(state=AlertState.ACTIVE),
         fingerprint="fp-1",
     )
 

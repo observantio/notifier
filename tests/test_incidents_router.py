@@ -25,6 +25,8 @@ from pathlib import Path
 
 incidents_path = Path(__file__).resolve().parents[1] / "routers" / "observability" / "incidents.py"
 spec = importlib.util.spec_from_file_location("incidents_module", incidents_path)
+assert spec is not None
+assert spec.loader is not None
 incidents_mod = importlib.util.module_from_spec(spec)
 sys.modules["incidents_module"] = incidents_mod
 spec.loader.exec_module(incidents_mod)

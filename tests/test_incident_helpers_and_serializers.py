@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from types import SimpleNamespace
+from typing import Any, cast
 
 import pytest
 
@@ -37,7 +38,7 @@ def _user(**kwargs) -> TokenData:
         "group_ids": ["g1"],
     }
     payload.update(kwargs)
-    return TokenData(**payload)
+    return TokenData(**cast(dict[str, Any], payload))
 
 
 def _incident(**kwargs) -> AlertIncident:

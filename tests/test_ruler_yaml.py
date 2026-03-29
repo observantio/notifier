@@ -26,15 +26,17 @@ from services.alerting.ruler_yaml import (
 
 class RulerYamlTests(unittest.TestCase):
     def _rule(self, name: str, enabled: bool = True, group: str = "infra") -> AlertRule:
-        return AlertRule(
-            name=name,
-            expression='up == 0',
-            severity=RuleSeverity.WARNING,
-            groupName=group,
-            enabled=enabled,
-            labels={'team': 'ops'},
-            annotations={'summary': 'Host down'},
-            duration='5m',
+        return AlertRule.model_validate(
+            {
+                "name": name,
+                "expression": "up == 0",
+                "severity": RuleSeverity.WARNING,
+                "groupName": group,
+                "enabled": enabled,
+                "labels": {"team": "ops"},
+                "annotations": {"summary": "Host down"},
+                "for": "5m",
+            }
         )
 
     def test_yaml_quote_escapes_double_quotes_and_backslashes(self):
@@ -60,15 +62,17 @@ class RulerYamlTests(unittest.TestCase):
         self.assertEqual(extract_mimir_group_names(namespace), ['infra', 'app'])
 
     def test_build_yaml_without_labels_or_annotations_and_extract_unquoted(self):
-        rule = AlertRule(
-            name="bare",
-            expression="up == 0",
-            severity=RuleSeverity.WARNING,
-            groupName="infra",
-            enabled=True,
-            labels={},
-            annotations={},
-            duration="5m",
+        rule = AlertRule.model_validate(
+            {
+                "name": "bare",
+                "expression": "up == 0",
+                "severity": RuleSeverity.WARNING,
+                "groupName": "infra",
+                "enabled": True,
+                "labels": {},
+                "annotations": {},
+                "for": "5m",
+            }
         )
         yaml_text = build_ruler_group_yaml("infra", [rule])
         self.assertIn('severity: "warning"', yaml_text)

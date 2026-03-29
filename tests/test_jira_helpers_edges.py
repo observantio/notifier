@@ -9,6 +9,7 @@ You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2
 from __future__ import annotations
 
 from types import SimpleNamespace
+from typing import Any, cast
 
 import pytest
 from fastapi import HTTPException
@@ -36,7 +37,7 @@ def _user(**kwargs) -> TokenData:
         "is_superuser": True,
     }
     data.update(kwargs)
-    return TokenData(**data)
+    return TokenData(**cast(dict[str, Any], data))
 
 
 def test_find_integration_matches_trimmed_ids(monkeypatch):

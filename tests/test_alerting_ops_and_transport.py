@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from email.message import EmailMessage
 from types import SimpleNamespace
+from typing import Any, cast
 
 import httpx
 import pytest
@@ -53,7 +54,7 @@ def _current_user(**kwargs) -> TokenData:
         "permissions": ["read:rules"],
     }
     payload.update(kwargs)
-    return TokenData(**payload)
+    return TokenData(**cast(dict[str, Any], payload))
 
 
 @pytest.mark.asyncio

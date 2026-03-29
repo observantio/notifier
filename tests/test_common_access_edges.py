@@ -39,7 +39,7 @@ class FakeDB:
     def __init__(self, groups=None, flush_error: Exception | None = None):
         self.groups = list(groups or [])
         self.flush_error = flush_error
-        self.added = []
+        self.added: list[object] = []
         self.rolled_back = False
         self.query_calls = 0
 
