@@ -158,7 +158,8 @@ ALLOWLIST_FAIL_OPEN=false
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
+python -m pip install --upgrade pip
+pip install -e ".[dev]"
 ```
 
 ### 2. Configure environment
