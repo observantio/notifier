@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [v0.0.2] - 2026-03-30
+
 ### Added
 
 - Added org-scoped PromQL helper endpoints for alert authoring: `/api/alertmanager/metrics/query`, `/api/alertmanager/metrics/labels`, and `/api/alertmanager/metrics/label-values/{label}`.
