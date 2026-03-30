@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "notifier"
-version = "0.1.0"
+version = "0.0.2"
 description = "Notifier alerting and incident-management service for the Observantio platform."
 readme = "README.md"
 requires-python = ">=3.11"
