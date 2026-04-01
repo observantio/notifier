@@ -14,6 +14,7 @@ All notable changes to this project will be documented in this file.
 - Updated notifier app wiring to install custom OpenAPI middleware at startup.
 - Tightened alerting request and router validation behavior to improve schema-conformance under contract testing.
 - Refined silences operations handling to better match documented response semantics.
+- Resolved validation gaps identified by Schemathesis and fuzz-style tests; the provided verification scripts now run fully green (100%).
 
 ## [v0.0.2] - 2026-03-30
 
