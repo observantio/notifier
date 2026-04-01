@@ -10,7 +10,7 @@ You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2
 
 from __future__ import annotations
 
-from typing import Any, Callable, cast
+from typing import Any
 
 from fastapi import FastAPI
 from fastapi.openapi.utils import get_openapi
@@ -39,7 +39,7 @@ def _apply_inferred_responses(path: str, method: str, operation: dict[str, Any])
 def install_custom_openapi(app: FastAPI) -> None:
     def custom_openapi() -> dict[str, Any]:
         if app.openapi_schema:
-            return cast(dict[str, Any], app.openapi_schema)
+            return app.openapi_schema
 
         schema = get_openapi(
             title=app.title,
@@ -61,4 +61,4 @@ def install_custom_openapi(app: FastAPI) -> None:
         app.openapi_schema = schema
         return schema
 
-    app.openapi = cast(Callable[[], dict[str, Any]], custom_openapi)  # type: ignore[method-assign]
+    app.openapi = custom_openapi  # type: ignore[method-assign]
