@@ -9,7 +9,7 @@ You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2
 """
 
 from __future__ import annotations
-from typing import List, Optional
+from typing import Annotated, List, Optional
 from pydantic import BaseModel, ConfigDict, Field
 
 from custom_types.json import JSONDict
@@ -71,7 +71,13 @@ class IncidentJiraCreateRequest(BaseModel):
 
 
 class GroupSharePruneRequest(BaseModel):
-    tenant_id: str = Field(..., alias="tenantId")
-    group_id: str = Field(..., alias="groupId")
-    removed_user_ids: List[str] = Field(default_factory=list, alias="removedUserIds")
-    removed_usernames: List[str] = Field(default_factory=list, alias="removedUsernames")
+    tenant_id: Annotated[str, Field(min_length=1, pattern=r"^[^\x00]+$", alias="tenantId")]
+    group_id: Annotated[str, Field(min_length=1, pattern=r"^[^\x00]+$", alias="groupId")]
+    removed_user_ids: List[Annotated[str, Field(min_length=1, pattern=r"^[^\x00]+$")]] = Field(
+        default_factory=list,
+        alias="removedUserIds",
+    )
+    removed_usernames: List[Annotated[str, Field(min_length=1, pattern=r"^[^\x00]+$")]] = Field(
+        default_factory=list,
+        alias="removedUsernames",
+    )

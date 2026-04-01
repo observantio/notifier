@@ -31,7 +31,10 @@ router = APIRouter()
 
 
 @router.get("/silences", response_model=List[Silence])
-@handle_route_errors(bad_request_detail=INVALID_FILTER_LABELS_JSON)
+@handle_route_errors(
+    bad_request_exceptions=(ValueError, UnicodeError, TypeError),
+    bad_request_detail=INVALID_FILTER_LABELS_JSON,
+)
 async def get_silences(
     filter_labels: Optional[str] = Query(None),
     include_expired: bool = Query(False),
@@ -62,6 +65,7 @@ async def get_silences(
 
 
 @router.get("/silences/{silence_id}", response_model=Silence)
+@handle_route_errors(bad_request_exceptions=(ValueError, UnicodeError, TypeError))
 async def get_silence(
     silence_id: str,
     show_hidden: bool = Query(False),
@@ -87,7 +91,7 @@ async def get_silence(
 
 
 @router.post("/silences", response_model=Dict[str, str])
-@handle_route_errors()
+@handle_route_errors(bad_request_exceptions=(ValueError, UnicodeError, TypeError))
 async def create_silence(
     silence: SilenceCreateRequest = Body(...),
     current_user: TokenData = Depends(
@@ -101,7 +105,7 @@ async def create_silence(
 
 
 @router.put("/silences/{silence_id}", response_model=Dict[str, str])
-@handle_route_errors()
+@handle_route_errors(bad_request_exceptions=(ValueError, UnicodeError, TypeError))
 async def update_silence(
     silence_id: str,
     silence: SilenceCreateRequest = Body(...),
@@ -124,6 +128,7 @@ async def update_silence(
 
 
 @router.delete("/silences/{silence_id}")
+@handle_route_errors(bad_request_exceptions=(ValueError, UnicodeError, TypeError))
 async def delete_silence(
     silence_id: str,
     current_user: TokenData = Depends(require_permission_with_scope(Permission.DELETE_SILENCES, "alertmanager")),
@@ -142,7 +147,7 @@ async def delete_silence(
 
 
 @router.post("/silences/{silence_id}/hide")
-@handle_route_errors()
+@handle_route_errors(bad_request_exceptions=(ValueError, UnicodeError, TypeError))
 async def hide_silence(
     silence_id: str,
     payload: HideTogglePayload = Body(...),

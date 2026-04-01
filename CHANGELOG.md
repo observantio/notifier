@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- Added dynamic OpenAPI response inference middleware for internal alertmanager endpoints to keep generated contracts aligned with authenticated runtime behavior.
+- Added focused middleware coverage tests for OpenAPI generation paths.
+
+### Changed
+
+- Updated notifier app wiring to install custom OpenAPI middleware at startup.
+- Tightened alerting request and router validation behavior to improve schema-conformance under contract testing.
+- Refined silences operations handling to better match documented response semantics.
+
 ## [v0.0.2] - 2026-03-30
 
 ### Added

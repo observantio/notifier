@@ -281,6 +281,7 @@ async def hide_alert_rule(
 
 
 @router.post("/rules", response_model=AlertRule, status_code=status.HTTP_201_CREATED)
+@handle_route_errors(bad_request_exceptions=(ValueError, UnicodeError, TypeError))
 async def create_alert_rule(
     rule: AlertRuleCreate = Body(...),
     current_user: TokenData = Depends(
@@ -301,6 +302,7 @@ async def create_alert_rule(
 
 
 @router.put("/rules/{rule_id}", response_model=AlertRule)
+@handle_route_errors(bad_request_exceptions=(ValueError, UnicodeError, TypeError))
 async def update_alert_rule(
     rule_id: str,
     rule: AlertRuleCreate = Body(...),
@@ -332,6 +334,7 @@ async def update_alert_rule(
 
 
 @router.post("/rules/{rule_id}/test")
+@handle_route_errors(bad_request_exceptions=(ValueError, UnicodeError, TypeError))
 async def test_alert_rule(
     rule_id: str,
     current_user: TokenData = Depends(
@@ -416,6 +419,7 @@ async def test_alert_rule(
 
 
 @router.delete("/rules/{rule_id}")
+@handle_route_errors(bad_request_exceptions=(ValueError, UnicodeError, TypeError))
 async def delete_alert_rule(
     rule_id: str,
     current_user: TokenData = Depends(require_permission_with_scope(Permission.DELETE_RULES, "alertmanager")),

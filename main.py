@@ -22,6 +22,7 @@ import database as database_module
 from middleware.headers import security_headers_middleware
 from middleware.error_handlers import general_exception_handler, validation_exception_handler
 from middleware.concurrency_limit import ConcurrencyLimitMiddleware
+from middleware.openapi import install_custom_openapi
 from middleware.request_size_limit import RequestSizeLimitMiddleware
 from routers.observability.alerts import router as alertmanager_alerts_router, webhook_router as alertmanager_webhook_router
 from routers.observability.incidents import router as alertmanager_incidents_router
@@ -99,6 +100,8 @@ app.include_router(alertmanager_incidents_router, prefix="/internal/v1")
 app.include_router(alertmanager_jira_router, prefix="/internal/v1")
 
 app.include_router(alertmanager_webhook_router, prefix="/internal/v1/alertmanager")
+
+install_custom_openapi(app)
 
 
 @app.get("/health")

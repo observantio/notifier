@@ -162,7 +162,7 @@ async def get_silence(service: AlertManagerService, silence_id: str) -> Optional
         response = await service._client.get(f"{service.alertmanager_url}/api/v2/silence/{silence_id}")
         response.raise_for_status()
         return Silence(**response.json())
-    except httpx.HTTPError as exc:
+    except (httpx.HTTPError, UnicodeError, ValueError, TypeError) as exc:
         logger.error("Error fetching silence %s: %s", silence_id, exc)
         return None
 
@@ -177,7 +177,7 @@ async def create_silence(service: AlertManagerService, silence: SilenceCreate) -
         payload = response.json()
         silence_id = payload.get("silenceID") if isinstance(payload, dict) else None
         return str(silence_id) if isinstance(silence_id, str) else None
-    except httpx.HTTPError as exc:
+    except (httpx.HTTPError, UnicodeError, ValueError, TypeError) as exc:
         logger.error("Error creating silence: %s", exc)
         return None
 
@@ -198,7 +198,7 @@ async def delete_silence(service: AlertManagerService, silence_id: str) -> bool:
 
         logger.error("Silence %s still present after delete call", silence_id)
         return False
-    except httpx.HTTPError as exc:
+    except (httpx.HTTPError, UnicodeError, ValueError, TypeError) as exc:
         logger.error("Error deleting silence %s: %s", silence_id, exc)
         return False
 
