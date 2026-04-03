@@ -65,3 +65,25 @@ def test_install_custom_openapi_uses_cache_and_normalizes_paths(monkeypatch) -> 
     openapi_middleware.install_custom_openapi(app3)
     monkeypatch.setattr(openapi_middleware, "get_openapi", lambda **kwargs: {"paths": []})
     assert app3.openapi()["paths"] == []
+
+
+def test_helper_functions_cover_fallback_and_explicit_server_paths() -> None:
+    assert openapi_middleware.status_description(999) == "HTTP 999"
+    assert openapi_middleware.tag_description("custom-tag") == "Operations for custom tag."
+
+    servers = openapi_middleware.openapi_servers(host="0.0.0.0", port=4323, tls_enabled=False)
+    assert servers[0]["url"] == "http://127.0.0.1:4323"
+
+    explicit_servers = openapi_middleware.openapi_servers(
+        host="localhost",
+        port=4323,
+        explicit_url="https://example.internal/notifier/",
+    )
+    assert explicit_servers == [{"url": "https://example.internal/notifier", "description": "Configured runtime endpoint"}]
+
+    merged = openapi_middleware.merge_responses(
+        {401: {"description": "Unauthorized"}},
+        {"404": {"description": "Not Found"}},
+    )
+    assert merged[401]["description"] == "Unauthorized"
+    assert merged["404"]["description"] == "Not Found"

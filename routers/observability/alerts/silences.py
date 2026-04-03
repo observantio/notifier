@@ -10,12 +10,13 @@ You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2
 
 from typing import Dict, List, Optional
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
 from fastapi.concurrency import run_in_threadpool
 
 from custom_types.json import JSONDict
 from middleware.dependencies import require_any_permission_with_scope, require_permission_with_scope
 from middleware.error_handlers import handle_route_errors
+from middleware.openapi import BAD_REQUEST_ERRORS, BAD_REQUEST_NOT_FOUND_ERRORS
 from models.access.auth_models import Permission, TokenData
 from models.alerting.silences import Silence, SilenceCreateRequest
 
@@ -24,23 +25,35 @@ from .shared import (
     HideTogglePayload,
     alertmanager_service,
     build_silence_payload,
+    parse_show_hidden,
+    reject_unknown_query_params,
     storage_service,
 )
 
-router = APIRouter()
+router = APIRouter(tags=["alertmanager-silences"])
 
 
-@router.get("/silences", response_model=List[Silence])
+@router.get(
+    "/silences",
+    response_model=List[Silence],
+    summary="List Silences",
+    description="Lists silences visible to the current user with optional label and expiration filtering.",
+    response_description="The silences visible to the current caller.",
+    responses=BAD_REQUEST_ERRORS,
+)
 @handle_route_errors(
     bad_request_exceptions=(ValueError, UnicodeError, TypeError),
     bad_request_detail=INVALID_FILTER_LABELS_JSON,
 )
-async def get_silences(
+async def list_silences(
+    request: Request,
     filter_labels: Optional[str] = Query(None),
     include_expired: bool = Query(False),
-    show_hidden: bool = Query(False),
+    show_hidden: str = Query("false", pattern="^(true|false)$"),
     current_user: TokenData = Depends(require_permission_with_scope(Permission.READ_SILENCES, "alertmanager")),
 ) -> List[Silence]:
+    if request is not None:
+        reject_unknown_query_params(request, {"filter_labels", "include_expired", "show_hidden"})
     silences = await alertmanager_service.get_silences(filter_labels=alertmanager_service.parse_filter_labels(filter_labels))
     hidden_ids = set(
         await run_in_threadpool(
@@ -58,19 +71,33 @@ async def get_silences(
                 continue
         if alertmanager_service.silence_accessible(silence, current_user):
             silence.is_hidden = bool(silence.id and silence.id in hidden_ids)
-            if silence.is_hidden and not show_hidden:
+            if silence.is_hidden and not parse_show_hidden(show_hidden):
                 continue
             result.append(silence)
     return result
 
 
-@router.get("/silences/{silence_id}", response_model=Silence)
-@handle_route_errors(bad_request_exceptions=(ValueError, UnicodeError, TypeError))
+@router.get(
+    "/silences/{silence_id}",
+    response_model=Silence,
+    summary="Get Silence",
+    description="Returns a single silence when it exists and is visible to the current user.",
+    response_description="The requested silence.",
+    responses=BAD_REQUEST_NOT_FOUND_ERRORS,
+)
+@handle_route_errors(
+    bad_request_exceptions=(ValueError, UnicodeError, TypeError),
+    internal_detail="Invalid silence identifier",
+    internal_status_code=400,
+)
 async def get_silence(
     silence_id: str,
-    show_hidden: bool = Query(False),
+    request: Request,
+    show_hidden: str = Query("false", pattern="^(true|false)$"),
     current_user: TokenData = Depends(require_permission_with_scope(Permission.READ_SILENCES, "alertmanager")),
 ) -> Silence:
+    if request is not None:
+        reject_unknown_query_params(request, {"show_hidden"})
     silence = await alertmanager_service.get_silence(silence_id)
     if not silence:
         raise HTTPException(status_code=404, detail=f"Silence {silence_id} not found")
@@ -85,12 +112,19 @@ async def get_silence(
         )
     )
     silence.is_hidden = bool(silence.id and silence.id in hidden_ids)
-    if silence.is_hidden and not show_hidden:
+    if silence.is_hidden and not parse_show_hidden(show_hidden):
         raise HTTPException(status_code=404, detail=f"Silence {silence_id} not found")
     return silence
 
 
-@router.post("/silences", response_model=Dict[str, str])
+@router.post(
+    "/silences",
+    response_model=Dict[str, str],
+    summary="Create Silence",
+    description="Creates a new silence in alertmanager for the current user scope.",
+    response_description="The created silence identifier and operation result.",
+    responses=BAD_REQUEST_ERRORS,
+)
 @handle_route_errors(bad_request_exceptions=(ValueError, UnicodeError, TypeError))
 async def create_silence(
     silence: SilenceCreateRequest = Body(...),
@@ -104,7 +138,14 @@ async def create_silence(
     return {"silenceID": silence_id, "status": "success"}
 
 
-@router.put("/silences/{silence_id}", response_model=Dict[str, str])
+@router.put(
+    "/silences/{silence_id}",
+    response_model=Dict[str, str],
+    summary="Update Silence",
+    description="Updates an existing silence when the caller owns it and still has access.",
+    response_description="The updated silence identifier and operation result.",
+    responses=BAD_REQUEST_NOT_FOUND_ERRORS,
+)
 @handle_route_errors(bad_request_exceptions=(ValueError, UnicodeError, TypeError))
 async def update_silence(
     silence_id: str,
@@ -127,8 +168,18 @@ async def update_silence(
     return {"silenceID": new_id, "status": "success", "message": "Silence updated"}
 
 
-@router.delete("/silences/{silence_id}")
-@handle_route_errors(bad_request_exceptions=(ValueError, UnicodeError, TypeError))
+@router.delete(
+    "/silences/{silence_id}",
+    summary="Delete Silence",
+    description="Deletes an existing silence when the caller owns it and still has access.",
+    response_description="The deletion result for the specified silence.",
+    responses=BAD_REQUEST_NOT_FOUND_ERRORS,
+)
+@handle_route_errors(
+    bad_request_exceptions=(ValueError, UnicodeError, TypeError),
+    internal_detail="Invalid silence identifier",
+    internal_status_code=400,
+)
 async def delete_silence(
     silence_id: str,
     current_user: TokenData = Depends(require_permission_with_scope(Permission.DELETE_SILENCES, "alertmanager")),
@@ -146,7 +197,13 @@ async def delete_silence(
     return {"status": "success", "message": f"Silence {silence_id} deleted", "purged": True}
 
 
-@router.post("/silences/{silence_id}/hide")
+@router.post(
+    "/silences/{silence_id}/hide",
+    summary="Hide Silence",
+    description="Toggles whether a shared silence is hidden for the current user.",
+    response_description="The hide state applied to the silence.",
+    responses=BAD_REQUEST_NOT_FOUND_ERRORS,
+)
 @handle_route_errors(bad_request_exceptions=(ValueError, UnicodeError, TypeError))
 async def hide_silence(
     silence_id: str,

@@ -25,19 +25,19 @@ DESC_ALERTMANAGER_CONFIG_HASH = "Configuration hash"
 DESC_ALERTMANAGER_CLUSTER_STATUS = "Cluster status information"
 
 class Receiver(BaseModel):
-    name: str = Field(..., description=DESC_RECEIVER_NAME)
-    email_configs: List[JSONDict] = Field(default_factory=list, alias="emailConfigs", description=DESC_RECEIVER_EMAIL_CONFIGS)
-    slack_configs: List[JSONDict] = Field(default_factory=list, alias="slackConfigs", description=DESC_RECEIVER_SLACK_CONFIGS)
-    webhook_configs: List[JSONDict] = Field(default_factory=list, alias="webhookConfigs", description=DESC_RECEIVER_WEBHOOK_CONFIGS)
-    pagerduty_configs: List[JSONDict] = Field(default_factory=list, alias="pagerdutyConfigs", description=DESC_RECEIVER_PAGERDUTY_CONFIGS)
-    msteams_configs: List[JSONDict] = Field(default_factory=list, alias="msteamsConfigs", description=DESC_RECEIVER_TEAMS_CONFIGS)
+    name: str = Field(..., description=DESC_RECEIVER_NAME, examples=["primary-oncall"])
+    email_configs: List[JSONDict] = Field(default_factory=list, alias="emailConfigs", description=DESC_RECEIVER_EMAIL_CONFIGS, examples=[[{"to": "oncall@example.com"}]])
+    slack_configs: List[JSONDict] = Field(default_factory=list, alias="slackConfigs", description=DESC_RECEIVER_SLACK_CONFIGS, examples=[[{"channel": "#alerts"}]])
+    webhook_configs: List[JSONDict] = Field(default_factory=list, alias="webhookConfigs", description=DESC_RECEIVER_WEBHOOK_CONFIGS, examples=[[{"url": "https://hooks.example.internal/alerts"}]])
+    pagerduty_configs: List[JSONDict] = Field(default_factory=list, alias="pagerdutyConfigs", description=DESC_RECEIVER_PAGERDUTY_CONFIGS, examples=[[{"routing_key": "pd-key"}]])
+    msteams_configs: List[JSONDict] = Field(default_factory=list, alias="msteamsConfigs", description=DESC_RECEIVER_TEAMS_CONFIGS, examples=[[{"webhook_url": "https://teams.example.internal/webhook"}]])
     model_config = ConfigDict(use_enum_values=True, populate_by_name=True)
 
 
 class AlertManagerStatus(BaseModel):
-    version: str = Field(..., description=DESC_ALERTMANAGER_VERSION)
-    uptime: str = Field(..., description=DESC_ALERTMANAGER_UPTIME)
-    config_hash: str = Field(..., alias="configHash", description=DESC_ALERTMANAGER_CONFIG_HASH)
-    config: JSONDict = Field(default_factory=dict, description="Alertmanager configuration details")
-    cluster: JSONDict = Field(..., description=DESC_ALERTMANAGER_CLUSTER_STATUS)
+    version: str = Field(..., description=DESC_ALERTMANAGER_VERSION, examples=["0.28.1"])
+    uptime: str = Field(..., description=DESC_ALERTMANAGER_UPTIME, examples=["72h15m"])
+    config_hash: str = Field(..., alias="configHash", description=DESC_ALERTMANAGER_CONFIG_HASH, examples=["sha256:abc123"])
+    config: JSONDict = Field(default_factory=dict, description="Alertmanager configuration details", examples=[{"route": {"receiver": "primary-oncall"}}])
+    cluster: JSONDict = Field(..., description=DESC_ALERTMANAGER_CLUSTER_STATUS, examples=[{"status": "ready"}])
     model_config = ConfigDict(use_enum_values=True, populate_by_name=True)

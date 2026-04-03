@@ -1,11 +1,12 @@
 import uuid
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, status
 from fastapi.concurrency import run_in_threadpool
 
 from custom_types.json import JSONDict
 from middleware.dependencies import require_permission_with_scope
 from middleware.error_handlers import handle_route_errors
+from middleware.openapi import BAD_REQUEST_ERRORS, BAD_REQUEST_NOT_FOUND_ERRORS, NOT_FOUND_ERRORS
 from models.access.auth_models import Permission, TokenData
 from models.alerting.requests import JiraIntegrationCreateRequest, JiraIntegrationUpdateRequest
 from services.alerting.integration_security_service import (
@@ -21,16 +22,27 @@ from services.alerting.integration_security_service import (
     validate_shared_group_ids_for_user,
 )
 
+from ..alerts.shared import reject_unknown_query_params
+from ..alerts.shared import parse_show_hidden
 from .shared import HideTogglePayload, storage_service
 
-router = APIRouter()
+router = APIRouter(tags=["alertmanager-jira"])
 
 
-@router.get("/integrations/jira")
+@router.get(
+    "/integrations/jira",
+    summary="List Jira Integrations",
+    description="Lists Jira integrations visible to the current user, including hidden state when requested.",
+    response_description="The Jira integrations visible to the current caller.",
+    responses=BAD_REQUEST_ERRORS,
+)
 async def list_jira_integrations(
-    show_hidden: bool = Query(False),
+    request: Request,
+    show_hidden: str = Query("false", pattern="^(true|false)$"),
     current_user: TokenData = Depends(require_permission_with_scope(Permission.READ_INCIDENTS, "alertmanager")),
 ) -> JSONDict:
+    if request is not None:
+        reject_unknown_query_params(request, {"show_hidden"})
     integrations = load_tenant_jira_integrations(current_user.tenant_id)
     hidden_ids = set(
         await run_in_threadpool(
@@ -45,13 +57,19 @@ async def list_jira_integrations(
             continue
         masked = mask_jira_integration(item, current_user)
         masked["isHidden"] = str(masked.get("id") or "") in hidden_ids
-        if not show_hidden and masked["isHidden"]:
+        if not parse_show_hidden(show_hidden) and masked["isHidden"]:
             continue
         visible_items.append(masked)
     return {"items": visible_items}
 
 
-@router.post("/integrations/jira")
+@router.post(
+    "/integrations/jira",
+    summary="Create Jira Integration",
+    description="Creates a new Jira integration for the current tenant.",
+    response_description="The created Jira integration with sensitive values masked.",
+    responses=BAD_REQUEST_NOT_FOUND_ERRORS,
+)
 @handle_route_errors()
 async def create_jira_integration(
     payload: JiraIntegrationCreateRequest = Body(...),
@@ -93,7 +111,13 @@ async def create_jira_integration(
     return mask_jira_integration(item, current_user)
 
 
-@router.put("/integrations/jira/{integration_id}")
+@router.put(
+    "/integrations/jira/{integration_id}",
+    summary="Update Jira Integration",
+    description="Updates an existing Jira integration owned by the current user.",
+    response_description="The updated Jira integration with sensitive values masked.",
+    responses=BAD_REQUEST_NOT_FOUND_ERRORS,
+)
 @handle_route_errors()
 async def update_jira_integration(
     integration_id: str,
@@ -163,7 +187,13 @@ async def update_jira_integration(
     return mask_jira_integration(current, current_user)
 
 
-@router.delete("/integrations/jira/{integration_id}")
+@router.delete(
+    "/integrations/jira/{integration_id}",
+    summary="Delete Jira Integration",
+    description="Deletes a Jira integration owned by the current user and unlinks it from incidents.",
+    response_description="The deletion result and count of incidents unlinked from the integration.",
+    responses=NOT_FOUND_ERRORS,
+)
 @handle_route_errors()
 async def delete_jira_integration(
     integration_id: str,
@@ -185,7 +215,13 @@ async def delete_jira_integration(
     return {"status": "success", "incidentsUnlinked": unlinked}
 
 
-@router.post("/integrations/jira/{integration_id}/hide")
+@router.post(
+    "/integrations/jira/{integration_id}/hide",
+    summary="Hide Jira Integration",
+    description="Toggles whether a shared Jira integration is hidden for the current user.",
+    response_description="The hide state applied to the Jira integration.",
+    responses=BAD_REQUEST_NOT_FOUND_ERRORS,
+)
 @handle_route_errors()
 async def hide_jira_integration(
     integration_id: str,

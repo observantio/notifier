@@ -6,6 +6,7 @@ from fastapi.concurrency import run_in_threadpool
 from custom_types.json import JSONDict
 from middleware.dependencies import require_permission_with_scope
 from middleware.error_handlers import handle_route_errors
+from middleware.openapi import BAD_REQUEST_NOT_FOUND_ERRORS, CONFLICT_ERRORS
 from models.access.auth_models import Permission, TokenData
 from models.alerting.incidents import AlertIncident, AlertIncidentUpdateRequest
 from models.alerting.requests import IncidentJiraCreateRequest
@@ -26,12 +27,19 @@ from .shared import SUPPORTED_INCIDENT_JIRA_ISSUE_TYPES, storage_service
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter()
+router = APIRouter(tags=["alertmanager-jira"])
 
 
-@router.post("/incidents/{incident_id}/jira", response_model=AlertIncident)
+@router.post(
+    "/incidents/{incident_id}/jira",
+    response_model=AlertIncident,
+    summary="Create Incident Jira Link",
+    description="Creates a Jira issue for an incident and stores the Jira linkage on the incident record.",
+    response_description="The incident updated with Jira linkage metadata.",
+    responses=CONFLICT_ERRORS,
+)
 @handle_route_errors()
-async def create_incident_jira(
+async def create_incident_link(
     incident_id: str,
     payload: IncidentJiraCreateRequest = Body(...),
     current_user: TokenData = Depends(require_permission_with_scope(Permission.UPDATE_INCIDENTS, "alertmanager")),
@@ -128,9 +136,15 @@ async def create_incident_jira(
     return updated
 
 
-@router.post("/incidents/{incident_id}/jira/sync-notes")
+@router.post(
+    "/incidents/{incident_id}/jira/sync-notes",
+    summary="Sync Incident Jira Notes",
+    description="Backfills incident notes to the linked Jira issue while skipping notes already present.",
+    response_description="The note synchronization result for the linked Jira issue.",
+    responses=BAD_REQUEST_NOT_FOUND_ERRORS,
+)
 @handle_route_errors()
-async def sync_incident_jira_notes(
+async def sync_incident_notes(
     incident_id: str,
     current_user: TokenData = Depends(require_permission_with_scope(Permission.UPDATE_INCIDENTS, "alertmanager")),
 ) -> JSONDict:
@@ -183,8 +197,14 @@ async def sync_incident_jira_notes(
     return {"synced": synced, "skipped": skipped, "totalNotes": len(note_bodies)}
 
 
-@router.get("/incidents/{incident_id}/jira/comments")
-async def list_incident_jira_comments(
+@router.get(
+    "/incidents/{incident_id}/jira/comments",
+    summary="List Incident Jira Comments",
+    description="Lists comments from the Jira issue linked to the specified incident when credentials are available.",
+    response_description="The Jira comments associated with the incident's linked issue.",
+    responses=BAD_REQUEST_NOT_FOUND_ERRORS,
+)
+async def list_incident_comments(
     incident_id: str,
     current_user: TokenData = Depends(require_permission_with_scope(Permission.READ_INCIDENTS, "alertmanager")),
 ) -> JSONDict:

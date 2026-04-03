@@ -13,16 +13,24 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException
 
 from middleware.dependencies import require_permission_with_scope
+from middleware.openapi import BAD_REQUEST_ERRORS, COMMON_ERRORS
 from models.access.auth_models import Permission, TokenData
 from models.alerting.receivers import AlertManagerStatus
 
 from .shared import alertmanager_service
 
-router = APIRouter()
+router = APIRouter(tags=["alertmanager"])
 
 
-@router.get("/status", response_model=AlertManagerStatus)
-async def get_status(
+@router.get(
+    "/status",
+    response_model=AlertManagerStatus,
+    summary="Get Alertmanager Status",
+    description="Returns alertmanager runtime status and cluster metadata.",
+    response_description="The current alertmanager status payload.",
+    responses=BAD_REQUEST_ERRORS,
+)
+async def get_alertmanager_status(
     current_user: TokenData = Depends(require_permission_with_scope(Permission.READ_ALERTS, "alertmanager")),
 ) -> AlertManagerStatus:
     _ = current_user
@@ -32,8 +40,15 @@ async def get_status(
     return result
 
 
-@router.get("/receivers", response_model=List[str])
-async def get_receivers(
+@router.get(
+    "/receivers",
+    response_model=List[str],
+    summary="List Receivers",
+    description="Lists alertmanager receiver names available for routing and inspection.",
+    response_description="The configured alertmanager receiver names.",
+    responses=COMMON_ERRORS,
+)
+async def list_receivers(
     current_user: TokenData = Depends(require_permission_with_scope(Permission.READ_ALERTS, "alertmanager")),
 ) -> List[str]:
     _ = current_user

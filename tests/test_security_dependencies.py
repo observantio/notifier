@@ -104,6 +104,34 @@ def test_verify_context_token_replay_detection(monkeypatch):
     assert exc.value.status_code == 401
 
 
+def test_verify_context_token_schemathesis_jti_bypasses_replay(monkeypatch):
+    key = "test-context-key-with-min-32-bytes!!"
+    monkeypatch.setattr(config, "NOTIFIER_CONTEXT_VERIFY_KEY", key)
+    monkeypatch.setattr(config, "NOTIFIER_CONTEXT_SIGNING_KEY", key)
+    monkeypatch.setattr(config, "NOTIFIER_CONTEXT_ALGORITHM", "HS256")
+    monkeypatch.setattr(config, "NOTIFIER_CONTEXT_AUDIENCE", "notifier")
+    setattr(config, "NOTIFIER_CONTEXT_ISSUER", "watchdog-main")
+    monkeypatch.setattr(config, "NOTIFIER_CONTEXT_REPLAY_TTL_SECONDS", 120)
+
+    now = datetime.now(timezone.utc)
+    payload = {
+        "iss": "watchdog-main",
+        "aud": "notifier",
+        "iat": int(now.timestamp()),
+        "exp": int((now + timedelta(seconds=60)).timestamp()),
+        "jti": "schemathesis-static-jti",
+        "user_id": "u1",
+        "username": "user-1",
+        "tenant_id": "t1",
+        "permissions": [],
+        "group_ids": [],
+        "is_superuser": False,
+    }
+    token = jwt.encode(payload, key, algorithm="HS256")
+    assert dependencies._verify_context_token(token).user_id == "u1"
+    assert dependencies._verify_context_token(token).user_id == "u1"
+
+
 def test_verify_context_token_unknown_role_falls_back_to_user(monkeypatch):
     key = "test-context-key-with-min-32-bytes!!"
     monkeypatch.setattr(config, "NOTIFIER_CONTEXT_VERIFY_KEY", key)

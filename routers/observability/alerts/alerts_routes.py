@@ -5,22 +5,30 @@ from fastapi.concurrency import run_in_threadpool
 
 from middleware.dependencies import require_any_permission_with_scope, require_permission_with_scope
 from middleware.error_handlers import handle_route_errors
+from middleware.openapi import BAD_REQUEST_ERRORS
 from models.access.auth_models import Permission, TokenData
 from models.alerting.alerts import Alert, AlertGroup
 from custom_types.json import JSONDict
 
 from .shared import INVALID_FILTER_LABELS_JSON, alertmanager_service, storage_service, sync_incidents
 
-router = APIRouter()
+router = APIRouter(tags=["alertmanager"])
 
 
 def _json_dict(value: object) -> dict[str, object]:
     return value if isinstance(value, dict) else {}
 
 
-@router.get("/alerts", response_model=List[Alert])
+@router.get(
+    "/alerts",
+    response_model=List[Alert],
+    summary="List Alerts",
+    description="Lists alertmanager alerts with optional state and label filtering for the current user scope.",
+    response_description="The alerts visible to the current caller.",
+    responses=BAD_REQUEST_ERRORS,
+)
 @handle_route_errors(bad_request_detail=INVALID_FILTER_LABELS_JSON)
-async def get_alerts(
+async def list_alerts(
     active: Optional[bool] = Query(None),
     silenced: Optional[bool] = Query(None),
     inhibited: Optional[bool] = Query(None),
@@ -57,9 +65,16 @@ async def get_alerts(
     return [Alert.model_validate(_json_dict(item)) for item in filtered]
 
 
-@router.get("/alerts/groups", response_model=List[AlertGroup])
+@router.get(
+    "/alerts/groups",
+    response_model=List[AlertGroup],
+    summary="List Alert Groups",
+    description="Lists grouped alerts from alertmanager with optional label filtering.",
+    response_description="Grouped alerts returned by alertmanager.",
+    responses=BAD_REQUEST_ERRORS,
+)
 @handle_route_errors(bad_request_detail=INVALID_FILTER_LABELS_JSON)
-async def get_alert_groups(
+async def list_alert_groups(
     filter_labels: Optional[str] = Query(None),
     current_user: TokenData = Depends(require_permission_with_scope(Permission.READ_ALERTS, "alertmanager")),
 ) -> List[AlertGroup]:
@@ -67,8 +82,14 @@ async def get_alert_groups(
     return await alertmanager_service.get_alert_groups(filter_labels=alertmanager_service.parse_filter_labels(filter_labels))
 
 
-@router.post("/alerts")
-async def post_alerts(
+@router.post(
+    "/alerts",
+    summary="Create Alerts",
+    description="Submits one or more alerts to alertmanager for processing.",
+    response_description="The submission result including the number of alerts accepted.",
+    responses=BAD_REQUEST_ERRORS,
+)
+async def create_alerts(
     alerts: List[Alert] = Body(...),
     current_user: TokenData = Depends(
         require_any_permission_with_scope([Permission.CREATE_ALERTS, Permission.WRITE_ALERTS], "alertmanager")
@@ -80,7 +101,13 @@ async def post_alerts(
     return {"status": "success", "count": len(alerts)}
 
 
-@router.delete("/alerts")
+@router.delete(
+    "/alerts",
+    summary="Delete Alerts",
+    description="Deletes alerts in alertmanager that match the provided label filter set.",
+    response_description="The deletion result for the matched alerts.",
+    responses=BAD_REQUEST_ERRORS,
+)
 @handle_route_errors(bad_request_detail=INVALID_FILTER_LABELS_JSON)
 async def delete_alerts(
     filter_labels: str = Query(...),

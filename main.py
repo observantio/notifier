@@ -13,16 +13,23 @@ from __future__ import annotations
 import logging
 import secrets
 from collections.abc import Awaitable, Callable
-from fastapi import FastAPI, Request, status
+from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.responses import Response
 from config import config
 import database as database_module
 from middleware.headers import security_headers_middleware
-from middleware.error_handlers import general_exception_handler, validation_exception_handler
+from middleware.error_handlers import general_exception_handler, http_exception_handler, validation_exception_handler
 from middleware.concurrency_limit import ConcurrencyLimitMiddleware
-from middleware.openapi import install_custom_openapi
+from middleware.openapi import (
+    install_custom_openapi,
+    openapi_contact,
+    openapi_license,
+    openapi_servers,
+    openapi_tags,
+)
 from middleware.request_size_limit import RequestSizeLimitMiddleware
 from routers.observability.alerts import router as alertmanager_alerts_router, webhook_router as alertmanager_webhook_router
 from routers.observability.incidents import router as alertmanager_incidents_router
@@ -41,10 +48,22 @@ database_module.ensure_database_exists(config.NOTIFIER_DATABASE_URL)
 database_module.init_database(config.NOTIFIER_DATABASE_URL, config.LOG_LEVEL == "debug")
 database_module.init_db()
 
+APP_TITLE = "Notifier"
+APP_DESCRIPTION = "Internal alerting service for Watchdog"
+
 app = FastAPI(
-    title="Notifier",
-    description="Internal alerting service for Watchdog",
+    title=APP_TITLE,
+    description=APP_DESCRIPTION,
     version="1.0.0",
+    servers=openapi_servers(
+        host=config.HOST,
+        port=config.PORT,
+        tls_enabled=config.NOTIFIER_TLS_ENABLED,
+    ),
+    contact=openapi_contact(service_name=APP_TITLE),
+    license_info=openapi_license(),
+    openapi_tags=openapi_tags(),
+    generate_unique_id_function=lambda route: route.name,
     docs_url="/docs" if config.ENABLE_API_DOCS else None,
     redoc_url="/redoc" if config.ENABLE_API_DOCS else None,
     openapi_url="/openapi.json" if config.ENABLE_API_DOCS else None,
@@ -52,6 +71,8 @@ app = FastAPI(
 
 app.middleware("http")(security_headers_middleware)
 app.add_exception_handler(RequestValidationError, validation_exception_handler)
+app.add_exception_handler(HTTPException, http_exception_handler)
+app.add_exception_handler(StarletteHTTPException, http_exception_handler)
 app.add_exception_handler(Exception, general_exception_handler)
 
 app.add_middleware(RequestSizeLimitMiddleware, max_bytes=config.MAX_REQUEST_BYTES)
@@ -104,19 +125,35 @@ app.include_router(alertmanager_webhook_router, prefix="/internal/v1/alertmanage
 install_custom_openapi(app)
 
 
-@app.get("/health")
+@app.get(
+    "/health",
+    tags=["system"],
+    summary="Service Health",
+    description="Returns a lightweight health status for the notifier service.",
+    response_description="The current health status for the notifier service.",
+)
 async def health() -> dict[str, str]:
     return {"status": "healthy", "service": "notifier"}
 
 
-@app.get("/ready", response_model=None)
-async def ready() -> JSONResponse:
+@app.get(
+    "/ready",
+    response_model=None,
+    tags=["system"],
+    summary="Service Readiness",
+    description="Runs readiness checks required for notifier to serve traffic.",
+    response_description="The readiness result and individual dependency checks.",
+)
+async def readiness() -> JSONResponse:
     checks: dict[str, bool] = {"database": connection_test()}
     ok = all(checks.values())
     payload: dict[str, bool | str | dict[str, bool]] = {"status": "ready" if ok else "not_ready", "checks": checks}
     if not ok:
         return JSONResponse(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, content=payload)
     return JSONResponse(status_code=status.HTTP_200_OK, content=payload)
+
+
+ready = readiness
 
 
 if __name__ == "__main__":

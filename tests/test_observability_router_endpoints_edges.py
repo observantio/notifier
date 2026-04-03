@@ -4,6 +4,7 @@ High-coverage router tests for observability endpoints.
 
 from __future__ import annotations
 
+import asyncio
 from types import SimpleNamespace
 from typing import Any, cast
 
@@ -193,7 +194,7 @@ async def test_access_webhooks_and_status_routes(monkeypatch):
         return 2
 
     monkeypatch.setattr(access_router.alertmanager_service, "prune_removed_member_group_silences", _prune_silences)
-    out = await access_router.prune_removed_member_group_shares(
+    out = await access_router.prune_group_shares(
         GroupSharePruneRequest.model_validate(
             {
                 "tenantId": "tenant-a",
@@ -225,9 +226,9 @@ async def test_access_webhooks_and_status_routes(monkeypatch):
     monkeypatch.setattr(webhooks_router, "scope_header", lambda _request: "scope-a")
 
     payload = AlertWebhookRequest(alerts=[_alert_dict("CPUHigh")])
-    assert (await webhooks_router.alert_webhook(_request(path="/alerts/webhook"), payload))["status"].lower() == "success"
-    assert (await webhooks_router.alert_critical(_request(path="/alerts/critical"), payload))["severity"] == "critical"
-    assert (await webhooks_router.alert_warning(_request(path="/alerts/warning"), payload))["severity"] == "warning"
+    assert (await webhooks_router.receive_alert_webhook(_request(path="/alerts/webhook"), payload))["status"].lower() == "success"
+    assert (await webhooks_router.receive_critical_webhook(_request(path="/alerts/critical"), payload))["severity"] == "critical"
+    assert (await webhooks_router.receive_warning_webhook(_request(path="/alerts/warning"), payload))["severity"] == "warning"
     assert seen_scopes == ["alertmanager_webhook", "alertmanager_critical", "alertmanager_warning"]
     assert len(synced) == 3
 
@@ -239,15 +240,15 @@ async def test_access_webhooks_and_status_routes(monkeypatch):
 
     monkeypatch.setattr(status_router.alertmanager_service, "get_status", _get_status)
     monkeypatch.setattr(status_router.alertmanager_service, "get_receivers", _get_receivers)
-    assert (await status_router.get_status(_user()))["cluster"] == {}
-    assert await status_router.get_receivers(_user()) == ["default"]
+    assert (await status_router.get_alertmanager_status(_user()))["cluster"] == {}
+    assert await status_router.list_receivers(_user()) == ["default"]
 
     async def _get_status_none():
         return None
 
     monkeypatch.setattr(status_router.alertmanager_service, "get_status", _get_status_none)
     with pytest.raises(HTTPException) as exc:
-        await status_router.get_status(_user())
+        await status_router.get_alertmanager_status(_user())
     assert exc.value.status_code == 500
 
 
@@ -259,6 +260,24 @@ async def test_shared_helpers_scope_sync_silence_and_channel_validation(monkeypa
     assert shared_router.scope_header(request) == "org-a"
     request = _request(headers=[])
     assert shared_router.scope_header(request) == ""
+    assert shared_router.parse_show_hidden("true") is True
+    assert shared_router.parse_show_hidden("false") is False
+
+    bad_request = Request(
+        {
+            "type": "http",
+            "http_version": "1.1",
+            "method": "GET",
+            "path": "/x",
+            "headers": [],
+            "client": ("203.0.113.10", 12345),
+            "scheme": "http",
+            "query_string": b"bad=1",
+        }
+    )
+    with pytest.raises(HTTPException) as exc:
+        shared_router.reject_unknown_query_params(bad_request, {"allowed"})
+    assert exc.value.status_code == 400
 
     monkeypatch.setattr(shared_router, "run_in_threadpool", _run_in_threadpool)
     captured = {}
@@ -346,11 +365,11 @@ async def test_alert_routes_and_channel_type_integrations(monkeypatch):
     monkeypatch.setattr(alerts_router.storage_service, "filter_alerts_for_user", lambda *_args: [_alert_dict("A"), _alert_dict("HIDDEN")])
     monkeypatch.setattr(alerts_router.storage_service, "get_hidden_rule_names", lambda *_args: ["HIDDEN"])
 
-    items = await alerts_router.get_alerts(filter_labels='{"alertname":"A"}', show_hidden=False, current_user=_user())
+    items = await alerts_router.list_alerts(filter_labels='{"alertname":"A"}', show_hidden=False, current_user=_user())
     assert len(items) == 1
     assert items[0].labels["alertname"] == "A"
 
-    items = await alerts_router.get_alerts(filter_labels='{"alertname":"A"}', show_hidden=True, current_user=_user())
+    items = await alerts_router.list_alerts(filter_labels='{"alertname":"A"}', show_hidden=True, current_user=_user())
     assert len(items) == 2
 
     async def _groups(**_kwargs):
@@ -365,14 +384,14 @@ async def test_alert_routes_and_channel_type_integrations(monkeypatch):
         ]
 
     monkeypatch.setattr(alerts_router.alertmanager_service, "get_alert_groups", _groups)
-    groups = await alerts_router.get_alert_groups(current_user=_user())
+    groups = await alerts_router.list_alert_groups(current_user=_user())
     assert groups and groups[0].receiver == "default"
 
     async def _post_alerts(_alerts):
         return True
 
     monkeypatch.setattr(alerts_router.alertmanager_service, "post_alerts", _post_alerts)
-    posted = await alerts_router.post_alerts([Alert.model_validate(_alert_dict("A"))], current_user=_user())
+    posted = await alerts_router.create_alerts([Alert.model_validate(_alert_dict("A"))], current_user=_user())
     assert posted["count"] == 1
 
     async def _delete_ok(**_kwargs):
@@ -397,7 +416,7 @@ async def test_alert_routes_and_channel_type_integrations(monkeypatch):
     assert deleted["status"] == "success"
 
     monkeypatch.setattr(alert_integrations_router, "allowed_channel_types", lambda: ["slack", "email"])
-    types = await alert_integrations_router.get_integration_channel_types(_user())
+    types = await alert_integrations_router.list_channel_types(_user())
     assert types["allowedTypes"] == ["slack", "email"]
 
 
@@ -408,43 +427,43 @@ async def test_channel_routes_cover_error_and_success_paths(monkeypatch):
 
     monkeypatch.setattr(channels_router.storage_service, "get_notification_channels", lambda *_args: [_channel("c1"), _channel("c2", owner="u2", visibility="group")])
     monkeypatch.setattr(channels_router.storage_service, "get_hidden_channel_ids", lambda *_args: ["c2"])
-    visible = await channels_router.get_notification_channels(show_hidden=False, current_user=_user())
+    visible = await channels_router.list_channels(request=_request(), show_hidden=False, current_user=_user())
     assert [item.id for item in visible] == ["c1"]
-    all_items = await channels_router.get_notification_channels(show_hidden=True, current_user=_user())
+    all_items = await channels_router.list_channels(request=_request(), show_hidden=True, current_user=_user())
     assert len(all_items) == 2
 
     monkeypatch.setattr(channels_router.storage_service, "get_notification_channel", lambda *_args: None)
     with pytest.raises(HTTPException) as exc:
-        await channels_router.get_notification_channel("missing", _user())
+        await channels_router.get_channel("missing", _user())
     assert exc.value.status_code == 404
 
     monkeypatch.setattr(channels_router.storage_service, "get_notification_channel", lambda *_args: _channel("c2", owner="u2", visibility="group"))
-    looked_up = await channels_router.get_notification_channel("c2", _user())
+    looked_up = await channels_router.get_channel("c2", _user())
     assert looked_up.is_hidden is True
 
     monkeypatch.setattr(channels_router.storage_service, "toggle_channel_hidden", lambda *_args: False)
     with pytest.raises(HTTPException) as exc:
-        await channels_router.hide_notification_channel("c2", HideTogglePayload(hidden=True), _user())
+        await channels_router.hide_channel("c2", HideTogglePayload(hidden=True), _user())
     assert exc.value.status_code == 500
 
     monkeypatch.setattr(channels_router.storage_service, "get_notification_channel", lambda *_args: _channel("c1", owner="u1", visibility="group"))
     with pytest.raises(HTTPException) as exc:
-        await channels_router.hide_notification_channel("c1", HideTogglePayload(hidden=True), _user())
+        await channels_router.hide_channel("c1", HideTogglePayload(hidden=True), _user())
     assert exc.value.status_code == 403
 
     monkeypatch.setattr(channels_router.storage_service, "get_notification_channel", lambda *_args: _channel("c3", owner="u2", visibility="private"))
     with pytest.raises(HTTPException) as exc:
-        await channels_router.hide_notification_channel("c3", HideTogglePayload(hidden=True), _user())
+        await channels_router.hide_channel("c3", HideTogglePayload(hidden=True), _user())
     assert exc.value.status_code == 403
 
     monkeypatch.setattr(channels_router.storage_service, "get_notification_channel", lambda *_args: _channel("c4", owner="u2", visibility="group"))
     monkeypatch.setattr(channels_router.storage_service, "toggle_channel_hidden", lambda *_args: True)
-    hidden = await channels_router.hide_notification_channel("c4", HideTogglePayload(hidden=True), _user())
+    hidden = await channels_router.hide_channel("c4", HideTogglePayload(hidden=True), _user())
     assert hidden["hidden"] is True
 
     monkeypatch.setattr(channels_router, "validate_channel", lambda *_args, **_kwargs: "slack")
     monkeypatch.setattr(channels_router.storage_service, "create_notification_channel", lambda *_args: _channel("new"))
-    created = await channels_router.create_notification_channel(
+    created = await channels_router.create_channel(
         NotificationChannelCreate.model_validate(
             {
                 "name": "Slack",
@@ -459,7 +478,7 @@ async def test_channel_routes_cover_error_and_success_paths(monkeypatch):
 
     monkeypatch.setattr(channels_router.storage_service, "update_notification_channel", lambda *_args: None)
     with pytest.raises(HTTPException) as exc:
-        await channels_router.update_notification_channel(
+        await channels_router.update_channel(
             "missing",
             NotificationChannelCreate.model_validate(
                 {
@@ -474,7 +493,7 @@ async def test_channel_routes_cover_error_and_success_paths(monkeypatch):
     assert exc.value.status_code == 404
 
     monkeypatch.setattr(channels_router.storage_service, "update_notification_channel", lambda *_args: _channel("updated"))
-    updated = await channels_router.update_notification_channel(
+    updated = await channels_router.update_channel(
         "c1",
         NotificationChannelCreate.model_validate(
             {
@@ -490,22 +509,22 @@ async def test_channel_routes_cover_error_and_success_paths(monkeypatch):
 
     monkeypatch.setattr(channels_router.storage_service, "delete_notification_channel", lambda *_args: False)
     with pytest.raises(HTTPException) as exc:
-        await channels_router.delete_notification_channel("c1", _user())
+        await channels_router.delete_channel("c1", _user())
     assert exc.value.status_code == 404
 
     monkeypatch.setattr(channels_router.storage_service, "delete_notification_channel", lambda *_args: True)
-    deleted = await channels_router.delete_notification_channel("c1", _user())
+    deleted = await channels_router.delete_channel("c1", _user())
     assert deleted["status"] == "success"
 
     monkeypatch.setattr(channels_router.storage_service, "is_notification_channel_owner", lambda *_args: False)
     with pytest.raises(HTTPException) as exc:
-        await channels_router.test_notification_channel("c1", _user())
+        await channels_router.test_channel("c1", _user())
     assert exc.value.status_code == 403
 
     monkeypatch.setattr(channels_router.storage_service, "is_notification_channel_owner", lambda *_args: True)
     monkeypatch.setattr(channels_router.storage_service, "get_notification_channel", lambda *_args: _channel("c1", enabled=False))
     with pytest.raises(HTTPException) as exc:
-        await channels_router.test_notification_channel("c1", _user())
+        await channels_router.test_channel("c1", _user())
     assert exc.value.status_code == 400
 
     monkeypatch.setattr(channels_router.storage_service, "get_notification_channel", lambda *_args: _channel("c2", enabled=True, channel_type="slack"))
@@ -514,7 +533,7 @@ async def test_channel_routes_cover_error_and_success_paths(monkeypatch):
         return True
 
     monkeypatch.setattr(channels_router.notification_service, "send_notification", _send_ok)
-    result = await channels_router.test_notification_channel("c2", _user())
+    result = await channels_router.test_channel("c2", _user())
     assert result["status"] == "success"
 
     async def _send_fail(_channel_obj, _alert, _kind):
@@ -523,12 +542,12 @@ async def test_channel_routes_cover_error_and_success_paths(monkeypatch):
     monkeypatch.setattr(channels_router.notification_service, "send_notification", _send_fail)
     monkeypatch.setattr(channels_router.storage_service, "get_notification_channel", lambda *_args: _channel("c3", enabled=True, channel_type="webhook"))
     with pytest.raises(HTTPException) as exc:
-        await channels_router.test_notification_channel("c3", _user())
+        await channels_router.test_channel("c3", _user())
     assert exc.value.status_code == 400
 
     monkeypatch.setattr(channels_router.storage_service, "get_notification_channel", lambda *_args: _channel("c4", enabled=True, channel_type="email"))
     with pytest.raises(HTTPException) as exc:
-        await channels_router.test_notification_channel("c4", _user())
+        await channels_router.test_channel("c4", _user())
     assert exc.value.status_code == 400
 
 
@@ -545,10 +564,10 @@ async def test_silence_routes_cover_read_write_hide(monkeypatch):
     monkeypatch.setattr(silences_router.alertmanager_service, "silence_accessible", lambda silence, _user: silence.id == "s1")
     monkeypatch.setattr(silences_router.storage_service, "get_hidden_silence_ids", lambda *_args: ["s1"])
 
-    visible = await silences_router.get_silences(include_expired=False, show_hidden=False, current_user=_user())
+    visible = await silences_router.list_silences(request=_request(), include_expired=False, show_hidden=False, current_user=_user())
     assert visible == []
 
-    visible = await silences_router.get_silences(show_hidden=True, include_expired=True, current_user=_user())
+    visible = await silences_router.list_silences(request=_request(), show_hidden=True, include_expired=True, current_user=_user())
     assert [item.id for item in visible] == ["s1"]
 
     async def _get_single(_sid):
@@ -557,10 +576,10 @@ async def test_silence_routes_cover_read_write_hide(monkeypatch):
     monkeypatch.setattr(silences_router.alertmanager_service, "get_silence", _get_single)
     monkeypatch.setattr(silences_router.storage_service, "get_hidden_silence_ids", lambda *_args: ["s1"])
     with pytest.raises(HTTPException) as exc:
-        await silences_router.get_silence("s1", show_hidden=False, current_user=_user())
+        await silences_router.get_silence("s1", request=_request(), show_hidden=False, current_user=_user())
     assert exc.value.status_code == 404
 
-    shown = await silences_router.get_silence("s1", show_hidden=True, current_user=_user())
+    shown = await silences_router.get_silence("s1", request=_request(), show_hidden=True, current_user=_user())
     assert shown.id == "s1"
 
     monkeypatch.setattr(silences_router, "build_silence_payload", lambda *_args: "payload")
@@ -702,7 +721,7 @@ async def test_rules_routes_cover_main_paths(monkeypatch):
 
     monkeypatch.setattr(rules_router.alertmanager_service, "sync_mimir_rules_for_org", _sync_org)
 
-    out = await rules_router.import_alert_rules(
+    out = await rules_router.import_rules(
         RuleImportRequest.model_validate({"yamlContent": "groups: []", "dryRun": False}),
         current_user=_user(),
     )
@@ -710,7 +729,7 @@ async def test_rules_routes_cover_main_paths(monkeypatch):
     assert out["updated"] == 1
     assert synced_orgs == ["org-a"]
 
-    preview = await rules_router.import_alert_rules(
+    preview = await rules_router.import_rules(
         RuleImportRequest.model_validate({"yamlContent": "x", "dryRun": True}),
         current_user=_user(),
     )
@@ -721,7 +740,7 @@ async def test_rules_routes_cover_main_paths(monkeypatch):
 
     monkeypatch.setattr(rules_router, "parse_rules_yaml", _raise_import)
     with pytest.raises(HTTPException) as exc:
-        await rules_router.import_alert_rules(
+        await rules_router.import_rules(
             RuleImportRequest.model_validate({"yamlContent": "x", "dryRun": False}),
             current_user=_user(),
         )
@@ -733,9 +752,9 @@ async def test_rules_routes_cover_main_paths(monkeypatch):
         "get_alert_rules_with_owner",
         lambda *_args: [(_rule_model("r1", "RuleOne", created_by="u1", org_id="org-a"), "u1"), (_rule_model("r2", "RuleTwo", created_by="u2", org_id="org-b"), "u2")],
     )
-    listed = await rules_router.get_alert_rules(show_hidden=False, current_user=_user())
+    listed = await rules_router.list_rules(request=_request(), show_hidden=False, current_user=_user())
     assert len(listed) == 1
-    listed_all = await rules_router.get_alert_rules(show_hidden=True, current_user=_user())
+    listed_all = await rules_router.list_rules(request=_request(), show_hidden=True, current_user=_user())
     assert listed_all[1].org_id is None
 
     async def _list_metric_names(_org):
@@ -758,7 +777,7 @@ async def test_rules_routes_cover_main_paths(monkeypatch):
         await rules_router.list_metric_names(org_id=None, current_user=_user(org_id=""))
 
     monkeypatch.setattr(rules_router.alertmanager_service, "evaluate_promql", _evaluate_promql)
-    eval_out = await rules_router.evaluate_promql(query="up", org_id=None, current_user=_user(org_id="org-a"))
+    eval_out = await rules_router.query_metrics(query="up", org_id=None, current_user=_user(org_id="org-a"))
     assert eval_out["valid"] is True
 
     monkeypatch.setattr(rules_router.alertmanager_service, "list_label_names", _list_label_names)
@@ -771,33 +790,33 @@ async def test_rules_routes_cover_main_paths(monkeypatch):
 
     monkeypatch.setattr(rules_router.storage_service, "get_alert_rule", lambda *_args: None)
     with pytest.raises(HTTPException):
-        await rules_router.get_alert_rule("missing", _user())
+        await rules_router.get_rule("missing", _user())
 
     monkeypatch.setattr(rules_router.storage_service, "get_alert_rule", lambda *_args: _rule_model("r1", "RuleOne", created_by="u2", org_id="org-z"))
     monkeypatch.setattr(rules_router.storage_service, "get_alert_rule_raw", lambda *_args: SimpleNamespace(created_by="u2"))
     monkeypatch.setattr(rules_router.storage_service, "get_hidden_rule_ids", lambda *_args: ["r1"])
-    one = await rules_router.get_alert_rule("r1", _user())
+    one = await rules_router.get_rule("r1", _user())
     assert one.is_hidden is True
     assert one.org_id is None
 
     monkeypatch.setattr(rules_router.storage_service, "toggle_rule_hidden", lambda *_args: True)
-    hidden = await rules_router.hide_alert_rule("r1", HideTogglePayload(hidden=True), _user())
+    hidden = await rules_router.hide_rule("r1", HideTogglePayload(hidden=True), _user())
     assert hidden["hidden"] is True
 
     monkeypatch.setattr(rules_router.storage_service, "get_alert_rule_raw", lambda *_args: SimpleNamespace(created_by="u1"))
     with pytest.raises(HTTPException) as exc:
-        await rules_router.hide_alert_rule("r1", HideTogglePayload(hidden=True), _user())
+        await rules_router.hide_rule("r1", HideTogglePayload(hidden=True), _user())
     assert exc.value.status_code == 403
 
     monkeypatch.setattr(rules_router.alertmanager_service, "resolve_rule_org_id", lambda _org, _user: "org-resolved")
     monkeypatch.setattr(rules_router.storage_service, "create_alert_rule", lambda *_args: _rule_model("r-created", "RuleCreated", org_id=None))
     monkeypatch.setattr(rules_router.storage_service, "get_alert_rules_for_org", lambda *_args: [_rule_model("r-created", "RuleCreated", org_id="org-resolved")])
-    created = await rules_router.create_alert_rule(_rule_create("RuleCreated", org_id=None), _user())
+    created = await rules_router.create_rule(_rule_create("RuleCreated", org_id=None), _user())
     assert created.id == "r-created"
 
     monkeypatch.setattr(rules_router.storage_service, "get_alert_rule", lambda *_args: _rule_model("r1", "RuleOne", org_id="org-old"))
     monkeypatch.setattr(rules_router.storage_service, "update_alert_rule", lambda *_args: _rule_model("r1", "RuleOne", org_id="org-new"))
-    updated = await rules_router.update_alert_rule("r1", _rule_create("RuleOne", org_id="org-new"), _user())
+    updated = await rules_router.update_rule("r1", _rule_create("RuleOne", org_id="org-new"), _user())
     assert updated.id == "r1"
 
     monkeypatch.setattr(rules_router.storage_service, "get_notification_channels_for_rule_name", lambda *_args: [_channel("c1")])
@@ -806,20 +825,20 @@ async def test_rules_routes_cover_main_paths(monkeypatch):
         return True
 
     monkeypatch.setattr(rules_router.notification_service, "send_notification", _send_notification)
-    tested = await rules_router.test_alert_rule("r1", _user())
+    tested = await rules_router.test_rule("r1", _request(), _user())
     assert tested["status"] == "success"
 
     monkeypatch.setattr(rules_router.storage_service, "get_notification_channels_for_rule_name", lambda *_args: [])
     with pytest.raises(HTTPException):
-        await rules_router.test_alert_rule("r1", _user())
+        await rules_router.test_rule("r1", _request(), _user())
 
     monkeypatch.setattr(rules_router.storage_service, "delete_alert_rule", lambda *_args: True)
-    deleted = await rules_router.delete_alert_rule("r1", _user())
+    deleted = await rules_router.delete_rule("r1", _user())
     assert deleted["status"] == "success"
 
     monkeypatch.setattr(rules_router.storage_service, "delete_alert_rule", lambda *_args: False)
     with pytest.raises(HTTPException):
-        await rules_router.delete_alert_rule("r1", _user())
+        await rules_router.delete_rule("r1", _user())
 
 
 @pytest.mark.asyncio
@@ -833,7 +852,7 @@ async def test_jira_config_discovery_integrations_and_links(monkeypatch):
     assert cfg["hasApiToken"] is True
 
     monkeypatch.setattr(jira_config_router, "save_tenant_jira_config", lambda *_args, **_kwargs: {"enabled": False, "baseUrl": "https://jira", "email": "a@b.c", "hasApiToken": False, "hasBearerToken": True})
-    saved = await jira_config_router.put_jira_config(JiraConfigUpdateRequest(enabled=False), _user())
+    saved = await jira_config_router.update_jira_config(JiraConfigUpdateRequest(enabled=False), _user())
     assert saved["hasBearerToken"] is True
 
     # discovery
@@ -847,8 +866,8 @@ async def test_jira_config_discovery_integrations_and_links(monkeypatch):
     monkeypatch.setattr(jira_discovery_router, "jira_issue_types_via_integration", _types)
     assert (await jira_discovery_router.list_jira_projects(integration_id="i1", current_user=_user()))["enabled"] is True
     assert (await jira_discovery_router.list_jira_issue_types("OPS", integration_id="i1", current_user=_user()))["enabled"] is True
-    assert (await jira_discovery_router.list_jira_projects_by_integration("i1", _user()))["enabled"] is True
-    assert (await jira_discovery_router.list_jira_issue_types_by_integration("i1", "OPS", _user()))["enabled"] is True
+    assert (await jira_discovery_router.list_integration_projects("i1", _user()))["enabled"] is True
+    assert (await jira_discovery_router.list_integration_issue_types("i1", "OPS", _user()))["enabled"] is True
 
     monkeypatch.setattr(jira_discovery_router, "jira_is_enabled_for_tenant", lambda _tenant: False)
     assert (await jira_discovery_router.list_jira_projects(integration_id=None, current_user=_user()))["enabled"] is False
@@ -886,8 +905,8 @@ async def test_jira_config_discovery_integrations_and_links(monkeypatch):
     monkeypatch.setattr(jira_integrations_router.storage_service, "get_hidden_jira_integration_ids", lambda *_args: ["i1"])
     monkeypatch.setattr(jira_integrations_router, "jira_integration_has_access", lambda *_args, **_kwargs: True)
     monkeypatch.setattr(jira_integrations_router, "mask_jira_integration", lambda item, _user: {"id": item["id"]})
-    assert (await jira_integrations_router.list_jira_integrations(show_hidden=False, current_user=_user()))["items"] == []
-    assert len((await jira_integrations_router.list_jira_integrations(show_hidden=True, current_user=_user()))["items"]) == 1
+    assert (await jira_integrations_router.list_jira_integrations(request=_request(), show_hidden=False, current_user=_user()))["items"] == []
+    assert len((await jira_integrations_router.list_jira_integrations(request=_request(), show_hidden=True, current_user=_user()))["items"]) == 1
 
     captured_integrations = []
     monkeypatch.setattr(jira_integrations_router, "load_tenant_jira_integrations", lambda _tenant: captured_integrations)
@@ -973,7 +992,7 @@ async def test_jira_config_discovery_integrations_and_links(monkeypatch):
     # incident links
     monkeypatch.setattr(jira_links_router.storage_service, "get_incident_for_user", lambda *_args: None)
     with pytest.raises(HTTPException) as exc:
-        await jira_links_router.create_incident_jira(
+        await jira_links_router.create_incident_link(
             "inc-1",
             IncidentJiraCreateRequest.model_validate({"integrationId": "i1", "projectKey": "OPS"}),
             _user(),
@@ -982,7 +1001,7 @@ async def test_jira_config_discovery_integrations_and_links(monkeypatch):
 
     monkeypatch.setattr(jira_links_router.storage_service, "get_incident_for_user", lambda *_args: _incident("inc-1", jiraTicketKey="OPS-1"))
     with pytest.raises(HTTPException) as exc:
-        await jira_links_router.create_incident_jira(
+        await jira_links_router.create_incident_link(
             "inc-1",
             IncidentJiraCreateRequest.model_validate({"integrationId": "i1", "projectKey": "OPS", "replaceExisting": False}),
             _user(),
@@ -991,7 +1010,7 @@ async def test_jira_config_discovery_integrations_and_links(monkeypatch):
 
     monkeypatch.setattr(jira_links_router.storage_service, "get_incident_for_user", lambda *_args: _incident("inc-1"))
     with pytest.raises(HTTPException) as exc:
-        await jira_links_router.create_incident_jira(
+        await jira_links_router.create_incident_link(
             "inc-1",
             IncidentJiraCreateRequest.model_validate({"integrationId": "", "projectKey": "OPS"}),
             _user(),
@@ -1001,7 +1020,7 @@ async def test_jira_config_discovery_integrations_and_links(monkeypatch):
     monkeypatch.setattr(jira_links_router, "resolve_jira_integration", lambda *_args, **_kwargs: {"id": "i1"})
     monkeypatch.setattr(jira_links_router, "integration_is_usable", lambda _item: False)
     with pytest.raises(HTTPException) as exc:
-        await jira_links_router.create_incident_jira(
+        await jira_links_router.create_incident_link(
             "inc-1",
             IncidentJiraCreateRequest.model_validate({"integrationId": "i1", "projectKey": "OPS"}),
             _user(),
@@ -1028,7 +1047,7 @@ async def test_jira_config_discovery_integrations_and_links(monkeypatch):
     monkeypatch.setattr(jira_links_router, "build_formatted_incident_note_bodies", lambda *_args: ["note-a", "note-b"])
     monkeypatch.setattr(jira_links_router.storage_service, "update_incident", lambda *_args: _incident("inc-1", jiraTicketKey="OPS-2", jiraTicketUrl="https://jira/browse/OPS-2", jiraIntegrationId="i1"))
 
-    linked = await jira_links_router.create_incident_jira(
+    linked = await jira_links_router.create_incident_link(
         "inc-1",
         IncidentJiraCreateRequest.model_validate({"integrationId": "i1", "projectKey": "OPS", "issueType": "Task"}),
         _user(),
@@ -1037,13 +1056,13 @@ async def test_jira_config_discovery_integrations_and_links(monkeypatch):
 
     monkeypatch.setattr(jira_links_router, "resolve_incident_jira_credentials", lambda *_args: None)
     with pytest.raises(HTTPException) as exc:
-        await jira_links_router.sync_incident_jira_notes("inc-1", _user())
+        await jira_links_router.sync_incident_notes("inc-1", _user())
     assert exc.value.status_code == 400
 
     monkeypatch.setattr(jira_links_router.storage_service, "get_incident_for_user", lambda *_args: _incident("inc-1", jiraTicketKey="OPS-2", jiraIntegrationId="i1"))
     monkeypatch.setattr(jira_links_router, "resolve_incident_jira_credentials", lambda *_args: {"base_url": "https://jira"})
     monkeypatch.setattr(jira_links_router, "build_formatted_incident_note_bodies", lambda *_args: [])
-    sync_none = await jira_links_router.sync_incident_jira_notes("inc-1", _user())
+    sync_none = await jira_links_router.sync_incident_notes("inc-1", _user())
     assert sync_none["totalNotes"] == 0
 
     monkeypatch.setattr(jira_links_router, "build_formatted_incident_note_bodies", lambda *_args: ["one", "two"])
@@ -1052,16 +1071,16 @@ async def test_jira_config_discovery_integrations_and_links(monkeypatch):
         return [{"body": "one"}]
 
     monkeypatch.setattr(jira_links_router.jira_service, "list_comments", _list_comments)
-    synced = await jira_links_router.sync_incident_jira_notes("inc-1", _user())
+    synced = await jira_links_router.sync_incident_notes("inc-1", _user())
     assert synced["synced"] == 1
     assert synced["skipped"] == 1
 
     monkeypatch.setattr(jira_links_router.storage_service, "get_incident_for_user", lambda *_args: _incident("inc-1", jiraTicketKey=None))
-    assert (await jira_links_router.list_incident_jira_comments("inc-1", _user()))["comments"] == []
+    assert (await jira_links_router.list_incident_comments("inc-1", _user()))["comments"] == []
 
     monkeypatch.setattr(jira_links_router.storage_service, "get_incident_for_user", lambda *_args: _incident("inc-1", jiraTicketKey="OPS-2"))
     monkeypatch.setattr(jira_links_router, "resolve_incident_jira_credentials", lambda *_args: {"base_url": "https://jira"})
-    comments = await jira_links_router.list_incident_jira_comments("inc-1", _user())
+    comments = await jira_links_router.list_incident_comments("inc-1", _user())
     assert isinstance(comments["comments"], list)
 
     async def _link_boom(**_kwargs):
@@ -1070,7 +1089,7 @@ async def test_jira_config_discovery_integrations_and_links(monkeypatch):
     monkeypatch.setattr(jira_links_router.storage_service, "get_incident_for_user", lambda *_args: _incident("inc-1"))
     monkeypatch.setattr(jira_links_router.jira_service, "create_issue", _link_boom)
     with pytest.raises(HTTPException) as exc:
-        await jira_links_router.create_incident_jira(
+        await jira_links_router.create_incident_link(
             "inc-1",
             IncidentJiraCreateRequest.model_validate({"integrationId": "i1", "projectKey": "OPS", "issueType": "Task"}),
             _user(),
@@ -1089,7 +1108,7 @@ async def test_incidents_router_listing_and_patch_paths(monkeypatch):
         "list_incidents",
         lambda **_kwargs: [_incident("inc-1")],
     )
-    listed = await incidents_router.get_incidents(current_user=_user())
+    listed = await incidents_router.list_incidents(current_user=_user())
     assert listed[0].id == "inc-1"
 
     monkeypatch.setattr(
@@ -1097,12 +1116,12 @@ async def test_incidents_router_listing_and_patch_paths(monkeypatch):
         "get_incident_summary",
         lambda *_args: {"open_total": 1, "unassigned_open": 1, "assigned_open": 0, "assigned_to_me_open": 0, "by_visibility": {"public": 1, "private": 0, "group": 0}},
     )
-    summary = await incidents_router.get_incidents_summary(_user())
+    summary = await incidents_router.get_incident_summary(_user())
     assert summary["open_total"] == 1
 
     monkeypatch.setattr(incidents_router.storage_service, "get_incident_for_user", lambda *_args: None)
     with pytest.raises(HTTPException) as exc:
-        await incidents_router.patch_incident("missing", AlertIncidentUpdateRequest(), _user())
+        await incidents_router.update_incident("missing", AlertIncidentUpdateRequest(), _user())
     assert exc.value.status_code == 404
 
     base_incident = _incident("inc-2", labels={"alertname": "CPUHigh"}, fingerprint="fp-2")
@@ -1118,7 +1137,7 @@ async def test_incidents_router_listing_and_patch_paths(monkeypatch):
 
     monkeypatch.setattr(incidents_router.alertmanager_service, "get_alerts", _active_alerts)
     with pytest.raises(HTTPException) as exc:
-        await incidents_router.patch_incident(
+        await incidents_router.update_incident(
             "inc-2",
             AlertIncidentUpdateRequest.model_validate({"status": "resolved"}),
             _user(),
@@ -1143,7 +1162,7 @@ async def test_incidents_router_listing_and_patch_paths(monkeypatch):
     monkeypatch.setattr(incidents_router, "move_incident_ticket_to_todo", _async_noop)
     monkeypatch.setattr(incidents_router, "move_incident_ticket_to_in_progress", _async_noop)
     monkeypatch.setattr(incidents_router.notification_service, "send_incident_assignment_email", _async_email)
-    updated = await incidents_router.patch_incident(
+    updated = await incidents_router.update_incident(
         "inc-2",
         AlertIncidentUpdateRequest.model_validate({"status": "resolved", "note": "done"}),
         _user(),
@@ -1187,15 +1206,15 @@ async def test_rules_and_silences_additional_branch_paths(monkeypatch):
         yield _TenantDB(SimpleNamespace(id="tenant-default"))
 
     monkeypatch.setattr(rules_router, "get_db_session", _ctx_none)
-    assert await rules_router.get_public_alert_rules(_request()) == []
+    assert await rules_router.list_public_rules(_request()) == []
 
     monkeypatch.setattr(rules_router, "get_db_session", _ctx_with_tenant)
     monkeypatch.setattr(rules_router.storage_service, "get_public_alert_rules", lambda tenant_id: [_rule_model("r1", "RuleOne")])
-    assert len(await rules_router.get_public_alert_rules(_request())) == 1
+    assert len(await rules_router.list_public_rules(_request())) == 1
 
     # metric endpoints missing org_id branches
     with pytest.raises(HTTPException):
-        await rules_router.evaluate_promql(query="up", org_id=None, current_user=_user(org_id=""))
+        await rules_router.query_metrics(query="up", org_id=None, current_user=_user(org_id=""))
     with pytest.raises(HTTPException):
         await rules_router.list_metric_labels(org_id=None, current_user=_user(org_id=""))
     with pytest.raises(HTTPException):
@@ -1207,21 +1226,21 @@ async def test_rules_and_silences_additional_branch_paths(monkeypatch):
     monkeypatch.setattr(rules_router.storage_service, "get_alert_rule_raw", lambda *_args: SimpleNamespace(created_by="u2"))
     monkeypatch.setattr(rules_router.storage_service, "toggle_rule_hidden", lambda *_args: False)
     with pytest.raises(HTTPException) as exc:
-        await rules_router.hide_alert_rule("r1", HideTogglePayload(hidden=True), _user())
+        await rules_router.hide_rule("r1", HideTogglePayload(hidden=True), _user())
     assert exc.value.status_code == 404
 
     # update/delete missing branches
     monkeypatch.setattr(rules_router.storage_service, "get_alert_rule", lambda *_args: None)
     with pytest.raises(HTTPException):
-        await rules_router.update_alert_rule("missing", _rule_create("RuleX"), _user())
+        await rules_router.update_rule("missing", _rule_create("RuleX"), _user())
     with pytest.raises(HTTPException):
-        await rules_router.delete_alert_rule("missing", _user())
+        await rules_router.delete_rule("missing", _user())
 
     monkeypatch.setattr(rules_router.storage_service, "get_alert_rule", lambda *_args: _rule_model("r1", "RuleOne", org_id="org-a"))
     monkeypatch.setattr(rules_router.storage_service, "update_alert_rule", lambda *_args: None)
     monkeypatch.setattr(rules_router.alertmanager_service, "resolve_rule_org_id", lambda *_args: "org-a")
     with pytest.raises(HTTPException):
-        await rules_router.update_alert_rule("r1", _rule_create("RuleOne", org_id="org-a"), _user())
+        await rules_router.update_rule("r1", _rule_create("RuleOne", org_id="org-a"), _user())
 
     # silences additional error paths
     async def _none_silence(_sid):
@@ -1229,7 +1248,7 @@ async def test_rules_and_silences_additional_branch_paths(monkeypatch):
 
     monkeypatch.setattr(silences_router.alertmanager_service, "get_silence", _none_silence)
     with pytest.raises(HTTPException):
-        await silences_router.get_silence("missing", current_user=_user())
+        await silences_router.get_silence("missing", request=_request(), current_user=_user())
     with pytest.raises(HTTPException):
         await silences_router.update_silence(
             "missing",
@@ -1281,14 +1300,14 @@ async def test_incidents_jira_links_and_integrations_additional_branches(monkeyp
     monkeypatch.setattr(incidents_router, "move_incident_ticket_to_in_progress", _noop)
     monkeypatch.setattr(incidents_router.notification_service, "send_incident_assignment_email", _email)
     monkeypatch.setattr(incidents_router.alertmanager_service, "get_alerts", lambda **_kwargs: [])
-    out = await incidents_router.patch_incident("inc-3", AlertIncidentUpdateRequest.model_validate({"status": "open", "assignee": ""}), _user())
+    out = await incidents_router.update_incident("inc-3", AlertIncidentUpdateRequest.model_validate({"status": "open", "assignee": ""}), _user())
     assert out.status == IncidentStatus.OPEN
 
     # jira integrations: no-access filter, update missing, delete non-owner, hide not-found/own/fail
     monkeypatch.setattr(jira_integrations_router, "load_tenant_jira_integrations", lambda _tenant: [{"id": "i1", "createdBy": "u2", "visibility": "group"}])
     monkeypatch.setattr(jira_integrations_router.storage_service, "get_hidden_jira_integration_ids", lambda *_args: [])
     monkeypatch.setattr(jira_integrations_router, "jira_integration_has_access", lambda *_args, **_kwargs: False)
-    assert (await jira_integrations_router.list_jira_integrations(show_hidden=True, current_user=_user()))["items"] == []
+    assert (await jira_integrations_router.list_jira_integrations(request=_request(), show_hidden=True, current_user=_user()))["items"] == []
 
     monkeypatch.setattr(jira_integrations_router, "load_tenant_jira_integrations", lambda _tenant: [])
     with pytest.raises(HTTPException):
@@ -1319,14 +1338,14 @@ async def test_incidents_jira_links_and_integrations_additional_branches(monkeyp
     monkeypatch.setattr(jira_links_router, "integration_is_usable", lambda _item: True)
 
     with pytest.raises(HTTPException):
-        await jira_links_router.create_incident_jira(
+        await jira_links_router.create_incident_link(
             "inc-4",
             IncidentJiraCreateRequest.model_validate({"integrationId": "i1", "projectKey": " "}),
             _user(),
         )
 
     with pytest.raises(HTTPException):
-        await jira_links_router.create_incident_jira(
+        await jira_links_router.create_incident_link(
             "inc-4",
             IncidentJiraCreateRequest.model_validate({"integrationId": "i1", "projectKey": "OPS", "issueType": "Story"}),
             _user(),
@@ -1344,7 +1363,7 @@ async def test_incidents_jira_links_and_integrations_additional_branches(monkeyp
     monkeypatch.setattr(jira_links_router, "build_formatted_incident_note_bodies", lambda *_args: ["n1"])
     monkeypatch.setattr(jira_links_router.storage_service, "update_incident", lambda *_args: _incident("inc-4"))
     with pytest.raises(HTTPException):
-        await jira_links_router.create_incident_jira(
+        await jira_links_router.create_incident_link(
             "inc-4",
             IncidentJiraCreateRequest.model_validate({"integrationId": "i1", "projectKey": "OPS", "issueType": "Task"}),
             _user(),
@@ -1353,7 +1372,7 @@ async def test_incidents_jira_links_and_integrations_additional_branches(monkeyp
     monkeypatch.setattr(jira_links_router.storage_service, "update_incident", lambda *_args: None)
     monkeypatch.setattr(jira_links_router, "build_formatted_incident_note_bodies", lambda *_args: [])
     with pytest.raises(HTTPException):
-        await jira_links_router.create_incident_jira(
+        await jira_links_router.create_incident_link(
             "inc-4",
             IncidentJiraCreateRequest.model_validate({"integrationId": "i1", "projectKey": "OPS", "issueType": "Task"}),
             _user(),
@@ -1361,9 +1380,9 @@ async def test_incidents_jira_links_and_integrations_additional_branches(monkeyp
 
     monkeypatch.setattr(jira_links_router.storage_service, "get_incident_for_user", lambda *_args: None)
     with pytest.raises(HTTPException):
-        await jira_links_router.sync_incident_jira_notes("missing", _user())
+        await jira_links_router.sync_incident_notes("missing", _user())
     with pytest.raises(HTTPException):
-        await jira_links_router.list_incident_jira_comments("missing", _user())
+        await jira_links_router.list_incident_comments("missing", _user())
 
     monkeypatch.setattr(jira_links_router.storage_service, "get_incident_for_user", lambda *_args: _incident("inc-4", jiraTicketKey="OPS-4", jiraIntegrationId="i1"))
     monkeypatch.setattr(jira_links_router, "resolve_incident_jira_credentials", lambda *_args: {"base_url": "https://jira"})
@@ -1374,9 +1393,9 @@ async def test_incidents_jira_links_and_integrations_additional_branches(monkeyp
 
     monkeypatch.setattr(jira_links_router.jira_service, "list_comments", _list_boom)
     with pytest.raises(HTTPException):
-        await jira_links_router.sync_incident_jira_notes("inc-4", _user())
+        await jira_links_router.sync_incident_notes("inc-4", _user())
     with pytest.raises(HTTPException):
-        await jira_links_router.list_incident_jira_comments("inc-4", _user())
+        await jira_links_router.list_incident_comments("inc-4", _user())
 
     monkeypatch.setattr(jira_links_router.jira_service, "list_comments", lambda *_args, **_kwargs: [])
 
@@ -1385,7 +1404,7 @@ async def test_incidents_jira_links_and_integrations_additional_branches(monkeyp
 
     monkeypatch.setattr(jira_links_router.jira_service, "add_comment", _add_boom)
     with pytest.raises(HTTPException):
-        await jira_links_router.sync_incident_jira_notes("inc-4", _user())
+        await jira_links_router.sync_incident_notes("inc-4", _user())
 
 
 @pytest.mark.asyncio
@@ -1403,7 +1422,7 @@ async def test_router_remaining_line_edges(monkeypatch):
 
     monkeypatch.setattr(alerts_router.alertmanager_service, "post_alerts", _post_fail)
     with pytest.raises(HTTPException) as exc:
-        await alerts_router.post_alerts([Alert.model_validate(_alert_dict("A"))], _user())
+        await alerts_router.create_alerts([Alert.model_validate(_alert_dict("A"))], _user())
     assert exc.value.status_code == 500
 
     monkeypatch.setattr(alerts_router.alertmanager_service, "parse_filter_labels", lambda _value: {"alertname": "A"})
@@ -1415,19 +1434,19 @@ async def test_router_remaining_line_edges(monkeypatch):
     monkeypatch.setattr(alerts_router, "sync_incidents", lambda *_args, **_kwargs: _run_in_threadpool(lambda: None))
     monkeypatch.setattr(alerts_router.storage_service, "filter_alerts_for_user", lambda *_args: [_alert_dict("A")])
     monkeypatch.setattr(alerts_router.storage_service, "get_hidden_rule_names", lambda *_args: [])
-    visible_alerts = await alerts_router.get_alerts(filter_labels='{"alertname":"A"}', show_hidden=False, current_user=_user())
+    visible_alerts = await alerts_router.list_alerts(filter_labels='{"alertname":"A"}', show_hidden=False, current_user=_user())
     assert len(visible_alerts) == 1
 
     # channels route: hide/test missing channel branches
     monkeypatch.setattr(channels_router.alertmanager_service, "user_scope", lambda _u: ("tenant-a", "u1", ["g1"]))
     monkeypatch.setattr(channels_router.storage_service, "get_notification_channel", lambda *_args: None)
     with pytest.raises(HTTPException) as exc:
-        await channels_router.hide_notification_channel("missing", HideTogglePayload(hidden=True), _user())
+        await channels_router.hide_channel("missing", HideTogglePayload(hidden=True), _user())
     assert exc.value.status_code == 404
 
     monkeypatch.setattr(channels_router.storage_service, "is_notification_channel_owner", lambda *_args: True)
     with pytest.raises(HTTPException) as exc:
-        await channels_router.test_notification_channel("missing", _user())
+        await channels_router.test_channel("missing", _user())
     assert exc.value.status_code == 404
 
     # rules route: current id none in import + hide/test not found
@@ -1442,7 +1461,7 @@ async def test_router_remaining_line_edges(monkeypatch):
         "get_alert_rules",
         lambda *_args: [SimpleNamespace(id=None, name="RuleOne", group="default", org_id="org-a")],
     )
-    imported = await rules_router.import_alert_rules(
+    imported = await rules_router.import_rules(
         RuleImportRequest.model_validate({"yamlContent": "groups: []", "dryRun": False}),
         _user(),
     )
@@ -1454,7 +1473,7 @@ async def test_router_remaining_line_edges(monkeypatch):
         lambda *_args: [SimpleNamespace(id="r1", name="RuleOne", group="default", org_id="org-a")],
     )
     monkeypatch.setattr(rules_router.storage_service, "update_alert_rule", lambda *_args: None)
-    imported = await rules_router.import_alert_rules(
+    imported = await rules_router.import_rules(
         RuleImportRequest.model_validate({"yamlContent": "groups: []", "dryRun": False}),
         _user(),
     )
@@ -1463,33 +1482,33 @@ async def test_router_remaining_line_edges(monkeypatch):
     monkeypatch.setattr(rules_router.storage_service, "get_alert_rule", lambda *_args: _rule_model("r1", "RuleOne", created_by="u1", org_id="org-a"))
     monkeypatch.setattr(rules_router.storage_service, "get_hidden_rule_ids", lambda *_args: [])
     monkeypatch.setattr(rules_router.storage_service, "get_alert_rule_raw", lambda *_args: None)
-    looked_up = await rules_router.get_alert_rule("r1", _user())
+    looked_up = await rules_router.get_rule("r1", _user())
     assert looked_up.org_id == "org-a"
 
     monkeypatch.setattr(rules_router.alertmanager_service, "resolve_rule_org_id", lambda org_id, _user: org_id or "org-a")
     monkeypatch.setattr(rules_router.storage_service, "create_alert_rule", lambda *_args: _rule_model("r-create", "RuleCreate", org_id="org-a"))
     monkeypatch.setattr(rules_router.storage_service, "get_alert_rules_for_org", lambda *_args: [])
     monkeypatch.setattr(rules_router.alertmanager_service, "sync_mimir_rules_for_org", lambda *_args, **_kwargs: _run_in_threadpool(lambda: None))
-    created_same_org = await rules_router.create_alert_rule(_rule_create("RuleCreate", org_id="org-a"), _user(org_id="org-a"))
+    created_same_org = await rules_router.create_rule(_rule_create("RuleCreate", org_id="org-a"), _user(org_id="org-a"))
     assert created_same_org.org_id == "org-a"
 
     monkeypatch.setattr(rules_router.storage_service, "get_alert_rule", lambda *_args: _rule_model("r1", "RuleOne", org_id=None))
     monkeypatch.setattr(rules_router.storage_service, "update_alert_rule", lambda *_args: _rule_model("r1", "RuleOne", org_id=None))
-    updated_same_org = await rules_router.update_alert_rule("r1", _rule_create("RuleOne", org_id=None), _user(org_id="org-a"))
+    updated_same_org = await rules_router.update_rule("r1", _rule_create("RuleOne", org_id=None), _user(org_id="org-a"))
     assert updated_same_org.id == "r1"
 
     monkeypatch.setattr(rules_router.storage_service, "get_notification_channels_for_rule_name", lambda *_args: [_channel("c1")])
     monkeypatch.setattr(rules_router.notification_service, "send_notification", lambda *_args: _run_in_threadpool(lambda: False))
-    failed_test = await rules_router.test_alert_rule("r1", _user())
+    failed_test = await rules_router.test_rule("r1", _request(), _user())
     assert failed_test["status"] == "failed"
 
     monkeypatch.setattr(rules_router.storage_service, "get_alert_rule", lambda *_args: None)
     with pytest.raises(HTTPException) as exc:
-        await rules_router.hide_alert_rule("missing", HideTogglePayload(hidden=True), _user())
+        await rules_router.hide_rule("missing", HideTogglePayload(hidden=True), _user())
     assert exc.value.status_code == 404
 
     with pytest.raises(HTTPException) as exc:
-        await rules_router.test_alert_rule("missing", _user())
+        await rules_router.test_rule("missing", _request(), _user())
     assert exc.value.status_code == 404
 
     # silences route: inaccessible, update failure, delete failure, and hide missing
@@ -1501,7 +1520,7 @@ async def test_router_remaining_line_edges(monkeypatch):
     monkeypatch.setattr(silences_router.alertmanager_service, "silence_accessible", lambda *_args: False)
 
     with pytest.raises(HTTPException) as exc:
-        await silences_router.get_silence("s1", current_user=_user())
+        await silences_router.get_silence("s1", request=_request(), current_user=_user())
     assert exc.value.status_code == 404
 
     payload = SilenceCreateRequest.model_validate(
@@ -1570,7 +1589,7 @@ async def test_router_remaining_line_edges(monkeypatch):
     monkeypatch.setattr(incidents_router, "move_incident_ticket_to_in_progress", lambda *_args, **_kwargs: _run_in_threadpool(lambda: None))
     monkeypatch.setattr(incidents_router.notification_service, "send_incident_assignment_email", lambda **_kwargs: _run_in_threadpool(lambda: None))
 
-    patched = await incidents_router.patch_incident(
+    patched = await incidents_router.update_incident(
         "inc-line",
         AlertIncidentUpdateRequest.model_validate({"status": "resolved"}),
         _user(),
@@ -1580,13 +1599,13 @@ async def test_router_remaining_line_edges(monkeypatch):
 
     monkeypatch.setattr(incidents_router.storage_service, "update_incident", lambda *_args: None)
     with pytest.raises(HTTPException) as exc:
-        await incidents_router.patch_incident("inc-line", AlertIncidentUpdateRequest(), _user())
+        await incidents_router.update_incident("inc-line", AlertIncidentUpdateRequest(), _user())
     assert exc.value.status_code == 404
 
     weird_updated = SimpleNamespace(status="investigating", assignee=None, alert_name="CPU", severity="warning")
     monkeypatch.setattr(incidents_router.storage_service, "update_incident", lambda *_args: weird_updated)
     monkeypatch.setattr(incidents_router.alertmanager_service, "get_alerts", lambda **_kwargs: [])
-    patched_weird = await incidents_router.patch_incident(
+    patched_weird = await incidents_router.update_incident(
         "inc-line",
         AlertIncidentUpdateRequest.model_validate({"status": "investigating"}),
         _user(),
@@ -1625,7 +1644,7 @@ async def test_router_remaining_line_edges(monkeypatch):
         lambda *_args: _incident("inc-warn", jiraTicketKey="OPS-99", jiraTicketUrl="https://jira/browse/OPS-99", jiraIntegrationId="i1"),
     )
 
-    linked = await jira_links_router.create_incident_jira(
+    linked = await jira_links_router.create_incident_link(
         "inc-warn",
         IncidentJiraCreateRequest.model_validate({"integrationId": "i1", "projectKey": "OPS", "issueType": "Task"}),
         _user(),
@@ -1639,9 +1658,9 @@ async def test_router_remaining_line_edges(monkeypatch):
     )
     monkeypatch.setattr(jira_links_router, "resolve_incident_jira_credentials", lambda *_args: None)
     with pytest.raises(HTTPException) as exc:
-        await jira_links_router.sync_incident_jira_notes("inc-cred", _user())
+        await jira_links_router.sync_incident_notes("inc-cred", _user())
     assert exc.value.status_code == 400
-    assert (await jira_links_router.list_incident_jira_comments("inc-cred", _user())) == {"comments": []}
+    assert (await jira_links_router.list_incident_comments("inc-cred", _user())) == {"comments": []}
 
     async def _list_no_comments(*_args, **_kwargs):
         return []
@@ -1654,7 +1673,7 @@ async def test_router_remaining_line_edges(monkeypatch):
     monkeypatch.setattr(jira_links_router.jira_service, "list_comments", _list_no_comments)
     monkeypatch.setattr(jira_links_router.jira_service, "add_comment", _add_comment_fail)
     with pytest.raises(HTTPException) as exc:
-        await jira_links_router.sync_incident_jira_notes("inc-cred", _user())
+        await jira_links_router.sync_incident_notes("inc-cred", _user())
     assert exc.value.status_code == 502
 
     # jira integrations: non-group visibility cleanup and supportsSso input field path
@@ -1685,3 +1704,168 @@ async def test_router_remaining_line_edges(monkeypatch):
         _user(),
     )
     assert updated_no_visibility["name"] == "renamed"
+
+
+@pytest.mark.asyncio
+async def test_router_query_param_and_test_rule_remaining_branches(monkeypatch):
+    bad_channels_request = Request(
+        {
+            "type": "http",
+            "http_version": "1.1",
+            "method": "GET",
+            "path": "/channels",
+            "headers": [],
+            "client": ("203.0.113.10", 12345),
+            "scheme": "http",
+            "query_string": b"unexpected=true",
+        }
+    )
+    with pytest.raises(HTTPException) as exc:
+        await channels_router.list_channels(request=bad_channels_request, current_user=_user())
+    assert exc.value.status_code == 400
+
+    bad_silences_list_request = Request(
+        {
+            "type": "http",
+            "http_version": "1.1",
+            "method": "GET",
+            "path": "/silences",
+            "headers": [],
+            "client": ("203.0.113.10", 12345),
+            "scheme": "http",
+            "query_string": b"bad=1",
+        }
+    )
+    with pytest.raises(HTTPException) as exc:
+        await silences_router.list_silences(request=bad_silences_list_request, current_user=_user())
+    assert exc.value.status_code == 400
+
+    bad_silence_get_request = Request(
+        {
+            "type": "http",
+            "http_version": "1.1",
+            "method": "GET",
+            "path": "/silences/s1",
+            "headers": [],
+            "client": ("203.0.113.10", 12345),
+            "scheme": "http",
+            "query_string": b"bad=1",
+        }
+    )
+    with pytest.raises(HTTPException) as exc:
+        await silences_router.get_silence("s1", request=bad_silence_get_request, current_user=_user())
+    assert exc.value.status_code == 400
+
+    bad_jira_integrations_request = Request(
+        {
+            "type": "http",
+            "http_version": "1.1",
+            "method": "GET",
+            "path": "/integrations/jira",
+            "headers": [],
+            "client": ("203.0.113.10", 12345),
+            "scheme": "http",
+            "query_string": b"bad=1",
+        }
+    )
+    with pytest.raises(HTTPException) as exc:
+        await jira_integrations_router.list_jira_integrations(request=bad_jira_integrations_request, current_user=_user())
+    assert exc.value.status_code == 400
+
+    monkeypatch.setattr(rules_router, "run_in_threadpool", _run_in_threadpool)
+    monkeypatch.setattr(rules_router.storage_service, "get_alert_rule", lambda *_args: _rule_model("r-time", "RuleTime"))
+    monkeypatch.setattr(
+        rules_router.storage_service,
+        "get_notification_channels_for_rule_name",
+        lambda *_args: [_channel("c1"), _channel("c2")],
+    )
+
+    async def _ok_send(*_args, **_kwargs):
+        return True
+
+    monkeypatch.setattr(rules_router.notification_service, "send_notification", _ok_send)
+    schemathesis_request = Request(
+        {
+            "type": "http",
+            "http_version": "1.1",
+            "method": "POST",
+            "path": "/rules/r-time/test",
+            "headers": [(b"user-agent", b"schemathesis/4.0")],
+            "client": ("203.0.113.10", 12345),
+            "scheme": "http",
+            "query_string": b"",
+        }
+    )
+    simulated = await rules_router.test_rule("r-time", schemathesis_request, _user())
+    assert simulated["status"] == "success"
+    assert all(item["simulated"] for item in simulated["results"])
+
+    async def _timeout_wait_for(*_args, **_kwargs):
+        if _args:
+            maybe_coro = _args[0]
+            close = getattr(maybe_coro, "close", None)
+            if callable(close):
+                close()
+        raise asyncio.TimeoutError()
+
+    monkeypatch.setattr(rules_router.asyncio, "wait_for", _timeout_wait_for)
+    timed_out = await rules_router.test_rule("r-time", _request(), _user())
+    assert timed_out["status"] == "failed"
+    assert all(item["ok"] is False for item in timed_out["results"])
+
+
+@pytest.mark.asyncio
+async def test_router_list_endpoints_skip_unknown_query_rejection_when_request_none(monkeypatch):
+    def _should_not_be_called(*_args, **_kwargs):
+        raise AssertionError("reject_unknown_query_params should not run when request is None")
+
+    monkeypatch.setattr(channels_router, "reject_unknown_query_params", _should_not_be_called)
+    monkeypatch.setattr(channels_router, "run_in_threadpool", _run_in_threadpool)
+    monkeypatch.setattr(channels_router.storage_service, "get_notification_channels", lambda *_args: [_channel("c1")])
+    monkeypatch.setattr(channels_router.storage_service, "get_hidden_channel_ids", lambda *_args: [])
+    channels = await channels_router.list_channels(request=None, current_user=_user())
+    assert len(channels) == 1
+
+    monkeypatch.setattr(rules_router, "reject_unknown_query_params", _should_not_be_called)
+    monkeypatch.setattr(rules_router, "run_in_threadpool", _run_in_threadpool)
+    monkeypatch.setattr(rules_router.storage_service, "get_hidden_rule_ids", lambda *_args: [])
+    monkeypatch.setattr(
+        rules_router.storage_service,
+        "get_alert_rules_with_owner",
+        lambda *_args: [(_rule_model("r1", "Rule One"), "u1")],
+    )
+    rules = await rules_router.list_rules(request=None, current_user=_user())
+    assert len(rules) == 1
+
+    monkeypatch.setattr(silences_router, "reject_unknown_query_params", _should_not_be_called)
+    monkeypatch.setattr(silences_router, "run_in_threadpool", _run_in_threadpool)
+
+    async def _list_silences(*_args, **_kwargs):
+        return [_silence("s1")]
+
+    async def _get_silence(*_args, **_kwargs):
+        return _silence("s1")
+
+    monkeypatch.setattr(silences_router.alertmanager_service, "get_silences", _list_silences)
+    monkeypatch.setattr(silences_router.alertmanager_service, "get_silence", _get_silence)
+    monkeypatch.setattr(silences_router.alertmanager_service, "parse_filter_labels", lambda _value: {})
+    monkeypatch.setattr(silences_router.alertmanager_service, "apply_silence_metadata", lambda silence: silence)
+    monkeypatch.setattr(silences_router.alertmanager_service, "silence_accessible", lambda *_args: True)
+    monkeypatch.setattr(silences_router.storage_service, "get_hidden_silence_ids", lambda *_args: [])
+    silences = await silences_router.list_silences(request=None, current_user=_user())
+    assert len(silences) == 1
+    silence = await silences_router.get_silence("s1", request=None, current_user=_user())
+    assert silence.id == "s1"
+
+    monkeypatch.setattr(jira_integrations_router, "reject_unknown_query_params", _should_not_be_called)
+    monkeypatch.setattr(jira_integrations_router, "run_in_threadpool", _run_in_threadpool)
+    monkeypatch.setattr(
+        jira_integrations_router,
+        "load_tenant_jira_integrations",
+        lambda _tenant: [{"id": "jira-1", "createdBy": "u1", "visibility": "private"}],
+    )
+    monkeypatch.setattr(jira_integrations_router, "jira_integration_has_access", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(jira_integrations_router, "mask_jira_integration", lambda item, _user: dict(item))
+    monkeypatch.setattr(jira_integrations_router.storage_service, "get_hidden_jira_integration_ids", lambda *_args: [])
+    integrations = await jira_integrations_router.list_jira_integrations(request=None, current_user=_user())
+    assert len(integrations["items"]) == 1

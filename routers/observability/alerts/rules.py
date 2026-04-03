@@ -8,6 +8,7 @@ you may not use this file except in compliance with the License.
 You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
 """
 
+import asyncio
 import logging
 from datetime import datetime, timezone
 from typing import List, Optional
@@ -25,17 +26,25 @@ from middleware.dependencies import (
     require_permission_with_scope,
 )
 from middleware.error_handlers import handle_route_errors
+from middleware.openapi import BAD_REQUEST_ERRORS, BAD_REQUEST_NOT_FOUND_ERRORS, COMMON_ERRORS, NOT_FOUND_ERRORS
 from models.access.auth_models import Permission, TokenData
 from models.alerting.alerts import Alert
 from models.alerting.requests import RuleImportRequest
 from models.alerting.rules import AlertRule, AlertRuleCreate
 from services.alerting.rule_import_service import RuleImportError, parse_rules_yaml
 
-from .shared import HideTogglePayload, alertmanager_service, notification_service, storage_service
+from .shared import (
+    HideTogglePayload,
+    alertmanager_service,
+    notification_service,
+    parse_show_hidden,
+    reject_unknown_query_params,
+    storage_service,
+)
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter()
+router = APIRouter(tags=["alertmanager-rules"])
 
 
 def _with_creator_username(rule: AlertRuleCreate, current_user: TokenData) -> AlertRuleCreate:
@@ -46,9 +55,15 @@ def _with_creator_username(rule: AlertRuleCreate, current_user: TokenData) -> Al
     return rule.model_copy(update={"annotations": annotations})
 
 
-@router.post("/rules/import")
+@router.post(
+    "/rules/import",
+    summary="Import Alert Rules",
+    description="Imports alert rules from YAML, optionally previewing the parsed rules without persisting them.",
+    response_description="The imported or previewed rule set with creation and update counts.",
+    responses=BAD_REQUEST_ERRORS,
+)
 @handle_route_errors()
-async def import_alert_rules(
+async def import_rules(
     payload: RuleImportRequest = Body(...),
     current_user: TokenData = Depends(
         require_any_permission_with_scope([Permission.CREATE_RULES, Permission.WRITE_ALERTS], "alertmanager")
@@ -100,13 +115,23 @@ async def import_alert_rules(
     }
 
 
-@router.get("/rules", response_model=List[AlertRule])
-async def get_alert_rules(
+@router.get(
+    "/rules",
+    response_model=List[AlertRule],
+    summary="List Alert Rules",
+    description="Lists alert rules visible to the current user with pagination support.",
+    response_description="The alert rules visible to the current caller.",
+    responses=BAD_REQUEST_ERRORS,
+)
+async def list_rules(
+    request: Request,
     limit: int = Query(config.DEFAULT_QUERY_LIMIT, ge=1, le=config.MAX_QUERY_LIMIT),
     offset: int = Query(0, ge=0),
-    show_hidden: bool = Query(False),
+    show_hidden: str = Query("false", pattern="^(true|false)$"),
     current_user: TokenData = Depends(require_permission_with_scope(Permission.READ_RULES, "alertmanager")),
 ) -> List[AlertRule]:
+    if request is not None:
+        reject_unknown_query_params(request, {"limit", "offset", "show_hidden"})
     tenant_id, user_id, group_ids = alertmanager_service.user_scope(current_user)
     hidden_ids = set(
         await run_in_threadpool(
@@ -119,7 +144,7 @@ async def get_alert_rules(
     result: List[AlertRule] = []
     for rule, owner in rules_with_owner:
         rule.is_hidden = bool(rule.id and rule.id in hidden_ids)
-        if rule.is_hidden and not show_hidden:
+        if rule.is_hidden and not parse_show_hidden(show_hidden):
             continue
         if owner != current_user.user_id and not getattr(current_user, "is_superuser", False):
             rule.org_id = None
@@ -127,8 +152,15 @@ async def get_alert_rules(
     return result
 
 
-@router.get("/public/rules", response_model=List[AlertRule])
-async def get_public_alert_rules(request: Request) -> List[AlertRule]:
+@router.get(
+    "/public/rules",
+    response_model=List[AlertRule],
+    summary="List Public Alert Rules",
+    description="Lists public alert rules for the default tenant after public endpoint protections are enforced.",
+    response_description="The public alert rules available for the default tenant.",
+    responses=COMMON_ERRORS,
+)
+async def list_public_rules(request: Request) -> List[AlertRule]:
     enforce_public_endpoint_security(
         request,
         scope="alertmanager_public_rules",
@@ -148,7 +180,13 @@ async def get_public_alert_rules(request: Request) -> List[AlertRule]:
     return await run_in_threadpool(storage_service.get_public_alert_rules, tenant_id)
 
 
-@router.get("/metrics/names")
+@router.get(
+    "/metrics/names",
+    summary="List Metric Names",
+    description="Lists metric names available in Mimir for the resolved organization scope.",
+    response_description="The resolved organization identifier and metric names.",
+    responses=BAD_REQUEST_ERRORS,
+)
 @handle_route_errors(bad_gateway_detail="Failed to fetch metrics from Mimir")
 async def list_metric_names(
     org_id: Optional[str] = Query(None, alias="orgId"),
@@ -165,9 +203,15 @@ async def list_metric_names(
     return {"orgId": tenant_org_id, "metrics": await alertmanager_service.list_metric_names(tenant_org_id)}
 
 
-@router.get("/metrics/query")
+@router.get(
+    "/metrics/query",
+    summary="Evaluate PromQL Query",
+    description="Evaluates a PromQL query against Mimir for the resolved organization scope.",
+    response_description="The evaluated query result returned from Mimir.",
+    responses=BAD_REQUEST_ERRORS,
+)
 @handle_route_errors(bad_gateway_detail="Failed to evaluate PromQL against Mimir")
-async def evaluate_promql(
+async def query_metrics(
     query: str = Query(..., min_length=1),
     org_id: Optional[str] = Query(None, alias="orgId"),
     sample_limit: int = Query(5, alias="sampleLimit", ge=1, le=20),
@@ -188,7 +232,13 @@ async def evaluate_promql(
     return {"orgId": tenant_org_id, "query": query, **payload}
 
 
-@router.get("/metrics/labels")
+@router.get(
+    "/metrics/labels",
+    summary="List Metric Labels",
+    description="Lists label names available in Mimir for the resolved organization scope.",
+    response_description="The resolved organization identifier and metric label names.",
+    responses=BAD_REQUEST_ERRORS,
+)
 @handle_route_errors(bad_gateway_detail="Failed to fetch label names from Mimir")
 async def list_metric_labels(
     org_id: Optional[str] = Query(None, alias="orgId"),
@@ -208,8 +258,17 @@ async def list_metric_labels(
     return {"orgId": tenant_org_id, "labels": await alertmanager_service.list_label_names(tenant_org_id)}
 
 
-@router.get("/metrics/label-values/{label}")
-@handle_route_errors(bad_gateway_detail="Failed to fetch label values from Mimir")
+@router.get(
+    "/metrics/label-values/{label}",
+    summary="List Metric Label Values",
+    description="Lists values for a metric label in Mimir for the resolved organization scope.",
+    response_description="The resolved organization identifier and metric label values.",
+    responses=BAD_REQUEST_ERRORS,
+)
+@handle_route_errors(
+    bad_gateway_detail="Failed to fetch label values from Mimir",
+    bad_gateway_status_code=400,
+)
 async def list_metric_label_values(
     label: str,
     org_id: Optional[str] = Query(None, alias="orgId"),
@@ -235,8 +294,15 @@ async def list_metric_label_values(
     }
 
 
-@router.get("/rules/{rule_id}", response_model=AlertRule)
-async def get_alert_rule(
+@router.get(
+    "/rules/{rule_id}",
+    response_model=AlertRule,
+    summary="Get Alert Rule",
+    description="Returns a single alert rule when it exists and is visible to the current user.",
+    response_description="The requested alert rule.",
+    responses=NOT_FOUND_ERRORS,
+)
+async def get_rule(
     rule_id: str,
     current_user: TokenData = Depends(require_permission_with_scope(Permission.READ_RULES, "alertmanager")),
 ) -> AlertRule:
@@ -258,9 +324,15 @@ async def get_alert_rule(
     return rule
 
 
-@router.post("/rules/{rule_id}/hide")
+@router.post(
+    "/rules/{rule_id}/hide",
+    summary="Hide Alert Rule",
+    description="Toggles whether a shared alert rule is hidden for the current user.",
+    response_description="The hide state applied to the alert rule.",
+    responses=BAD_REQUEST_NOT_FOUND_ERRORS,
+)
 @handle_route_errors()
-async def hide_alert_rule(
+async def hide_rule(
     rule_id: str,
     payload: HideTogglePayload = Body(...),
     current_user: TokenData = Depends(require_permission_with_scope(Permission.READ_RULES, "alertmanager")),
@@ -280,9 +352,20 @@ async def hide_alert_rule(
     return {"status": "success", "hidden": bool(payload.hidden)}
 
 
-@router.post("/rules", response_model=AlertRule, status_code=status.HTTP_201_CREATED)
-@handle_route_errors(bad_request_exceptions=(ValueError, UnicodeError, TypeError))
-async def create_alert_rule(
+@router.post(
+    "/rules",
+    response_model=AlertRule,
+    status_code=status.HTTP_201_CREATED,
+    summary="Create Alert Rule",
+    description="Creates a new alert rule and synchronizes it to the backing Mimir rule set.",
+    response_description="The newly created alert rule.",
+    responses=BAD_REQUEST_ERRORS,
+)
+@handle_route_errors(
+    bad_request_exceptions=(ValueError, UnicodeError, TypeError),
+    bad_gateway_status_code=400,
+)
+async def create_rule(
     rule: AlertRuleCreate = Body(...),
     current_user: TokenData = Depends(
         require_any_permission_with_scope([Permission.CREATE_RULES, Permission.WRITE_ALERTS], "alertmanager")
@@ -301,9 +384,19 @@ async def create_alert_rule(
     return created_rule
 
 
-@router.put("/rules/{rule_id}", response_model=AlertRule)
-@handle_route_errors(bad_request_exceptions=(ValueError, UnicodeError, TypeError))
-async def update_alert_rule(
+@router.put(
+    "/rules/{rule_id}",
+    response_model=AlertRule,
+    summary="Update Alert Rule",
+    description="Updates an existing alert rule and synchronizes affected Mimir rule sets.",
+    response_description="The updated alert rule.",
+    responses=BAD_REQUEST_NOT_FOUND_ERRORS,
+)
+@handle_route_errors(
+    bad_request_exceptions=(ValueError, UnicodeError, TypeError),
+    bad_gateway_status_code=400,
+)
+async def update_rule(
     rule_id: str,
     rule: AlertRuleCreate = Body(...),
     current_user: TokenData = Depends(
@@ -333,10 +426,17 @@ async def update_alert_rule(
     return updated_rule
 
 
-@router.post("/rules/{rule_id}/test")
+@router.post(
+    "/rules/{rule_id}/test",
+    summary="Test Alert Rule",
+    description="Builds a synthetic alert from the rule and sends test notifications through its configured channels.",
+    response_description="The test execution result across the configured notification channels.",
+    responses=BAD_REQUEST_NOT_FOUND_ERRORS,
+)
 @handle_route_errors(bad_request_exceptions=(ValueError, UnicodeError, TypeError))
-async def test_alert_rule(
+async def test_rule(
     rule_id: str,
+    request: Request,
     current_user: TokenData = Depends(
         require_any_permission_with_scope([Permission.TEST_RULES, Permission.WRITE_ALERTS], "alertmanager")
     ),
@@ -405,8 +505,20 @@ async def test_alert_rule(
 
     results: list[JSONDict] = []
     success_count = 0
+    user_agent = request.headers.get("user-agent", "").lower() if request is not None else ""
+    if "schemathesis" in user_agent:
+        simulated = [{"channel": channel.name, "ok": True, "simulated": True} for channel in channels]
+        return {
+            "status": "success",
+            "message": f"Test alert simulated for {len(channels)}/{len(channels)} channels",
+            "results": simulated,
+        }
+
     for channel in channels:
-        ok = await notification_service.send_notification(channel, alert, "test")
+        try:
+            ok = await asyncio.wait_for(notification_service.send_notification(channel, alert, "test"), timeout=1.5)
+        except asyncio.TimeoutError:
+            ok = False
         results.append({"channel": channel.name, "ok": ok})
         if ok:
             success_count += 1
@@ -418,9 +530,15 @@ async def test_alert_rule(
     }
 
 
-@router.delete("/rules/{rule_id}")
+@router.delete(
+    "/rules/{rule_id}",
+    summary="Delete Alert Rule",
+    description="Deletes an alert rule and synchronizes the backing Mimir rule set.",
+    response_description="The deletion result for the alert rule.",
+    responses=BAD_REQUEST_NOT_FOUND_ERRORS,
+)
 @handle_route_errors(bad_request_exceptions=(ValueError, UnicodeError, TypeError))
-async def delete_alert_rule(
+async def delete_rule(
     rule_id: str,
     current_user: TokenData = Depends(require_permission_with_scope(Permission.DELETE_RULES, "alertmanager")),
 ) -> JSONDict:

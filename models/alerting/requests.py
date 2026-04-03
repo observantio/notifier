@@ -10,74 +10,78 @@ You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2
 
 from __future__ import annotations
 from typing import Annotated, List, Optional
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, StrictBool
 
 from custom_types.json import JSONDict
 
 
 class AlertWebhookRequest(BaseModel):
     model_config = ConfigDict(extra="allow")
-    alerts: List[JSONDict] = Field(default_factory=list)
+    alerts: List[JSONDict] = Field(default_factory=list, examples=[[{"labels": {"alertname": "HighCpuUsage", "severity": "critical"}}]])
 
 
 class RuleImportRequest(BaseModel):
-    yamlContent: Optional[str] = None
-    defaults: JSONDict = Field(default_factory=dict)
-    dryRun: bool = False
+    yamlContent: Optional[str] = Field(None, examples=['groups:\n  - name: watchdog-default\n    rules:\n      - alert: HighCpuUsage'])
+    defaults: JSONDict = Field(default_factory=dict, examples=[{"labels": {"team": "platform"}}])
+    dryRun: bool = Field(False, examples=[True])
 
 
 class JiraConfigUpdateRequest(BaseModel):
-    enabled: Optional[bool] = None
-    baseUrl: Optional[str] = None
-    email: Optional[str] = None
-    apiToken: Optional[str] = None
-    bearerToken: Optional[str] = None
+    model_config = ConfigDict(extra="forbid")
+    enabled: Optional[StrictBool] = Field(None, examples=[True])
+    baseUrl: Optional[str] = Field(None, examples=["https://jira.example.internal"])
+    email: Optional[str] = Field(None, examples=["jira-bot@example.com"])
+    apiToken: Optional[str] = Field(None, examples=["jira-api-token"])
+    bearerToken: Optional[str] = Field(None, examples=["jira-bearer-token"])
 
 
 class JiraIntegrationCreateRequest(BaseModel):
-    name: Optional[str] = None
-    enabled: bool = True
-    visibility: str = "private"
-    sharedGroupIds: List[str] = Field(default_factory=list)
-    baseUrl: Optional[str] = None
-    email: Optional[str] = None
-    apiToken: Optional[str] = None
-    bearerToken: Optional[str] = None
-    authMode: Optional[str] = None
-    supportsSso: Optional[bool] = None
+    model_config = ConfigDict(extra="forbid")
+    name: Optional[str] = Field(None, examples=["Primary Jira"])
+    enabled: StrictBool = Field(True, examples=[True])
+    visibility: str = Field("private", examples=["group"])
+    sharedGroupIds: List[str] = Field(default_factory=list, examples=[["group-ops"]])
+    baseUrl: Optional[str] = Field(None, examples=["https://jira.example.internal"])
+    email: Optional[str] = Field(None, examples=["jira-bot@example.com"])
+    apiToken: Optional[str] = Field(None, examples=["jira-api-token"])
+    bearerToken: Optional[str] = Field(None, examples=["jira-bearer-token"])
+    authMode: Optional[str] = Field(None, examples=["api_token"])
+    supportsSso: Optional[StrictBool] = Field(None, examples=[False])
 
 
 class JiraIntegrationUpdateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    name: Optional[str] = None
-    enabled: Optional[bool] = None
-    visibility: Optional[str] = None
-    sharedGroupIds: Optional[List[str]] = None
-    baseUrl: Optional[str] = None
-    email: Optional[str] = None
-    apiToken: Optional[str] = None
-    bearerToken: Optional[str] = None
-    authMode: Optional[str] = None
-    supportsSso: Optional[bool] = None
+    name: Optional[str] = Field(None, examples=["Primary Jira"])
+    enabled: Optional[bool] = Field(None, examples=[True])
+    visibility: Optional[str] = Field(None, examples=["group"])
+    sharedGroupIds: Optional[List[str]] = Field(None, examples=[["group-ops"]])
+    baseUrl: Optional[str] = Field(None, examples=["https://jira.example.internal"])
+    email: Optional[str] = Field(None, examples=["jira-bot@example.com"])
+    apiToken: Optional[str] = Field(None, examples=["jira-api-token"])
+    bearerToken: Optional[str] = Field(None, examples=["jira-bearer-token"])
+    authMode: Optional[str] = Field(None, examples=["api_token"])
+    supportsSso: Optional[bool] = Field(None, examples=[False])
 
 
 class IncidentJiraCreateRequest(BaseModel):
-    integrationId: str
-    projectKey: str
-    summary: Optional[str] = None
-    description: Optional[str] = None
-    issueType: Optional[str] = None
-    replaceExisting: bool = False
+    integrationId: str = Field(..., examples=["jira-int-01"])
+    projectKey: str = Field(..., examples=["OPS"])
+    summary: Optional[str] = Field(None, examples=["Investigate HighCpuUsage incident"])
+    description: Optional[str] = Field(None, examples=["CPU usage has remained above 95% for five minutes."])
+    issueType: Optional[str] = Field(None, examples=["Task"])
+    replaceExisting: bool = Field(False, examples=[False])
 
 
 class GroupSharePruneRequest(BaseModel):
-    tenant_id: Annotated[str, Field(min_length=1, pattern=r"^[^\x00]+$", alias="tenantId")]
-    group_id: Annotated[str, Field(min_length=1, pattern=r"^[^\x00]+$", alias="groupId")]
+    tenant_id: Annotated[str, Field(min_length=1, pattern=r"^[^\x00]+$", alias="tenantId", examples=["tenant-01"])]
+    group_id: Annotated[str, Field(min_length=1, pattern=r"^[^\x00]+$", alias="groupId", examples=["group-ops"])]
     removed_user_ids: List[Annotated[str, Field(min_length=1, pattern=r"^[^\x00]+$")]] = Field(
         default_factory=list,
         alias="removedUserIds",
+        examples=[["user-42"]],
     )
     removed_usernames: List[Annotated[str, Field(min_length=1, pattern=r"^[^\x00]+$")]] = Field(
         default_factory=list,
         alias="removedUsernames",
+        examples=[["alice"]],
     )

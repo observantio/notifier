@@ -19,6 +19,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from custom_types.json import JSONDict
 from middleware.dependencies import require_permission_with_scope
 from middleware.error_handlers import handle_route_errors
+from middleware.openapi import BAD_REQUEST_ERRORS, BAD_REQUEST_NOT_FOUND_ERRORS, COMMON_ERRORS
 from models.access.auth_models import Permission, TokenData
 from models.alerting.incidents import AlertIncident, AlertIncidentUpdateRequest
 from services.alertmanager_service import AlertManagerService
@@ -40,8 +41,15 @@ alertmanager_service = AlertManagerService()
 storage_service = DatabaseStorageService()
 notification_service = NotificationService()
 
-@router.get("/incidents", response_model=List[AlertIncident])
-async def get_incidents(
+@router.get(
+    "/incidents",
+    response_model=List[AlertIncident],
+    summary="List Incidents",
+    description="Lists alert incidents visible to the current user with optional status, visibility, and group filters.",
+    response_description="The incidents visible to the current caller.",
+    responses=BAD_REQUEST_ERRORS,
+)
+async def list_incidents(
     status_filter: Optional[str] = Query(None, alias="status"),
     visibility_filter: Optional[str] = Query(None, alias="visibility"),
     group_id_filter: Optional[str] = Query(None, alias="group_id"),
@@ -62,8 +70,14 @@ async def get_incidents(
     )
 
 
-@router.get("/incidents/summary")
-async def get_incidents_summary(
+@router.get(
+    "/incidents/summary",
+    summary="Get Incident Summary",
+    description="Returns an aggregated summary of incidents visible to the current user.",
+    response_description="Aggregated incident summary counts and breakdowns.",
+    responses=COMMON_ERRORS,
+)
+async def get_incident_summary(
     current_user: TokenData = Depends(require_permission_with_scope(Permission.READ_INCIDENTS, "alertmanager")),
 ) -> JSONDict:
     return await run_in_threadpool(
@@ -74,9 +88,16 @@ async def get_incidents_summary(
     )
 
 
-@router.patch("/incidents/{incident_id}", response_model=AlertIncident)
+@router.patch(
+    "/incidents/{incident_id}",
+    response_model=AlertIncident,
+    summary="Update Incident",
+    description="Updates an incident's status, assignment, Jira metadata, or visibility settings.",
+    response_description="The updated incident.",
+    responses=BAD_REQUEST_NOT_FOUND_ERRORS,
+)
 @handle_route_errors()
-async def patch_incident(
+async def update_incident(
     incident_id: str,
     payload: AlertIncidentUpdateRequest,
     current_user: TokenData = Depends(require_permission_with_scope(Permission.UPDATE_INCIDENTS, "alertmanager")),

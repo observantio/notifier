@@ -22,7 +22,7 @@ except ImportError:
 ensure_test_env()
 
 from models.access.auth_models import Role, TokenData
-from models.alerting.incidents import AlertIncident, IncidentStatus
+from models.alerting.incidents import AlertIncident, IncidentNote, IncidentStatus
 from services.incidents import helpers as helpers_mod
 from services.storage import serializers as serializers_mod
 
@@ -89,6 +89,12 @@ def test_incident_helper_formatting_and_author_rewrites():
     bodies = helpers_mod.build_formatted_incident_note_bodies(incident, current_user)
     assert len(bodies) == 1
     assert "alice acknowledged incident" in bodies[0]
+
+
+def test_incident_note_serializer_handles_timezone_aware_values() -> None:
+    aware = datetime(2026, 1, 1, 12, 0, tzinfo=timezone.utc)
+    note = IncidentNote.model_validate({"author": "alice", "text": "investigating", "createdAt": aware})
+    assert note.model_dump(by_alias=True)["createdAt"] == "2026-01-01T12:00:00Z"
 
 
 def test_build_formatted_incident_note_bodies_skips_empty_formatted_body(monkeypatch):
@@ -314,3 +320,47 @@ def test_storage_serializer_preserves_existing_dual_correlation_keys():
     model = serializers_mod.incident_to_pydantic(incident)
     assert model.annotations["watchdogCorrelationId"] == "corr-a"
     assert model.annotations["WatchdogCorrelationId"] == "corr-b"
+
+
+def test_incident_datetime_serializers_cover_naive_and_none_paths():
+    note = IncidentNote.model_validate(
+        {
+            "author": "alice@example.com",
+            "text": "Investigating",
+            "createdAt": datetime(2026, 1, 1, 0, 0, 0),
+        }
+    )
+    dumped_note = note.model_dump(by_alias=True)
+    assert dumped_note["createdAt"].endswith("Z")
+
+    incident = AlertIncident.model_validate(
+        {
+            "id": "inc-naive",
+            "fingerprint": "fp-naive",
+            "alertName": "CPUHigh",
+            "severity": "critical",
+            "status": "open",
+            "assignee": None,
+            "notes": [],
+            "labels": {},
+            "annotations": {},
+            "visibility": "public",
+            "sharedGroupIds": [],
+            "jiraTicketKey": None,
+            "jiraTicketUrl": None,
+            "jiraIntegrationId": None,
+            "startsAt": None,
+            "lastSeenAt": datetime(2026, 1, 1, 0, 0, 0),
+            "resolvedAt": None,
+            "createdAt": datetime(2026, 1, 1, 0, 0, 0),
+            "updatedAt": datetime(2026, 1, 1, 0, 0, 0),
+            "userManaged": False,
+            "hideWhenResolved": False,
+        }
+    )
+    dumped_incident = incident.model_dump(by_alias=True)
+    assert dumped_incident["lastSeenAt"].endswith("Z")
+    assert dumped_incident["createdAt"].endswith("Z")
+    assert dumped_incident["updatedAt"].endswith("Z")
+    assert dumped_incident["startsAt"] is None
+    assert dumped_incident["resolvedAt"] is None

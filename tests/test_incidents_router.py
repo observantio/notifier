@@ -31,7 +31,7 @@ incidents_mod = importlib.util.module_from_spec(spec)
 sys.modules["incidents_module"] = incidents_mod
 spec.loader.exec_module(incidents_mod)
 
-patch_incident = incidents_mod.patch_incident
+update_incident = incidents_mod.update_incident
 storage_service = incidents_mod.storage_service
 notification_service = incidents_mod.notification_service
 
@@ -82,7 +82,7 @@ async def test_patch_incident_sends_assignment_email(monkeypatch):
     )
 
     payload = AlertIncidentUpdateRequest(assignee="bob@example.com")
-    result = await patch_incident("i1", payload, current_user=user)
+    result = await update_incident("i1", payload, current_user=user)
 
     assert result.assignee == "bob@example.com"
     assert 'args' in called
@@ -140,7 +140,7 @@ async def test_patch_incident_requests_write_access_for_existing_incident(monkey
     )
 
     payload = AlertIncidentUpdateRequest()
-    await patch_incident("i2", payload, current_user=user)
+    await update_incident("i2", payload, current_user=user)
 
     existing_write_access = (
         captured["existing_kwargs"].get("write_access")

@@ -3,11 +3,12 @@ from fastapi import APIRouter, Body, Depends
 from custom_types.json import JSONDict
 from middleware.dependencies import require_permission_with_scope
 from middleware.error_handlers import handle_route_errors
+from middleware.openapi import BAD_REQUEST_ERRORS, merge_responses, NOT_FOUND_ERRORS
 from models.access.auth_models import Permission, TokenData
 from models.alerting.requests import JiraConfigUpdateRequest
 from services.alerting.integration_security_service import load_tenant_jira_config, save_tenant_jira_config
 
-router = APIRouter()
+router = APIRouter(tags=["alertmanager-jira"])
 
 
 def _optional_str(value: object) -> str | None:
@@ -24,7 +25,13 @@ def _jira_config_payload(config_data: dict[str, object]) -> JSONDict:
     }
 
 
-@router.get("/jira/config")
+@router.get(
+    "/jira/config",
+    summary="Get Jira Config",
+    description="Returns the tenant-level Jira configuration with secrets masked into presence flags.",
+    response_description="The current tenant Jira configuration.",
+    responses=NOT_FOUND_ERRORS,
+)
 async def get_jira_config(
     current_user: TokenData = Depends(require_permission_with_scope(Permission.MANAGE_TENANTS, "alertmanager")),
 ) -> JSONDict:
@@ -32,9 +39,15 @@ async def get_jira_config(
     return _jira_config_payload(cfg)
 
 
-@router.put("/jira/config")
+@router.put(
+    "/jira/config",
+    summary="Update Jira Config",
+    description="Updates the tenant-level Jira configuration used when an explicit integration is not selected.",
+    response_description="The saved tenant Jira configuration.",
+    responses=merge_responses(BAD_REQUEST_ERRORS, {404: {"description": "Not Found"}}),
+)
 @handle_route_errors()
-async def put_jira_config(
+async def update_jira_config(
     payload: JiraConfigUpdateRequest = Body(...),
     current_user: TokenData = Depends(require_permission_with_scope(Permission.MANAGE_TENANTS, "alertmanager")),
 ) -> JSONDict:

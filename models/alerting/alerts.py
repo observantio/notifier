@@ -36,25 +36,62 @@ class AlertState(str, Enum):
 
 
 class AlertStatus(BaseModel):
-    state: AlertState = Field(..., description=DESC_CURRENT_STATE_ALERT)
-    silenced_by: List[str] = Field(default_factory=list, alias="silencedBy", description=DESC_LIST_SILENCES_SILENCE_ALERT)
-    inhibited_by: List[str] = Field(default_factory=list, alias="inhibitedBy", description=DESC_LIST_ALERTS_INHIBIT_ALERT)
+    state: AlertState = Field(..., description=DESC_CURRENT_STATE_ALERT, examples=["active"])
+    silenced_by: List[str] = Field(
+        default_factory=list,
+        alias="silencedBy",
+        description=DESC_LIST_SILENCES_SILENCE_ALERT,
+        examples=[["silence-123"]],
+    )
+    inhibited_by: List[str] = Field(
+        default_factory=list,
+        alias="inhibitedBy",
+        description=DESC_LIST_ALERTS_INHIBIT_ALERT,
+        examples=[["alert-456"]],
+    )
     model_config = ConfigDict(populate_by_name=True)
 
 
 class Alert(BaseModel):
-    labels: Dict[str, str] = Field(..., description=DESC_KEY_VALUE_PAIRS_IDENTIFY_ALERT)
-    annotations: Dict[str, str] = Field(default_factory=dict, description=DESC_ADDITIONAL_INFO_ALERT)
-    starts_at: str = Field(..., alias="startsAt", description=DESC_TIME_ALERT_STARTED_FIRING)
-    ends_at: Optional[str] = Field(None, alias="endsAt", description=DESC_TIME_ALERT_STOPPED_FIRING)
-    generator_url: Optional[str] = Field(None, alias="generatorURL", description=DESC_URL_ALERT_GENERATOR)
+    labels: Dict[str, str] = Field(
+        ...,
+        description=DESC_KEY_VALUE_PAIRS_IDENTIFY_ALERT,
+        examples=[{"alertname": "HighCpuUsage", "severity": "critical"}],
+    )
+    annotations: Dict[str, str] = Field(
+        default_factory=dict,
+        description=DESC_ADDITIONAL_INFO_ALERT,
+        examples=[{"summary": "CPU usage above 95%", "description": "Node cpu is saturated"}],
+    )
+    starts_at: str = Field(
+        ...,
+        alias="startsAt",
+        description=DESC_TIME_ALERT_STARTED_FIRING,
+        examples=["2026-04-03T12:00:00Z"],
+    )
+    ends_at: Optional[str] = Field(
+        None,
+        alias="endsAt",
+        description=DESC_TIME_ALERT_STOPPED_FIRING,
+        examples=["2026-04-03T12:15:00Z"],
+    )
+    generator_url: Optional[str] = Field(
+        None,
+        alias="generatorURL",
+        description=DESC_URL_ALERT_GENERATOR,
+        examples=["https://grafana.example.internal/alerting/grafana/high-cpu"],
+    )
     status: AlertStatus = Field(..., description=DESC_CURRENT_STATUS_ALERT)
-    receivers: Optional[List[Union[str, JSONDict]]] = Field(default_factory=list, description=DESC_LIST_RECEIVERS_ALERT)
-    fingerprint: Optional[str] = Field(None, description=DESC_UNIQUE_IDENTIFIER_ALERT)
+    receivers: Optional[List[Union[str, JSONDict]]] = Field(
+        default_factory=list,
+        description=DESC_LIST_RECEIVERS_ALERT,
+        examples=[["primary-oncall", {"type": "slack", "channel": "#alerts"}]],
+    )
+    fingerprint: Optional[str] = Field(None, description=DESC_UNIQUE_IDENTIFIER_ALERT, examples=["01ARZ3NDEKTSV4RRFFQ69G5FAV"])
     model_config = ConfigDict(populate_by_name=True)
 
 
 class AlertGroup(BaseModel):
-    labels: Dict[str, str] = Field(..., description=DESC_COMMON_LABELS_GROUP)
-    receiver: str = Field(..., description=DESC_RECEIVER_HANDLE_ALERTS)
+    labels: Dict[str, str] = Field(..., description=DESC_COMMON_LABELS_GROUP, examples=[{"team": "platform"}])
+    receiver: str = Field(..., description=DESC_RECEIVER_HANDLE_ALERTS, examples=["primary-oncall"])
     alerts: List[Alert] = Field(..., description=DESC_LIST_ALERTS_GROUP)

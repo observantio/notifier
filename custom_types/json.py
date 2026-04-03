@@ -11,17 +11,10 @@ You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from typing import TYPE_CHECKING, TypeAlias, TypeGuard
-from typing_extensions import TypeAliasType
+from typing import Any, TypeAlias, TypeGuard
 
 JSONScalar: TypeAlias = str | int | float | bool | None
-if TYPE_CHECKING:
-    JSONValue: TypeAlias = JSONScalar | Mapping[str, "JSONValue"] | Sequence["JSONValue"]
-else:
-    JSONValue = TypeAliasType(
-        "JSONValue",
-        JSONScalar | Mapping[str, "JSONValue"] | Sequence["JSONValue"],
-    )
+JSONValue: TypeAlias = Any
 JSONDict: TypeAlias = dict[str, JSONValue]
 JSONList: TypeAlias = list[JSONValue]
 

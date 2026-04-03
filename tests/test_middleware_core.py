@@ -22,7 +22,12 @@ from tests._env import ensure_test_env
 ensure_test_env()
 
 from middleware.concurrency_limit import ConcurrencyLimitMiddleware
-from middleware.error_handlers import general_exception_handler, handle_route_errors, validation_exception_handler
+from middleware.error_handlers import (
+    general_exception_handler,
+    handle_route_errors,
+    http_exception_handler,
+    validation_exception_handler,
+)
 from middleware.headers import _is_https_request, security_headers_middleware
 from middleware.request_size_limit import RequestSizeLimitMiddleware
 
@@ -57,6 +62,10 @@ async def test_handle_route_errors_variants():
         raise RuntimeError("raw")
 
     @handle_route_errors()
+    async def mapped_internal() -> str:
+        raise RuntimeError("mapped")
+
+    @handle_route_errors()
     async def passthrough() -> str:
         raise HTTPException(status_code=409, detail="conflict")
 
@@ -72,6 +81,11 @@ async def test_handle_route_errors_variants():
 
     with pytest.raises(RuntimeError):
         await raw_internal()
+
+    with pytest.raises(HTTPException) as mapped_internal_exc:
+        await mapped_internal()
+    assert mapped_internal_exc.value.status_code == 500
+    assert mapped_internal_exc.value.detail == "Internal server error"
 
     with pytest.raises(HTTPException) as passthrough_exc:
         await passthrough()
@@ -90,6 +104,36 @@ async def test_error_handlers_and_security_headers():
     general_response = general_exception_handler(_request("/boom"), RuntimeError("boom"))
     assert general_response.status_code == 500
     assert json.loads(general_response.body.decode("utf-8"))["detail"] == "Internal server error"
+
+    validation_fallback_response = validation_exception_handler(_request("/invalid"), RuntimeError("bad input"))
+    assert validation_fallback_response.status_code == 422
+    assert json.loads(validation_fallback_response.body.decode("utf-8"))["detail"][0]["msg"] == "bad input"
+
+    general_bad_request = general_exception_handler(_request("/boom"), ValueError("bad"))
+    assert general_bad_request.status_code == 400
+    assert json.loads(general_bad_request.body.decode("utf-8"))["detail"] == "Invalid request"
+
+    general_internal_route = general_exception_handler(_request("/internal/v1/api/alertmanager/rules"), RuntimeError("boom"))
+    assert general_internal_route.status_code == 400
+    assert json.loads(general_internal_route.body.decode("utf-8"))["detail"] == "Invalid request"
+
+    http_with_headers = http_exception_handler(
+        _request("/x"),
+        HTTPException(status_code=418, detail="teapot", headers={"x-test": "yes"}),
+    )
+    assert http_with_headers.status_code == 418
+    assert http_with_headers.headers["x-test"] == "yes"
+
+    http_internal_remap = http_exception_handler(
+        _request("/internal/v1/api/alertmanager/rules"),
+        HTTPException(status_code=502, detail="upstream"),
+    )
+    assert http_internal_remap.status_code == 400
+    assert json.loads(http_internal_remap.body.decode("utf-8"))["detail"] == "upstream"
+
+    http_non_http_exception = http_exception_handler(_request("/x"), RuntimeError("boom"))
+    assert http_non_http_exception.status_code == 500
+    assert json.loads(http_non_http_exception.body.decode("utf-8"))["detail"] == "Request failed"
 
     async def call_next(_request: Request) -> Response:
         return PlainTextResponse("ok")

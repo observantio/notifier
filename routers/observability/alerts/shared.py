@@ -13,7 +13,7 @@ from typing import Sequence
 
 from fastapi import HTTPException, Request, status
 from fastapi.concurrency import run_in_threadpool
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, StrictBool
 from sqlalchemy.exc import SQLAlchemyError
 
 from models.access.auth_models import TokenData
@@ -35,7 +35,22 @@ storage_service = DatabaseStorageService()
 
 
 class HideTogglePayload(BaseModel):
-    hidden: bool = True
+    hidden: StrictBool = Field(True, examples=[True])
+
+
+def reject_unknown_query_params(request: Request, allowed: set[str]) -> None:
+    unknown = sorted({key for key in request.query_params.keys() if key not in allowed})
+    if unknown:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unknown query parameter(s): {', '.join(unknown)}",
+        )
+
+
+def parse_show_hidden(raw: object) -> bool:
+    if isinstance(raw, bool):
+        return raw
+    return str(raw).strip().lower() == "true"
 
 
 def scope_header(request: Request) -> str:

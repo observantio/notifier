@@ -11,7 +11,7 @@ from .silences import router as silences_router
 from .status import router as status_router
 from .webhooks import router as webhooks_router
 
-router = APIRouter(prefix="/api/alertmanager", tags=["alertmanager"])
+router = APIRouter(prefix="/api/alertmanager")
 router.include_router(alerts_router)
 router.include_router(access_router)
 router.include_router(integrations_router)
@@ -20,7 +20,7 @@ router.include_router(status_router)
 router.include_router(rules_router)
 router.include_router(channels_router)
 
-webhook_router = APIRouter(tags=["alertmanager-webhooks"])
+webhook_router = APIRouter()
 webhook_router.include_router(webhooks_router)
 
 __all__ = ["router", "webhook_router"]

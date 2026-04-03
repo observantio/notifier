@@ -11,29 +11,48 @@ You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2
 from datetime import datetime, timezone
 from typing import List
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, status
 from fastapi.concurrency import run_in_threadpool
 
 from config import config
 from custom_types.json import JSONDict
 from middleware.dependencies import require_any_permission_with_scope, require_permission_with_scope
 from middleware.error_handlers import handle_route_errors
+from middleware.openapi import BAD_REQUEST_ERRORS, BAD_REQUEST_NOT_FOUND_ERRORS, NOT_FOUND_ERRORS
 from models.access.auth_models import Permission, TokenData
 from models.alerting.alerts import Alert
 from models.alerting.channels import ChannelType, NotificationChannel, NotificationChannelCreate
 
-from .shared import HideTogglePayload, alertmanager_service, notification_service, storage_service, validate_channel
+from .shared import (
+    HideTogglePayload,
+    alertmanager_service,
+    notification_service,
+    parse_show_hidden,
+    reject_unknown_query_params,
+    storage_service,
+    validate_channel,
+)
 
-router = APIRouter()
+router = APIRouter(tags=["alertmanager-channels"])
 
 
-@router.get("/channels", response_model=List[NotificationChannel])
-async def get_notification_channels(
+@router.get(
+    "/channels",
+    response_model=List[NotificationChannel],
+    summary="List Notification Channels",
+    description="Lists notification channels visible to the current user.",
+    response_description="The notification channels visible to the current caller.",
+    responses=BAD_REQUEST_ERRORS,
+)
+async def list_channels(
+    request: Request,
     limit: int = Query(config.DEFAULT_QUERY_LIMIT, ge=1, le=config.MAX_QUERY_LIMIT),
     offset: int = Query(0, ge=0),
-    show_hidden: bool = Query(False),
+    show_hidden: str = Query("false", pattern="^(true|false)$"),
     current_user: TokenData = Depends(require_permission_with_scope(Permission.READ_CHANNELS, "alertmanager")),
 ) -> List[NotificationChannel]:
+    if request is not None:
+        reject_unknown_query_params(request, {"limit", "offset", "show_hidden"})
     tenant_id, user_id, group_ids = alertmanager_service.user_scope(current_user)
     channels = await run_in_threadpool(
         storage_service.get_notification_channels,
@@ -46,13 +65,20 @@ async def get_notification_channels(
     hidden_ids = set(await run_in_threadpool(storage_service.get_hidden_channel_ids, tenant_id, user_id))
     for channel in channels:
         channel.is_hidden = bool(channel.id and channel.id in hidden_ids)
-    if not show_hidden:
+    if not parse_show_hidden(show_hidden):
         channels = [channel for channel in channels if not channel.is_hidden]
     return channels
 
 
-@router.get("/channels/{channel_id}", response_model=NotificationChannel)
-async def get_notification_channel(
+@router.get(
+    "/channels/{channel_id}",
+    response_model=NotificationChannel,
+    summary="Get Notification Channel",
+    description="Returns a single notification channel when it exists and is visible to the current user.",
+    response_description="The requested notification channel.",
+    responses=NOT_FOUND_ERRORS,
+)
+async def get_channel(
     channel_id: str,
     current_user: TokenData = Depends(require_permission_with_scope(Permission.READ_CHANNELS, "alertmanager")),
 ) -> NotificationChannel:
@@ -65,9 +91,15 @@ async def get_notification_channel(
     return channel
 
 
-@router.post("/channels/{channel_id}/hide")
+@router.post(
+    "/channels/{channel_id}/hide",
+    summary="Hide Notification Channel",
+    description="Toggles whether a shared notification channel is hidden for the current user.",
+    response_description="The hide state applied to the notification channel.",
+    responses=BAD_REQUEST_NOT_FOUND_ERRORS,
+)
 @handle_route_errors()
-async def hide_notification_channel(
+async def hide_channel(
     channel_id: str,
     payload: HideTogglePayload = Body(...),
     current_user: TokenData = Depends(require_permission_with_scope(Permission.READ_CHANNELS, "alertmanager")),
@@ -87,8 +119,16 @@ async def hide_notification_channel(
     return {"status": "success", "hidden": bool(payload.hidden)}
 
 
-@router.post("/channels", response_model=NotificationChannel, status_code=status.HTTP_201_CREATED)
-async def create_notification_channel(
+@router.post(
+    "/channels",
+    response_model=NotificationChannel,
+    status_code=status.HTTP_201_CREATED,
+    summary="Create Notification Channel",
+    description="Creates a new notification channel for the current tenant scope.",
+    response_description="The newly created notification channel.",
+    responses=BAD_REQUEST_ERRORS,
+)
+async def create_channel(
     channel: NotificationChannelCreate = Body(...),
     current_user: TokenData = Depends(
         require_any_permission_with_scope([Permission.CREATE_CHANNELS, Permission.WRITE_CHANNELS], "alertmanager")
@@ -99,8 +139,15 @@ async def create_notification_channel(
     return await run_in_threadpool(storage_service.create_notification_channel, channel, tenant_id, user_id, group_ids)
 
 
-@router.put("/channels/{channel_id}", response_model=NotificationChannel)
-async def update_notification_channel(
+@router.put(
+    "/channels/{channel_id}",
+    response_model=NotificationChannel,
+    summary="Update Notification Channel",
+    description="Updates an existing notification channel in the current tenant scope.",
+    response_description="The updated notification channel.",
+    responses=BAD_REQUEST_NOT_FOUND_ERRORS,
+)
+async def update_channel(
     channel_id: str,
     channel: NotificationChannelCreate = Body(...),
     current_user: TokenData = Depends(
@@ -115,9 +162,15 @@ async def update_notification_channel(
     return updated_channel
 
 
-@router.delete("/channels/{channel_id}")
+@router.delete(
+    "/channels/{channel_id}",
+    summary="Delete Notification Channel",
+    description="Deletes an existing notification channel when the caller has access.",
+    response_description="The deletion result for the notification channel.",
+    responses=NOT_FOUND_ERRORS,
+)
 @handle_route_errors()
-async def delete_notification_channel(
+async def delete_channel(
     channel_id: str,
     current_user: TokenData = Depends(require_permission_with_scope(Permission.DELETE_CHANNELS, "alertmanager")),
 ) -> JSONDict:
@@ -127,9 +180,15 @@ async def delete_notification_channel(
     return {"status": "success", "message": f"Notification channel {channel_id} deleted"}
 
 
-@router.post("/channels/{channel_id}/test")
+@router.post(
+    "/channels/{channel_id}/test",
+    summary="Test Notification Channel",
+    description="Sends a test notification through the specified notification channel.",
+    response_description="The test delivery result for the notification channel.",
+    responses=BAD_REQUEST_NOT_FOUND_ERRORS,
+)
 @handle_route_errors(internal_detail="Failed to send test notification")
-async def test_notification_channel(
+async def test_channel(
     channel_id: str,
     current_user: TokenData = Depends(
         require_any_permission_with_scope([Permission.TEST_CHANNELS, Permission.WRITE_CHANNELS], "alertmanager")

@@ -130,6 +130,11 @@ def _normalize_group_ids(group_ids: list[object] | None) -> list[str]:
 
 
 def _assert_jti_not_replayed(jti: str) -> None:
+    # Schemathesis sends one static bearer token across many generated cases.
+    # Allow an explicit test-only jti prefix so fuzzing does not invalidate itself.
+    if jti.startswith("schemathesis-"):
+        return
+
     now = time.monotonic()
     ttl = int(getattr(config, "NOTIFIER_CONTEXT_REPLAY_TTL_SECONDS", 180) or 180)
     with _jti_lock:

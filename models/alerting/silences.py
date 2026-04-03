@@ -9,7 +9,7 @@ You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2
 """
 
 from typing import Dict, List, Optional
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, StrictBool
 from enum import Enum
 
 DESC_LABEL_NAME_MATCH = "Label name to match"
@@ -36,41 +36,41 @@ class Visibility(str, Enum):
 
 
 class Matcher(BaseModel):
-    name: str = Field(..., description=DESC_LABEL_NAME_MATCH)
-    value: str = Field(..., description=DESC_VALUE_MATCH_AGAINST)
-    is_regex: bool = Field(False, alias="isRegex", description=DESC_VALUE_IS_REGEX)
-    is_equal: bool = Field(True, alias="isEqual", description=DESC_MATCH_EQUAL_VALUES)
-    model_config = ConfigDict(populate_by_name=True)
+    name: str = Field(..., description=DESC_LABEL_NAME_MATCH, examples=["alertname"])
+    value: str = Field(..., description=DESC_VALUE_MATCH_AGAINST, examples=["HighCpuUsage"])
+    is_regex: StrictBool = Field(False, alias="isRegex", description=DESC_VALUE_IS_REGEX, examples=[False])
+    is_equal: StrictBool = Field(True, alias="isEqual", description=DESC_MATCH_EQUAL_VALUES, examples=[True])
+    model_config = ConfigDict(populate_by_name=True, extra="forbid")
 
 
 class Silence(BaseModel):
-    id: Optional[str] = Field(None, description=DESC_UNIQUE_IDENTIFIER_SILENCE)
-    matchers: List[Matcher] = Field(..., description=DESC_MATCHERS_DEFINE_SILENCE)
-    starts_at: str = Field(..., alias="startsAt", description=DESC_TIME_SILENCE_STARTS)
-    ends_at: str = Field(..., alias="endsAt", description=DESC_TIME_SILENCE_ENDS)
-    created_by: str = Field(..., alias="createdBy", description=DESC_USER_CREATED_SILENCE)
-    comment: str = Field(..., description=DESC_COMMENT_EXPLAINING_SILENCE)
-    status: Optional[Dict[str, str]] = Field(None, description=DESC_CURRENT_STATUS_SILENCE)
-    visibility: Optional[Visibility] = Field(None, description=DESC_VISIBILITY_SCOPE)
-    shared_group_ids: List[str] = Field(default_factory=list, alias="sharedGroupIds", description=DESC_GROUP_IDS_SILENCE_SHARED_WITH)
-    is_hidden: bool = Field(False, alias="isHidden", description="Whether this silence is hidden for the current user")
+    id: Optional[str] = Field(None, description=DESC_UNIQUE_IDENTIFIER_SILENCE, examples=["silence-123"])
+    matchers: List[Matcher] = Field(..., description=DESC_MATCHERS_DEFINE_SILENCE, examples=[[{"name": "alertname", "value": "HighCpuUsage", "isRegex": False, "isEqual": True}]])
+    starts_at: str = Field(..., alias="startsAt", description=DESC_TIME_SILENCE_STARTS, examples=["2026-04-03T12:00:00Z"])
+    ends_at: str = Field(..., alias="endsAt", description=DESC_TIME_SILENCE_ENDS, examples=["2026-04-03T13:00:00Z"])
+    created_by: str = Field(..., alias="createdBy", description=DESC_USER_CREATED_SILENCE, examples=["user-42"])
+    comment: str = Field(..., description=DESC_COMMENT_EXPLAINING_SILENCE, examples=["Suppress noisy deploy alert while maintenance is in progress"])
+    status: Optional[Dict[str, str]] = Field(None, description=DESC_CURRENT_STATUS_SILENCE, examples=[{"state": "active"}])
+    visibility: Optional[Visibility] = Field(None, description=DESC_VISIBILITY_SCOPE, examples=["private"])
+    shared_group_ids: List[str] = Field(default_factory=list, alias="sharedGroupIds", description=DESC_GROUP_IDS_SILENCE_SHARED_WITH, examples=[["group-ops"]])
+    is_hidden: bool = Field(False, alias="isHidden", description="Whether this silence is hidden for the current user", examples=[False])
     model_config = ConfigDict(populate_by_name=True, use_enum_values=True)
 
 
 class SilenceCreate(BaseModel):
-    matchers: List[Matcher] = Field(..., description=DESC_MATCHERS_DEFINE_SILENCE)
-    starts_at: str = Field(..., alias="startsAt", description=DESC_TIME_SILENCE_STARTS)
-    ends_at: str = Field(..., alias="endsAt", description=DESC_TIME_SILENCE_ENDS)
-    created_by: str = Field(..., alias="createdBy", description=DESC_USER_CREATED_SILENCE)
-    comment: str = Field(..., description=DESC_COMMENT_EXPLAINING_SILENCE)
-    model_config = ConfigDict(populate_by_name=True)
+    matchers: List[Matcher] = Field(..., description=DESC_MATCHERS_DEFINE_SILENCE, examples=[[{"name": "alertname", "value": "HighCpuUsage", "isRegex": False, "isEqual": True}]])
+    starts_at: str = Field(..., alias="startsAt", description=DESC_TIME_SILENCE_STARTS, examples=["2026-04-03T12:00:00Z"])
+    ends_at: str = Field(..., alias="endsAt", description=DESC_TIME_SILENCE_ENDS, examples=["2026-04-03T13:00:00Z"])
+    created_by: str = Field(..., alias="createdBy", description=DESC_USER_CREATED_SILENCE, examples=["user-42"])
+    comment: str = Field(..., description=DESC_COMMENT_EXPLAINING_SILENCE, examples=["Suppress noisy deploy alert while maintenance is in progress"])
+    model_config = ConfigDict(populate_by_name=True, extra="forbid")
 
 
 class SilenceCreateRequest(BaseModel):
-    matchers: List[Matcher] = Field(..., description=DESC_MATCHERS_DEFINE_SILENCE)
-    starts_at: str = Field(..., alias="startsAt", description=DESC_TIME_SILENCE_STARTS)
-    ends_at: str = Field(..., alias="endsAt", description=DESC_TIME_SILENCE_ENDS)
-    comment: str = Field(..., description=DESC_COMMENT_EXPLAINING_SILENCE)
-    visibility: Visibility = Field(Visibility.PRIVATE, description=DESC_VISIBILITY_SCOPE)
-    shared_group_ids: List[str] = Field(default_factory=list, alias="sharedGroupIds", description=DESC_GROUP_IDS_SHARE_WITH)
-    model_config = ConfigDict(populate_by_name=True, use_enum_values=True)
+    matchers: List[Matcher] = Field(..., min_length=1, description=DESC_MATCHERS_DEFINE_SILENCE, examples=[[{"name": "alertname", "value": "HighCpuUsage", "isRegex": False, "isEqual": True}]])
+    starts_at: str = Field(..., alias="startsAt", description=DESC_TIME_SILENCE_STARTS, examples=["2026-04-03T12:00:00Z"])
+    ends_at: str = Field(..., alias="endsAt", description=DESC_TIME_SILENCE_ENDS, examples=["2026-04-03T13:00:00Z"])
+    comment: str = Field(..., description=DESC_COMMENT_EXPLAINING_SILENCE, examples=["Suppress noisy deploy alert while maintenance is in progress"])
+    visibility: Visibility = Field(Visibility.PRIVATE, description=DESC_VISIBILITY_SCOPE, examples=["private"])
+    shared_group_ids: List[str] = Field(default_factory=list, alias="sharedGroupIds", description=DESC_GROUP_IDS_SHARE_WITH, examples=[["group-ops"]])
+    model_config = ConfigDict(populate_by_name=True, use_enum_values=True, extra="forbid")
