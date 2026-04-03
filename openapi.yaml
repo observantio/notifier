@@ -8,8 +8,10 @@ paths:
     get:
       tags:
       - alertmanager
-      summary: Get Alerts
-      operationId: get_alerts_internal_v1_api_alertmanager_alerts_get
+      summary: List Alerts
+      description: Lists alertmanager alerts with optional state and label filtering
+        for the current user scope.
+      operationId: list_alerts
       security:
       - HTTPBearer: []
       parameters:
@@ -54,31 +56,34 @@ paths:
           title: Show Hidden
       responses:
         '200':
-          description: Successful Response
+          description: The alerts visible to the current caller.
           content:
             application/json:
               schema:
                 type: array
                 items:
                   $ref: '#/components/schemas/Alert-Output'
-                title: Response Get Alerts Internal V1 Api Alertmanager Alerts Get
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
+                title: Response List Alerts
         '401':
           description: Unauthorized
         '403':
           description: Forbidden
         '429':
           description: Too Many Requests
+        '400':
+          description: Bad Request
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
     post:
       tags:
       - alertmanager
-      summary: Post Alerts
-      operationId: post_alerts_internal_v1_api_alertmanager_alerts_post
+      summary: Create Alerts
+      description: Submits one or more alerts to alertmanager for processing.
+      operationId: create_alerts
       security:
       - HTTPBearer: []
       requestBody:
@@ -92,33 +97,34 @@ paths:
               title: Alerts
       responses:
         '200':
-          description: Successful Response
+          description: The submission result including the number of alerts accepted.
           content:
             application/json:
               schema:
                 type: object
-                additionalProperties:
-                  $ref: '#/components/schemas/JSONValue-Output'
-                title: Response Post Alerts Internal V1 Api Alertmanager Alerts Post
+                additionalProperties: true
+                title: Response Create Alerts
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '429':
+          description: Too Many Requests
+        '400':
+          description: Bad Request
         '422':
           description: Validation Error
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-        '401':
-          description: Unauthorized
-        '403':
-          description: Forbidden
-        '400':
-          description: Bad Request
-        '429':
-          description: Too Many Requests
     delete:
       tags:
       - alertmanager
       summary: Delete Alerts
-      operationId: delete_alerts_internal_v1_api_alertmanager_alerts_delete
+      description: Deletes alerts in alertmanager that match the provided label filter
+        set.
+      operationId: delete_alerts
       security:
       - HTTPBearer: []
       parameters:
@@ -130,35 +136,34 @@ paths:
           title: Filter Labels
       responses:
         '200':
-          description: Successful Response
+          description: The deletion result for the matched alerts.
           content:
             application/json:
               schema:
                 type: object
-                additionalProperties:
-                  $ref: '#/components/schemas/JSONValue-Output'
-                title: Response Delete Alerts Internal V1 Api Alertmanager Alerts
-                  Delete
+                additionalProperties: true
+                title: Response Delete Alerts
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '429':
+          description: Too Many Requests
+        '400':
+          description: Bad Request
         '422':
           description: Validation Error
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-        '401':
-          description: Unauthorized
-        '403':
-          description: Forbidden
-        '400':
-          description: Bad Request
-        '429':
-          description: Too Many Requests
   /internal/v1/api/alertmanager/alerts/groups:
     get:
       tags:
       - alertmanager
-      summary: Get Alert Groups
-      operationId: get_alert_groups_internal_v1_api_alertmanager_alerts_groups_get
+      summary: List Alert Groups
+      description: Lists grouped alerts from alertmanager with optional label filtering.
+      operationId: list_alert_groups
       security:
       - HTTPBearer: []
       parameters:
@@ -172,33 +177,36 @@ paths:
           title: Filter Labels
       responses:
         '200':
-          description: Successful Response
+          description: Grouped alerts returned by alertmanager.
           content:
             application/json:
               schema:
                 type: array
                 items:
                   $ref: '#/components/schemas/AlertGroup'
-                title: Response Get Alert Groups Internal V1 Api Alertmanager Alerts
-                  Groups Get
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
+                title: Response List Alert Groups
         '401':
           description: Unauthorized
         '403':
           description: Forbidden
         '429':
           description: Too Many Requests
+        '400':
+          description: Bad Request
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /internal/v1/api/alertmanager/access/group-shares/prune:
     post:
       tags:
       - alertmanager
-      summary: Prune Removed Member Group Shares
-      operationId: prune_removed_member_group_shares_internal_v1_api_alertmanager_access_group_shares_prune_post
+      summary: Prune Group Shares
+      description: Removes stale shared-group visibility references for users that
+        were removed from a group.
+      operationId: prune_group_shares
       requestBody:
         content:
           application/json:
@@ -207,46 +215,44 @@ paths:
         required: true
       responses:
         '200':
-          description: Successful Response
+          description: The counts of updated records and pruned silences.
           content:
             application/json:
               schema:
-                additionalProperties:
-                  $ref: '#/components/schemas/JSONValue-Output'
+                additionalProperties: true
                 type: object
-                title: Response Prune Removed Member Group Shares Internal V1 Api
-                  Alertmanager Access Group Shares Prune Post
+                title: Response Prune Group Shares
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '429':
+          description: Too Many Requests
+        '400':
+          description: Bad Request
         '422':
           description: Validation Error
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-        '401':
-          description: Unauthorized
-        '403':
-          description: Forbidden
-        '400':
-          description: Bad Request
-        '429':
-          description: Too Many Requests
   /internal/v1/api/alertmanager/integrations/channel-types:
     get:
       tags:
       - alertmanager
-      summary: Get Integration Channel Types
-      operationId: get_integration_channel_types_internal_v1_api_alertmanager_integrations_channel_types_get
+      summary: List Allowed Channel Types
+      description: Lists notification channel types that are currently enabled for
+        alertmanager integrations.
+      operationId: list_channel_types
       responses:
         '200':
-          description: Successful Response
+          description: The channel types allowed by integration policy.
           content:
             application/json:
               schema:
-                additionalProperties:
-                  $ref: '#/components/schemas/JSONValue-Output'
+                additionalProperties: true
                 type: object
-                title: Response Get Integration Channel Types Internal V1 Api Alertmanager
-                  Integrations Channel Types Get
+                title: Response List Channel Types
         '401':
           description: Unauthorized
         '403':
@@ -258,9 +264,11 @@ paths:
   /internal/v1/api/alertmanager/silences:
     get:
       tags:
-      - alertmanager
-      summary: Get Silences
-      operationId: get_silences_internal_v1_api_alertmanager_silences_get
+      - alertmanager-silences
+      summary: List Silences
+      description: Lists silences visible to the current user with optional label
+        and expiration filtering.
+      operationId: list_silences
       security:
       - HTTPBearer: []
       parameters:
@@ -283,37 +291,40 @@ paths:
         in: query
         required: false
         schema:
-          type: boolean
-          default: false
+          type: string
+          pattern: ^(true|false)$
+          default: 'false'
           title: Show Hidden
       responses:
         '200':
-          description: Successful Response
+          description: The silences visible to the current caller.
           content:
             application/json:
               schema:
                 type: array
                 items:
                   $ref: '#/components/schemas/Silence'
-                title: Response Get Silences Internal V1 Api Alertmanager Silences
-                  Get
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
+                title: Response List Silences
         '401':
           description: Unauthorized
         '403':
           description: Forbidden
         '429':
           description: Too Many Requests
+        '400':
+          description: Bad Request
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
     post:
       tags:
-      - alertmanager
+      - alertmanager-silences
       summary: Create Silence
-      operationId: create_silence_internal_v1_api_alertmanager_silences_post
+      description: Creates a new silence in alertmanager for the current user scope.
+      operationId: create_silence
       security:
       - HTTPBearer: []
       requestBody:
@@ -324,35 +335,36 @@ paths:
               $ref: '#/components/schemas/SilenceCreateRequest'
       responses:
         '200':
-          description: Successful Response
+          description: The created silence identifier and operation result.
           content:
             application/json:
               schema:
                 type: object
                 additionalProperties:
                   type: string
-                title: Response Create Silence Internal V1 Api Alertmanager Silences
-                  Post
+                title: Response Create Silence
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '429':
+          description: Too Many Requests
+        '400':
+          description: Bad Request
         '422':
           description: Validation Error
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-        '401':
-          description: Unauthorized
-        '403':
-          description: Forbidden
-        '400':
-          description: Bad Request
-        '429':
-          description: Too Many Requests
   /internal/v1/api/alertmanager/silences/{silence_id}:
     get:
       tags:
-      - alertmanager
+      - alertmanager-silences
       summary: Get Silence
-      operationId: get_silence_internal_v1_api_alertmanager_silences__silence_id__get
+      description: Returns a single silence when it exists and is visible to the current
+        user.
+      operationId: get_silence
       security:
       - HTTPBearer: []
       parameters:
@@ -366,35 +378,40 @@ paths:
         in: query
         required: false
         schema:
-          type: boolean
-          default: false
+          type: string
+          pattern: ^(true|false)$
+          default: 'false'
           title: Show Hidden
       responses:
         '200':
-          description: Successful Response
+          description: The requested silence.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Silence'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '429':
+          description: Too Many Requests
+        '400':
+          description: Bad Request
+        '404':
+          description: Not Found
         '422':
           description: Validation Error
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-        '401':
-          description: Unauthorized
-        '403':
-          description: Forbidden
-        '404':
-          description: Not Found
-        '429':
-          description: Too Many Requests
     put:
       tags:
-      - alertmanager
+      - alertmanager-silences
       summary: Update Silence
-      operationId: update_silence_internal_v1_api_alertmanager_silences__silence_id__put
+      description: Updates an existing silence when the caller owns it and still has
+        access.
+      operationId: update_silence
       security:
       - HTTPBearer: []
       parameters:
@@ -412,36 +429,37 @@ paths:
               $ref: '#/components/schemas/SilenceCreateRequest'
       responses:
         '200':
-          description: Successful Response
+          description: The updated silence identifier and operation result.
           content:
             application/json:
               schema:
                 type: object
                 additionalProperties:
                   type: string
-                title: Response Update Silence Internal V1 Api Alertmanager Silences  Silence
-                  Id  Put
+                title: Response Update Silence
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '429':
+          description: Too Many Requests
+        '400':
+          description: Bad Request
+        '404':
+          description: Not Found
         '422':
           description: Validation Error
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-        '401':
-          description: Unauthorized
-        '403':
-          description: Forbidden
-        '400':
-          description: Bad Request
-        '404':
-          description: Not Found
-        '429':
-          description: Too Many Requests
     delete:
       tags:
-      - alertmanager
+      - alertmanager-silences
       summary: Delete Silence
-      operationId: delete_silence_internal_v1_api_alertmanager_silences__silence_id__delete
+      description: Deletes an existing silence when the caller owns it and still has
+        access.
+      operationId: delete_silence
       security:
       - HTTPBearer: []
       parameters:
@@ -453,37 +471,36 @@ paths:
           title: Silence Id
       responses:
         '200':
-          description: Successful Response
+          description: The deletion result for the specified silence.
           content:
             application/json:
               schema:
                 type: object
-                additionalProperties:
-                  $ref: '#/components/schemas/JSONValue-Output'
-                title: Response Delete Silence Internal V1 Api Alertmanager Silences  Silence
-                  Id  Delete
+                additionalProperties: true
+                title: Response Delete Silence
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '429':
+          description: Too Many Requests
+        '400':
+          description: Bad Request
+        '404':
+          description: Not Found
         '422':
           description: Validation Error
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-        '401':
-          description: Unauthorized
-        '403':
-          description: Forbidden
-        '400':
-          description: Bad Request
-        '404':
-          description: Not Found
-        '429':
-          description: Too Many Requests
   /internal/v1/api/alertmanager/silences/{silence_id}/hide:
     post:
       tags:
-      - alertmanager
+      - alertmanager-silences
       summary: Hide Silence
-      operationId: hide_silence_internal_v1_api_alertmanager_silences__silence_id__hide_post
+      description: Toggles whether a shared silence is hidden for the current user.
+      operationId: hide_silence
       security:
       - HTTPBearer: []
       parameters:
@@ -498,43 +515,42 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/HideTogglePayload'
+              $ref: '#/components/schemas/routers__observability__alerts__shared__HideTogglePayload'
       responses:
         '200':
-          description: Successful Response
+          description: The hide state applied to the silence.
           content:
             application/json:
               schema:
                 type: object
-                additionalProperties:
-                  $ref: '#/components/schemas/JSONValue-Output'
-                title: Response Hide Silence Internal V1 Api Alertmanager Silences  Silence
-                  Id  Hide Post
+                additionalProperties: true
+                title: Response Hide Silence
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '429':
+          description: Too Many Requests
+        '400':
+          description: Bad Request
+        '404':
+          description: Not Found
         '422':
           description: Validation Error
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-        '401':
-          description: Unauthorized
-        '403':
-          description: Forbidden
-        '400':
-          description: Bad Request
-        '404':
-          description: Not Found
-        '429':
-          description: Too Many Requests
   /internal/v1/api/alertmanager/status:
     get:
       tags:
       - alertmanager
-      summary: Get Status
-      operationId: get_status_internal_v1_api_alertmanager_status_get
+      summary: Get Alertmanager Status
+      description: Returns alertmanager runtime status and cluster metadata.
+      operationId: get_alertmanager_status
       responses:
         '200':
-          description: Successful Response
+          description: The current alertmanager status payload.
           content:
             application/json:
               schema:
@@ -545,25 +561,27 @@ paths:
           description: Forbidden
         '429':
           description: Too Many Requests
+        '400':
+          description: Bad Request
       security:
       - HTTPBearer: []
   /internal/v1/api/alertmanager/receivers:
     get:
       tags:
       - alertmanager
-      summary: Get Receivers
-      operationId: get_receivers_internal_v1_api_alertmanager_receivers_get
+      summary: List Receivers
+      description: Lists alertmanager receiver names available for routing and inspection.
+      operationId: list_receivers
       responses:
         '200':
-          description: Successful Response
+          description: The configured alertmanager receiver names.
           content:
             application/json:
               schema:
                 items:
                   type: string
                 type: array
-                title: Response Get Receivers Internal V1 Api Alertmanager Receivers
-                  Get
+                title: Response List Receivers
         '401':
           description: Unauthorized
         '403':
@@ -575,9 +593,11 @@ paths:
   /internal/v1/api/alertmanager/rules/import:
     post:
       tags:
-      - alertmanager
+      - alertmanager-rules
       summary: Import Alert Rules
-      operationId: import_alert_rules_internal_v1_api_alertmanager_rules_import_post
+      description: Imports alert rules from YAML, optionally previewing the parsed
+        rules without persisting them.
+      operationId: import_rules
       requestBody:
         content:
           application/json:
@@ -586,37 +606,37 @@ paths:
         required: true
       responses:
         '200':
-          description: Successful Response
+          description: The imported or previewed rule set with creation and update
+            counts.
           content:
             application/json:
               schema:
-                additionalProperties:
-                  $ref: '#/components/schemas/JSONValue-Output'
+                additionalProperties: true
                 type: object
-                title: Response Import Alert Rules Internal V1 Api Alertmanager Rules
-                  Import Post
+                title: Response Import Rules
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '429':
+          description: Too Many Requests
+        '400':
+          description: Bad Request
         '422':
           description: Validation Error
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-        '401':
-          description: Unauthorized
-        '403':
-          description: Forbidden
-        '400':
-          description: Bad Request
-        '429':
-          description: Too Many Requests
       security:
       - HTTPBearer: []
   /internal/v1/api/alertmanager/rules:
     get:
       tags:
-      - alertmanager
-      summary: Get Alert Rules
-      operationId: get_alert_rules_internal_v1_api_alertmanager_rules_get
+      - alertmanager-rules
+      summary: List Alert Rules
+      description: Lists alert rules visible to the current user with pagination support.
+      operationId: list_rules
       security:
       - HTTPBearer: []
       parameters:
@@ -641,37 +661,41 @@ paths:
         in: query
         required: false
         schema:
-          type: boolean
-          default: false
+          type: string
+          pattern: ^(true|false)$
+          default: 'false'
           title: Show Hidden
       responses:
         '200':
-          description: Successful Response
+          description: The alert rules visible to the current caller.
           content:
             application/json:
               schema:
                 type: array
                 items:
                   $ref: '#/components/schemas/AlertRule'
-                title: Response Get Alert Rules Internal V1 Api Alertmanager Rules
-                  Get
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
+                title: Response List Rules
         '401':
           description: Unauthorized
         '403':
           description: Forbidden
         '429':
           description: Too Many Requests
+        '400':
+          description: Bad Request
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
     post:
       tags:
-      - alertmanager
+      - alertmanager-rules
       summary: Create Alert Rule
-      operationId: create_alert_rule_internal_v1_api_alertmanager_rules_post
+      description: Creates a new alert rule and synchronizes it to the backing Mimir
+        rule set.
+      operationId: create_rule
       security:
       - HTTPBearer: []
       requestBody:
@@ -682,42 +706,43 @@ paths:
               $ref: '#/components/schemas/AlertRuleCreate'
       responses:
         '201':
-          description: Successful Response
+          description: The newly created alert rule.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/AlertRule'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '429':
+          description: Too Many Requests
+        '400':
+          description: Bad Request
         '422':
           description: Validation Error
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-        '401':
-          description: Unauthorized
-        '403':
-          description: Forbidden
-        '400':
-          description: Bad Request
-        '429':
-          description: Too Many Requests
   /internal/v1/api/alertmanager/public/rules:
     get:
       tags:
-      - alertmanager
-      summary: Get Public Alert Rules
-      operationId: get_public_alert_rules_internal_v1_api_alertmanager_public_rules_get
+      - alertmanager-rules
+      summary: List Public Alert Rules
+      description: Lists public alert rules for the default tenant after public endpoint
+        protections are enforced.
+      operationId: list_public_rules
       responses:
         '200':
-          description: Successful Response
+          description: The public alert rules available for the default tenant.
           content:
             application/json:
               schema:
                 items:
                   $ref: '#/components/schemas/AlertRule'
                 type: array
-                title: Response Get Public Alert Rules Internal V1 Api Alertmanager
-                  Public Rules Get
+                title: Response List Public Rules
         '401':
           description: Unauthorized
         '403':
@@ -727,9 +752,11 @@ paths:
   /internal/v1/api/alertmanager/metrics/names:
     get:
       tags:
-      - alertmanager
+      - alertmanager-rules
       summary: List Metric Names
-      operationId: list_metric_names_internal_v1_api_alertmanager_metrics_names_get
+      description: Lists metric names available in Mimir for the resolved organization
+        scope.
+      operationId: list_metric_names
       security:
       - HTTPBearer: []
       parameters:
@@ -743,33 +770,35 @@ paths:
           title: Orgid
       responses:
         '200':
-          description: Successful Response
+          description: The resolved organization identifier and metric names.
           content:
             application/json:
               schema:
                 type: object
-                additionalProperties:
-                  $ref: '#/components/schemas/JSONValue-Output'
-                title: Response List Metric Names Internal V1 Api Alertmanager Metrics
-                  Names Get
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
+                additionalProperties: true
+                title: Response List Metric Names
         '401':
           description: Unauthorized
         '403':
           description: Forbidden
         '429':
           description: Too Many Requests
+        '400':
+          description: Bad Request
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /internal/v1/api/alertmanager/metrics/query:
     get:
       tags:
-      - alertmanager
-      summary: Evaluate Promql
-      operationId: evaluate_promql_internal_v1_api_alertmanager_metrics_query_get
+      - alertmanager-rules
+      summary: Evaluate PromQL Query
+      description: Evaluates a PromQL query against Mimir for the resolved organization
+        scope.
+      operationId: query_metrics
       security:
       - HTTPBearer: []
       parameters:
@@ -799,33 +828,35 @@ paths:
           title: Samplelimit
       responses:
         '200':
-          description: Successful Response
+          description: The evaluated query result returned from Mimir.
           content:
             application/json:
               schema:
                 type: object
-                additionalProperties:
-                  $ref: '#/components/schemas/JSONValue-Output'
-                title: Response Evaluate Promql Internal V1 Api Alertmanager Metrics
-                  Query Get
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
+                additionalProperties: true
+                title: Response Query Metrics
         '401':
           description: Unauthorized
         '403':
           description: Forbidden
         '429':
           description: Too Many Requests
+        '400':
+          description: Bad Request
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /internal/v1/api/alertmanager/metrics/labels:
     get:
       tags:
-      - alertmanager
+      - alertmanager-rules
       summary: List Metric Labels
-      operationId: list_metric_labels_internal_v1_api_alertmanager_metrics_labels_get
+      description: Lists label names available in Mimir for the resolved organization
+        scope.
+      operationId: list_metric_labels
       security:
       - HTTPBearer: []
       parameters:
@@ -839,33 +870,35 @@ paths:
           title: Orgid
       responses:
         '200':
-          description: Successful Response
+          description: The resolved organization identifier and metric label names.
           content:
             application/json:
               schema:
                 type: object
-                additionalProperties:
-                  $ref: '#/components/schemas/JSONValue-Output'
-                title: Response List Metric Labels Internal V1 Api Alertmanager Metrics
-                  Labels Get
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
+                additionalProperties: true
+                title: Response List Metric Labels
         '401':
           description: Unauthorized
         '403':
           description: Forbidden
         '429':
           description: Too Many Requests
+        '400':
+          description: Bad Request
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /internal/v1/api/alertmanager/metrics/label-values/{label}:
     get:
       tags:
-      - alertmanager
+      - alertmanager-rules
       summary: List Metric Label Values
-      operationId: list_metric_label_values_internal_v1_api_alertmanager_metrics_label_values__label__get
+      description: Lists values for a metric label in Mimir for the resolved organization
+        scope.
+      operationId: list_metric_label_values
       security:
       - HTTPBearer: []
       parameters:
@@ -893,35 +926,37 @@ paths:
           title: Metricname
       responses:
         '200':
-          description: Successful Response
+          description: The resolved organization identifier and metric label values.
           content:
             application/json:
               schema:
                 type: object
-                additionalProperties:
-                  $ref: '#/components/schemas/JSONValue-Output'
-                title: Response List Metric Label Values Internal V1 Api Alertmanager
-                  Metrics Label Values  Label  Get
+                additionalProperties: true
+                title: Response List Metric Label Values
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '429':
+          description: Too Many Requests
+        '400':
+          description: Bad Request
         '422':
           description: Validation Error
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-        '401':
-          description: Unauthorized
-        '403':
-          description: Forbidden
         '404':
           description: Not Found
-        '429':
-          description: Too Many Requests
   /internal/v1/api/alertmanager/rules/{rule_id}:
     get:
       tags:
-      - alertmanager
+      - alertmanager-rules
       summary: Get Alert Rule
-      operationId: get_alert_rule_internal_v1_api_alertmanager_rules__rule_id__get
+      description: Returns a single alert rule when it exists and is visible to the
+        current user.
+      operationId: get_rule
       security:
       - HTTPBearer: []
       parameters:
@@ -933,30 +968,32 @@ paths:
           title: Rule Id
       responses:
         '200':
-          description: Successful Response
+          description: The requested alert rule.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/AlertRule'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '429':
+          description: Too Many Requests
+        '404':
+          description: Not Found
         '422':
           description: Validation Error
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-        '401':
-          description: Unauthorized
-        '403':
-          description: Forbidden
-        '404':
-          description: Not Found
-        '429':
-          description: Too Many Requests
     put:
       tags:
-      - alertmanager
+      - alertmanager-rules
       summary: Update Alert Rule
-      operationId: update_alert_rule_internal_v1_api_alertmanager_rules__rule_id__put
+      description: Updates an existing alert rule and synchronizes affected Mimir
+        rule sets.
+      operationId: update_rule
       security:
       - HTTPBearer: []
       parameters:
@@ -974,32 +1011,33 @@ paths:
               $ref: '#/components/schemas/AlertRuleCreate'
       responses:
         '200':
-          description: Successful Response
+          description: The updated alert rule.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/AlertRule'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '429':
+          description: Too Many Requests
+        '400':
+          description: Bad Request
+        '404':
+          description: Not Found
         '422':
           description: Validation Error
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-        '401':
-          description: Unauthorized
-        '403':
-          description: Forbidden
-        '400':
-          description: Bad Request
-        '404':
-          description: Not Found
-        '429':
-          description: Too Many Requests
     delete:
       tags:
-      - alertmanager
+      - alertmanager-rules
       summary: Delete Alert Rule
-      operationId: delete_alert_rule_internal_v1_api_alertmanager_rules__rule_id__delete
+      description: Deletes an alert rule and synchronizes the backing Mimir rule set.
+      operationId: delete_rule
       security:
       - HTTPBearer: []
       parameters:
@@ -1011,37 +1049,36 @@ paths:
           title: Rule Id
       responses:
         '200':
-          description: Successful Response
+          description: The deletion result for the alert rule.
           content:
             application/json:
               schema:
                 type: object
-                additionalProperties:
-                  $ref: '#/components/schemas/JSONValue-Output'
-                title: Response Delete Alert Rule Internal V1 Api Alertmanager Rules  Rule
-                  Id  Delete
+                additionalProperties: true
+                title: Response Delete Rule
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '429':
+          description: Too Many Requests
+        '400':
+          description: Bad Request
+        '404':
+          description: Not Found
         '422':
           description: Validation Error
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-        '401':
-          description: Unauthorized
-        '403':
-          description: Forbidden
-        '400':
-          description: Bad Request
-        '404':
-          description: Not Found
-        '429':
-          description: Too Many Requests
   /internal/v1/api/alertmanager/rules/{rule_id}/hide:
     post:
       tags:
-      - alertmanager
+      - alertmanager-rules
       summary: Hide Alert Rule
-      operationId: hide_alert_rule_internal_v1_api_alertmanager_rules__rule_id__hide_post
+      description: Toggles whether a shared alert rule is hidden for the current user.
+      operationId: hide_rule
       security:
       - HTTPBearer: []
       parameters:
@@ -1056,40 +1093,40 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/HideTogglePayload'
+              $ref: '#/components/schemas/routers__observability__alerts__shared__HideTogglePayload'
       responses:
         '200':
-          description: Successful Response
+          description: The hide state applied to the alert rule.
           content:
             application/json:
               schema:
                 type: object
-                additionalProperties:
-                  $ref: '#/components/schemas/JSONValue-Output'
-                title: Response Hide Alert Rule Internal V1 Api Alertmanager Rules  Rule
-                  Id  Hide Post
+                additionalProperties: true
+                title: Response Hide Rule
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '429':
+          description: Too Many Requests
+        '400':
+          description: Bad Request
+        '404':
+          description: Not Found
         '422':
           description: Validation Error
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-        '401':
-          description: Unauthorized
-        '403':
-          description: Forbidden
-        '400':
-          description: Bad Request
-        '404':
-          description: Not Found
-        '429':
-          description: Too Many Requests
   /internal/v1/api/alertmanager/rules/{rule_id}/test:
     post:
       tags:
-      - alertmanager
+      - alertmanager-rules
       summary: Test Alert Rule
-      operationId: test_alert_rule_internal_v1_api_alertmanager_rules__rule_id__test_post
+      description: Builds a synthetic alert from the rule and sends test notifications
+        through its configured channels.
+      operationId: test_rule
       security:
       - HTTPBearer: []
       parameters:
@@ -1101,37 +1138,37 @@ paths:
           title: Rule Id
       responses:
         '200':
-          description: Successful Response
+          description: The test execution result across the configured notification
+            channels.
           content:
             application/json:
               schema:
                 type: object
-                additionalProperties:
-                  $ref: '#/components/schemas/JSONValue-Output'
-                title: Response Test Alert Rule Internal V1 Api Alertmanager Rules  Rule
-                  Id  Test Post
+                additionalProperties: true
+                title: Response Test Rule
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '429':
+          description: Too Many Requests
+        '400':
+          description: Bad Request
+        '404':
+          description: Not Found
         '422':
           description: Validation Error
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-        '401':
-          description: Unauthorized
-        '403':
-          description: Forbidden
-        '400':
-          description: Bad Request
-        '404':
-          description: Not Found
-        '429':
-          description: Too Many Requests
   /internal/v1/api/alertmanager/channels:
     get:
       tags:
-      - alertmanager
-      summary: Get Notification Channels
-      operationId: get_notification_channels_internal_v1_api_alertmanager_channels_get
+      - alertmanager-channels
+      summary: List Notification Channels
+      description: Lists notification channels visible to the current user.
+      operationId: list_channels
       security:
       - HTTPBearer: []
       parameters:
@@ -1156,37 +1193,40 @@ paths:
         in: query
         required: false
         schema:
-          type: boolean
-          default: false
+          type: string
+          pattern: ^(true|false)$
+          default: 'false'
           title: Show Hidden
       responses:
         '200':
-          description: Successful Response
+          description: The notification channels visible to the current caller.
           content:
             application/json:
               schema:
                 type: array
                 items:
                   $ref: '#/components/schemas/NotificationChannel'
-                title: Response Get Notification Channels Internal V1 Api Alertmanager
-                  Channels Get
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
+                title: Response List Channels
         '401':
           description: Unauthorized
         '403':
           description: Forbidden
         '429':
           description: Too Many Requests
+        '400':
+          description: Bad Request
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
     post:
       tags:
-      - alertmanager
+      - alertmanager-channels
       summary: Create Notification Channel
-      operationId: create_notification_channel_internal_v1_api_alertmanager_channels_post
+      description: Creates a new notification channel for the current tenant scope.
+      operationId: create_channel
       security:
       - HTTPBearer: []
       requestBody:
@@ -1197,31 +1237,33 @@ paths:
               $ref: '#/components/schemas/NotificationChannelCreate'
       responses:
         '201':
-          description: Successful Response
+          description: The newly created notification channel.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/NotificationChannel'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '429':
+          description: Too Many Requests
+        '400':
+          description: Bad Request
         '422':
           description: Validation Error
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-        '401':
-          description: Unauthorized
-        '403':
-          description: Forbidden
-        '400':
-          description: Bad Request
-        '429':
-          description: Too Many Requests
   /internal/v1/api/alertmanager/channels/{channel_id}:
     get:
       tags:
-      - alertmanager
+      - alertmanager-channels
       summary: Get Notification Channel
-      operationId: get_notification_channel_internal_v1_api_alertmanager_channels__channel_id__get
+      description: Returns a single notification channel when it exists and is visible
+        to the current user.
+      operationId: get_channel
       security:
       - HTTPBearer: []
       parameters:
@@ -1233,30 +1275,32 @@ paths:
           title: Channel Id
       responses:
         '200':
-          description: Successful Response
+          description: The requested notification channel.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/NotificationChannel'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '429':
+          description: Too Many Requests
+        '404':
+          description: Not Found
         '422':
           description: Validation Error
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-        '401':
-          description: Unauthorized
-        '403':
-          description: Forbidden
-        '404':
-          description: Not Found
-        '429':
-          description: Too Many Requests
     put:
       tags:
-      - alertmanager
+      - alertmanager-channels
       summary: Update Notification Channel
-      operationId: update_notification_channel_internal_v1_api_alertmanager_channels__channel_id__put
+      description: Updates an existing notification channel in the current tenant
+        scope.
+      operationId: update_channel
       security:
       - HTTPBearer: []
       parameters:
@@ -1274,32 +1318,33 @@ paths:
               $ref: '#/components/schemas/NotificationChannelCreate'
       responses:
         '200':
-          description: Successful Response
+          description: The updated notification channel.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/NotificationChannel'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '429':
+          description: Too Many Requests
+        '400':
+          description: Bad Request
+        '404':
+          description: Not Found
         '422':
           description: Validation Error
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-        '401':
-          description: Unauthorized
-        '403':
-          description: Forbidden
-        '400':
-          description: Bad Request
-        '404':
-          description: Not Found
-        '429':
-          description: Too Many Requests
     delete:
       tags:
-      - alertmanager
+      - alertmanager-channels
       summary: Delete Notification Channel
-      operationId: delete_notification_channel_internal_v1_api_alertmanager_channels__channel_id__delete
+      description: Deletes an existing notification channel when the caller has access.
+      operationId: delete_channel
       security:
       - HTTPBearer: []
       parameters:
@@ -1311,37 +1356,37 @@ paths:
           title: Channel Id
       responses:
         '200':
-          description: Successful Response
+          description: The deletion result for the notification channel.
           content:
             application/json:
               schema:
                 type: object
-                additionalProperties:
-                  $ref: '#/components/schemas/JSONValue-Output'
-                title: Response Delete Notification Channel Internal V1 Api Alertmanager
-                  Channels  Channel Id  Delete
+                additionalProperties: true
+                title: Response Delete Channel
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '429':
+          description: Too Many Requests
+        '404':
+          description: Not Found
         '422':
           description: Validation Error
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-        '401':
-          description: Unauthorized
-        '403':
-          description: Forbidden
         '400':
           description: Bad Request
-        '404':
-          description: Not Found
-        '429':
-          description: Too Many Requests
   /internal/v1/api/alertmanager/channels/{channel_id}/hide:
     post:
       tags:
-      - alertmanager
+      - alertmanager-channels
       summary: Hide Notification Channel
-      operationId: hide_notification_channel_internal_v1_api_alertmanager_channels__channel_id__hide_post
+      description: Toggles whether a shared notification channel is hidden for the
+        current user.
+      operationId: hide_channel
       security:
       - HTTPBearer: []
       parameters:
@@ -1356,40 +1401,39 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/HideTogglePayload'
+              $ref: '#/components/schemas/routers__observability__alerts__shared__HideTogglePayload'
       responses:
         '200':
-          description: Successful Response
+          description: The hide state applied to the notification channel.
           content:
             application/json:
               schema:
                 type: object
-                additionalProperties:
-                  $ref: '#/components/schemas/JSONValue-Output'
-                title: Response Hide Notification Channel Internal V1 Api Alertmanager
-                  Channels  Channel Id  Hide Post
+                additionalProperties: true
+                title: Response Hide Channel
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '429':
+          description: Too Many Requests
+        '400':
+          description: Bad Request
+        '404':
+          description: Not Found
         '422':
           description: Validation Error
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-        '401':
-          description: Unauthorized
-        '403':
-          description: Forbidden
-        '400':
-          description: Bad Request
-        '404':
-          description: Not Found
-        '429':
-          description: Too Many Requests
   /internal/v1/api/alertmanager/channels/{channel_id}/test:
     post:
       tags:
-      - alertmanager
+      - alertmanager-channels
       summary: Test Notification Channel
-      operationId: test_notification_channel_internal_v1_api_alertmanager_channels__channel_id__test_post
+      description: Sends a test notification through the specified notification channel.
+      operationId: test_channel
       security:
       - HTTPBearer: []
       parameters:
@@ -1401,37 +1445,37 @@ paths:
           title: Channel Id
       responses:
         '200':
-          description: Successful Response
+          description: The test delivery result for the notification channel.
           content:
             application/json:
               schema:
                 type: object
-                additionalProperties:
-                  $ref: '#/components/schemas/JSONValue-Output'
-                title: Response Test Notification Channel Internal V1 Api Alertmanager
-                  Channels  Channel Id  Test Post
+                additionalProperties: true
+                title: Response Test Channel
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '429':
+          description: Too Many Requests
+        '400':
+          description: Bad Request
+        '404':
+          description: Not Found
         '422':
           description: Validation Error
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-        '401':
-          description: Unauthorized
-        '403':
-          description: Forbidden
-        '400':
-          description: Bad Request
-        '404':
-          description: Not Found
-        '429':
-          description: Too Many Requests
   /internal/v1/api/alertmanager/incidents:
     get:
       tags:
       - alertmanager-incidents
-      summary: Get Incidents
-      operationId: get_incidents_internal_v1_api_alertmanager_incidents_get
+      summary: List Incidents
+      description: Lists alert incidents visible to the current user with optional
+        status, visibility, and group filters.
+      operationId: list_incidents
       security:
       - HTTPBearer: []
       parameters:
@@ -1478,44 +1522,45 @@ paths:
           title: Offset
       responses:
         '200':
-          description: Successful Response
+          description: The incidents visible to the current caller.
           content:
             application/json:
               schema:
                 type: array
                 items:
                   $ref: '#/components/schemas/AlertIncident'
-                title: Response Get Incidents Internal V1 Api Alertmanager Incidents
-                  Get
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
+                title: Response List Incidents
         '401':
           description: Unauthorized
         '403':
           description: Forbidden
         '429':
           description: Too Many Requests
+        '400':
+          description: Bad Request
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /internal/v1/api/alertmanager/incidents/summary:
     get:
       tags:
       - alertmanager-incidents
-      summary: Get Incidents Summary
-      operationId: get_incidents_summary_internal_v1_api_alertmanager_incidents_summary_get
+      summary: Get Incident Summary
+      description: Returns an aggregated summary of incidents visible to the current
+        user.
+      operationId: get_incident_summary
       responses:
         '200':
-          description: Successful Response
+          description: Aggregated incident summary counts and breakdowns.
           content:
             application/json:
               schema:
-                additionalProperties:
-                  $ref: '#/components/schemas/JSONValue-Output'
+                additionalProperties: true
                 type: object
-                title: Response Get Incidents Summary Internal V1 Api Alertmanager
-                  Incidents Summary Get
+                title: Response Get Incident Summary
         '401':
           description: Unauthorized
         '403':
@@ -1528,8 +1573,10 @@ paths:
     patch:
       tags:
       - alertmanager-incidents
-      summary: Patch Incident
-      operationId: patch_incident_internal_v1_api_alertmanager_incidents__incident_id__patch
+      summary: Update Incident
+      description: Updates an incident's status, assignment, Jira metadata, or visibility
+        settings.
+      operationId: update_incident
       security:
       - HTTPBearer: []
       parameters:
@@ -1547,57 +1594,61 @@ paths:
               $ref: '#/components/schemas/AlertIncidentUpdateRequest'
       responses:
         '200':
-          description: Successful Response
+          description: The updated incident.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/AlertIncident'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '429':
+          description: Too Many Requests
+        '400':
+          description: Bad Request
+        '404':
+          description: Not Found
         '422':
           description: Validation Error
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-        '401':
-          description: Unauthorized
-        '403':
-          description: Forbidden
-        '400':
-          description: Bad Request
-        '404':
-          description: Not Found
-        '429':
-          description: Too Many Requests
   /internal/v1/api/alertmanager/jira/config:
     get:
       tags:
       - alertmanager-jira
       summary: Get Jira Config
-      operationId: get_jira_config_internal_v1_api_alertmanager_jira_config_get
+      description: Returns the tenant-level Jira configuration with secrets masked
+        into presence flags.
+      operationId: get_jira_config
       responses:
         '200':
-          description: Successful Response
+          description: The current tenant Jira configuration.
           content:
             application/json:
               schema:
-                additionalProperties:
-                  $ref: '#/components/schemas/JSONValue-Output'
+                additionalProperties: true
                 type: object
-                title: Response Get Jira Config Internal V1 Api Alertmanager Jira
-                  Config Get
+                title: Response Get Jira Config
         '401':
           description: Unauthorized
         '403':
           description: Forbidden
         '429':
           description: Too Many Requests
+        '404':
+          description: Not Found
       security:
       - HTTPBearer: []
     put:
       tags:
       - alertmanager-jira
-      summary: Put Jira Config
-      operationId: put_jira_config_internal_v1_api_alertmanager_jira_config_put
+      summary: Update Jira Config
+      description: Updates the tenant-level Jira configuration used when an explicit
+        integration is not selected.
+      operationId: update_jira_config
       requestBody:
         content:
           application/json:
@@ -1606,29 +1657,29 @@ paths:
         required: true
       responses:
         '200':
-          description: Successful Response
+          description: The saved tenant Jira configuration.
           content:
             application/json:
               schema:
-                additionalProperties:
-                  $ref: '#/components/schemas/JSONValue-Output'
+                additionalProperties: true
                 type: object
-                title: Response Put Jira Config Internal V1 Api Alertmanager Jira
-                  Config Put
+                title: Response Update Jira Config
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '429':
+          description: Too Many Requests
+        '400':
+          description: Bad Request
+        '404':
+          description: Not Found
         '422':
           description: Validation Error
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-        '401':
-          description: Unauthorized
-        '403':
-          description: Forbidden
-        '400':
-          description: Bad Request
-        '429':
-          description: Too Many Requests
       security:
       - HTTPBearer: []
   /internal/v1/api/alertmanager/jira/projects:
@@ -1636,7 +1687,9 @@ paths:
       tags:
       - alertmanager-jira
       summary: List Jira Projects
-      operationId: list_jira_projects_internal_v1_api_alertmanager_jira_projects_get
+      description: Lists Jira projects using either the tenant Jira config or a selected
+        integration.
+      operationId: list_jira_projects
       security:
       - HTTPBearer: []
       parameters:
@@ -1650,33 +1703,37 @@ paths:
           title: Integrationid
       responses:
         '200':
-          description: Successful Response
+          description: The available Jira projects for the resolved credentials.
           content:
             application/json:
               schema:
                 type: object
-                additionalProperties:
-                  $ref: '#/components/schemas/JSONValue-Output'
-                title: Response List Jira Projects Internal V1 Api Alertmanager Jira
-                  Projects Get
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
+                additionalProperties: true
+                title: Response List Jira Projects
         '401':
           description: Unauthorized
         '403':
           description: Forbidden
         '429':
           description: Too Many Requests
+        '400':
+          description: Bad Request
+        '404':
+          description: Not Found
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /internal/v1/api/alertmanager/jira/projects/{project_key}/issue-types:
     get:
       tags:
       - alertmanager-jira
       summary: List Jira Issue Types
-      operationId: list_jira_issue_types_internal_v1_api_alertmanager_jira_projects__project_key__issue_types_get
+      description: Lists Jira issue types for a project using either the tenant Jira
+        config or a selected integration.
+      operationId: list_jira_issue_types
       security:
       - HTTPBearer: []
       parameters:
@@ -1696,35 +1753,36 @@ paths:
           title: Integrationid
       responses:
         '200':
-          description: Successful Response
+          description: The available Jira issue types for the requested project.
           content:
             application/json:
               schema:
                 type: object
-                additionalProperties:
-                  $ref: '#/components/schemas/JSONValue-Output'
-                title: Response List Jira Issue Types Internal V1 Api Alertmanager
-                  Jira Projects  Project Key  Issue Types Get
+                additionalProperties: true
+                title: Response List Jira Issue Types
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '429':
+          description: Too Many Requests
+        '400':
+          description: Bad Request
+        '404':
+          description: Not Found
         '422':
           description: Validation Error
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-        '401':
-          description: Unauthorized
-        '403':
-          description: Forbidden
-        '404':
-          description: Not Found
-        '429':
-          description: Too Many Requests
   /internal/v1/api/alertmanager/integrations/jira/{integration_id}/projects:
     get:
       tags:
       - alertmanager-jira
       summary: List Jira Projects By Integration
-      operationId: list_jira_projects_by_integration_internal_v1_api_alertmanager_integrations_jira__integration_id__projects_get
+      description: Lists Jira projects using a specific Jira integration.
+      operationId: list_integration_projects
       security:
       - HTTPBearer: []
       parameters:
@@ -1736,35 +1794,36 @@ paths:
           title: Integration Id
       responses:
         '200':
-          description: Successful Response
+          description: The Jira projects available through the selected integration.
           content:
             application/json:
               schema:
                 type: object
-                additionalProperties:
-                  $ref: '#/components/schemas/JSONValue-Output'
-                title: Response List Jira Projects By Integration Internal V1 Api
-                  Alertmanager Integrations Jira  Integration Id  Projects Get
+                additionalProperties: true
+                title: Response List Integration Projects
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '429':
+          description: Too Many Requests
+        '400':
+          description: Bad Request
+        '404':
+          description: Not Found
         '422':
           description: Validation Error
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-        '401':
-          description: Unauthorized
-        '403':
-          description: Forbidden
-        '404':
-          description: Not Found
-        '429':
-          description: Too Many Requests
   /internal/v1/api/alertmanager/integrations/jira/{integration_id}/projects/{project_key}/issue-types:
     get:
       tags:
       - alertmanager-jira
       summary: List Jira Issue Types By Integration
-      operationId: list_jira_issue_types_by_integration_internal_v1_api_alertmanager_integrations_jira__integration_id__projects__project_key__issue_types_get
+      description: Lists Jira issue types for a project using a specific Jira integration.
+      operationId: list_integration_issue_types
       security:
       - HTTPBearer: []
       parameters:
@@ -1782,36 +1841,37 @@ paths:
           title: Project Key
       responses:
         '200':
-          description: Successful Response
+          description: The Jira issue types available through the selected integration.
           content:
             application/json:
               schema:
                 type: object
-                additionalProperties:
-                  $ref: '#/components/schemas/JSONValue-Output'
-                title: Response List Jira Issue Types By Integration Internal V1 Api
-                  Alertmanager Integrations Jira  Integration Id  Projects  Project
-                  Key  Issue Types Get
+                additionalProperties: true
+                title: Response List Integration Issue Types
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '429':
+          description: Too Many Requests
+        '400':
+          description: Bad Request
+        '404':
+          description: Not Found
         '422':
           description: Validation Error
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-        '401':
-          description: Unauthorized
-        '403':
-          description: Forbidden
-        '404':
-          description: Not Found
-        '429':
-          description: Too Many Requests
   /internal/v1/api/alertmanager/integrations/jira:
     get:
       tags:
       - alertmanager-jira
       summary: List Jira Integrations
-      operationId: list_jira_integrations_internal_v1_api_alertmanager_integrations_jira_get
+      description: Lists Jira integrations visible to the current user, including
+        hidden state when requested.
+      operationId: list_jira_integrations
       security:
       - HTTPBearer: []
       parameters:
@@ -1819,37 +1879,39 @@ paths:
         in: query
         required: false
         schema:
-          type: boolean
-          default: false
+          type: string
+          pattern: ^(true|false)$
+          default: 'false'
           title: Show Hidden
       responses:
         '200':
-          description: Successful Response
+          description: The Jira integrations visible to the current caller.
           content:
             application/json:
               schema:
                 type: object
-                additionalProperties:
-                  $ref: '#/components/schemas/JSONValue-Output'
-                title: Response List Jira Integrations Internal V1 Api Alertmanager
-                  Integrations Jira Get
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
+                additionalProperties: true
+                title: Response List Jira Integrations
         '401':
           description: Unauthorized
         '403':
           description: Forbidden
         '429':
           description: Too Many Requests
+        '400':
+          description: Bad Request
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
     post:
       tags:
       - alertmanager-jira
       summary: Create Jira Integration
-      operationId: create_jira_integration_internal_v1_api_alertmanager_integrations_jira_post
+      description: Creates a new Jira integration for the current tenant.
+      operationId: create_jira_integration
       security:
       - HTTPBearer: []
       requestBody:
@@ -1860,35 +1922,36 @@ paths:
               $ref: '#/components/schemas/JiraIntegrationCreateRequest'
       responses:
         '200':
-          description: Successful Response
+          description: The created Jira integration with sensitive values masked.
           content:
             application/json:
               schema:
                 type: object
-                additionalProperties:
-                  $ref: '#/components/schemas/JSONValue-Output'
-                title: Response Create Jira Integration Internal V1 Api Alertmanager
-                  Integrations Jira Post
+                additionalProperties: true
+                title: Response Create Jira Integration
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '429':
+          description: Too Many Requests
+        '400':
+          description: Bad Request
+        '404':
+          description: Not Found
         '422':
           description: Validation Error
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-        '401':
-          description: Unauthorized
-        '403':
-          description: Forbidden
-        '400':
-          description: Bad Request
-        '429':
-          description: Too Many Requests
   /internal/v1/api/alertmanager/integrations/jira/{integration_id}:
     put:
       tags:
       - alertmanager-jira
       summary: Update Jira Integration
-      operationId: update_jira_integration_internal_v1_api_alertmanager_integrations_jira__integration_id__put
+      description: Updates an existing Jira integration owned by the current user.
+      operationId: update_jira_integration
       security:
       - HTTPBearer: []
       parameters:
@@ -1906,36 +1969,36 @@ paths:
               $ref: '#/components/schemas/JiraIntegrationUpdateRequest'
       responses:
         '200':
-          description: Successful Response
+          description: The updated Jira integration with sensitive values masked.
           content:
             application/json:
               schema:
                 type: object
-                additionalProperties:
-                  $ref: '#/components/schemas/JSONValue-Output'
-                title: Response Update Jira Integration Internal V1 Api Alertmanager
-                  Integrations Jira  Integration Id  Put
+                additionalProperties: true
+                title: Response Update Jira Integration
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '429':
+          description: Too Many Requests
+        '400':
+          description: Bad Request
+        '404':
+          description: Not Found
         '422':
           description: Validation Error
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-        '401':
-          description: Unauthorized
-        '403':
-          description: Forbidden
-        '400':
-          description: Bad Request
-        '404':
-          description: Not Found
-        '429':
-          description: Too Many Requests
     delete:
       tags:
       - alertmanager-jira
       summary: Delete Jira Integration
-      operationId: delete_jira_integration_internal_v1_api_alertmanager_integrations_jira__integration_id__delete
+      description: Deletes a Jira integration owned by the current user and unlinks
+        it from incidents.
+      operationId: delete_jira_integration
       security:
       - HTTPBearer: []
       parameters:
@@ -1947,37 +2010,38 @@ paths:
           title: Integration Id
       responses:
         '200':
-          description: Successful Response
+          description: The deletion result and count of incidents unlinked from the
+            integration.
           content:
             application/json:
               schema:
                 type: object
-                additionalProperties:
-                  $ref: '#/components/schemas/JSONValue-Output'
-                title: Response Delete Jira Integration Internal V1 Api Alertmanager
-                  Integrations Jira  Integration Id  Delete
+                additionalProperties: true
+                title: Response Delete Jira Integration
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '429':
+          description: Too Many Requests
+        '404':
+          description: Not Found
         '422':
           description: Validation Error
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-        '401':
-          description: Unauthorized
-        '403':
-          description: Forbidden
         '400':
           description: Bad Request
-        '404':
-          description: Not Found
-        '429':
-          description: Too Many Requests
   /internal/v1/api/alertmanager/integrations/jira/{integration_id}/hide:
     post:
       tags:
       - alertmanager-jira
       summary: Hide Jira Integration
-      operationId: hide_jira_integration_internal_v1_api_alertmanager_integrations_jira__integration_id__hide_post
+      description: Toggles whether a shared Jira integration is hidden for the current
+        user.
+      operationId: hide_jira_integration
       security:
       - HTTPBearer: []
       parameters:
@@ -1992,40 +2056,40 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/HideTogglePayload'
+              $ref: '#/components/schemas/routers__observability__jira__shared__HideTogglePayload'
       responses:
         '200':
-          description: Successful Response
+          description: The hide state applied to the Jira integration.
           content:
             application/json:
               schema:
                 type: object
-                additionalProperties:
-                  $ref: '#/components/schemas/JSONValue-Output'
-                title: Response Hide Jira Integration Internal V1 Api Alertmanager
-                  Integrations Jira  Integration Id  Hide Post
+                additionalProperties: true
+                title: Response Hide Jira Integration
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '429':
+          description: Too Many Requests
+        '400':
+          description: Bad Request
+        '404':
+          description: Not Found
         '422':
           description: Validation Error
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-        '401':
-          description: Unauthorized
-        '403':
-          description: Forbidden
-        '400':
-          description: Bad Request
-        '404':
-          description: Not Found
-        '429':
-          description: Too Many Requests
   /internal/v1/api/alertmanager/incidents/{incident_id}/jira:
     post:
       tags:
       - alertmanager-jira
-      summary: Create Incident Jira
-      operationId: create_incident_jira_internal_v1_api_alertmanager_incidents__incident_id__jira_post
+      summary: Create Incident Jira Link
+      description: Creates a Jira issue for an incident and stores the Jira linkage
+        on the incident record.
+      operationId: create_incident_link
       security:
       - HTTPBearer: []
       parameters:
@@ -2043,33 +2107,37 @@ paths:
               $ref: '#/components/schemas/IncidentJiraCreateRequest'
       responses:
         '200':
-          description: Successful Response
+          description: The incident updated with Jira linkage metadata.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/AlertIncident'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '429':
+          description: Too Many Requests
+        '400':
+          description: Bad Request
+        '404':
+          description: Not Found
+        '409':
+          description: Conflict
         '422':
           description: Validation Error
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-        '401':
-          description: Unauthorized
-        '403':
-          description: Forbidden
-        '400':
-          description: Bad Request
-        '404':
-          description: Not Found
-        '429':
-          description: Too Many Requests
   /internal/v1/api/alertmanager/incidents/{incident_id}/jira/sync-notes:
     post:
       tags:
       - alertmanager-jira
       summary: Sync Incident Jira Notes
-      operationId: sync_incident_jira_notes_internal_v1_api_alertmanager_incidents__incident_id__jira_sync_notes_post
+      description: Backfills incident notes to the linked Jira issue while skipping
+        notes already present.
+      operationId: sync_incident_notes
       security:
       - HTTPBearer: []
       parameters:
@@ -2081,37 +2149,37 @@ paths:
           title: Incident Id
       responses:
         '200':
-          description: Successful Response
+          description: The note synchronization result for the linked Jira issue.
           content:
             application/json:
               schema:
                 type: object
-                additionalProperties:
-                  $ref: '#/components/schemas/JSONValue-Output'
-                title: Response Sync Incident Jira Notes Internal V1 Api Alertmanager
-                  Incidents  Incident Id  Jira Sync Notes Post
+                additionalProperties: true
+                title: Response Sync Incident Notes
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '429':
+          description: Too Many Requests
+        '400':
+          description: Bad Request
+        '404':
+          description: Not Found
         '422':
           description: Validation Error
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-        '401':
-          description: Unauthorized
-        '403':
-          description: Forbidden
-        '400':
-          description: Bad Request
-        '404':
-          description: Not Found
-        '429':
-          description: Too Many Requests
   /internal/v1/api/alertmanager/incidents/{incident_id}/jira/comments:
     get:
       tags:
       - alertmanager-jira
       summary: List Incident Jira Comments
-      operationId: list_incident_jira_comments_internal_v1_api_alertmanager_incidents__incident_id__jira_comments_get
+      description: Lists comments from the Jira issue linked to the specified incident
+        when credentials are available.
+      operationId: list_incident_comments
       security:
       - HTTPBearer: []
       parameters:
@@ -2123,35 +2191,37 @@ paths:
           title: Incident Id
       responses:
         '200':
-          description: Successful Response
+          description: The Jira comments associated with the incident's linked issue.
           content:
             application/json:
               schema:
                 type: object
-                additionalProperties:
-                  $ref: '#/components/schemas/JSONValue-Output'
-                title: Response List Incident Jira Comments Internal V1 Api Alertmanager
-                  Incidents  Incident Id  Jira Comments Get
+                additionalProperties: true
+                title: Response List Incident Comments
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '429':
+          description: Too Many Requests
+        '400':
+          description: Bad Request
+        '404':
+          description: Not Found
         '422':
           description: Validation Error
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-        '401':
-          description: Unauthorized
-        '403':
-          description: Forbidden
-        '404':
-          description: Not Found
-        '429':
-          description: Too Many Requests
   /internal/v1/alertmanager/alerts/webhook:
     post:
       tags:
       - alertmanager-webhooks
-      summary: Alert Webhook
-      operationId: alert_webhook_internal_v1_alertmanager_alerts_webhook_post
+      summary: Receive Alert Webhook
+      description: Receives general alert webhook payloads and dispatches notifications
+        for the inferred tenant.
+      operationId: receive_alert_webhook
       requestBody:
         content:
           application/json:
@@ -2160,35 +2230,35 @@ paths:
         required: true
       responses:
         '200':
-          description: Successful Response
+          description: The webhook processing result for the submitted alerts.
           content:
             application/json:
               schema:
-                additionalProperties:
-                  $ref: '#/components/schemas/JSONValue-Output'
+                additionalProperties: true
                 type: object
-                title: Response Alert Webhook Internal V1 Alertmanager Alerts Webhook
-                  Post
+                title: Response Receive Alert Webhook
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '429':
+          description: Too Many Requests
+        '400':
+          description: Bad Request
         '422':
           description: Validation Error
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-        '401':
-          description: Unauthorized
-        '403':
-          description: Forbidden
-        '400':
-          description: Bad Request
-        '429':
-          description: Too Many Requests
   /internal/v1/alertmanager/alerts/critical:
     post:
       tags:
       - alertmanager-webhooks
-      summary: Alert Critical
-      operationId: alert_critical_internal_v1_alertmanager_alerts_critical_post
+      summary: Receive Critical Alert Webhook
+      description: Receives critical alert webhook payloads and dispatches critical
+        notifications for the inferred tenant.
+      operationId: receive_critical_webhook
       requestBody:
         content:
           application/json:
@@ -2197,35 +2267,35 @@ paths:
         required: true
       responses:
         '200':
-          description: Successful Response
+          description: The webhook processing result for the submitted critical alerts.
           content:
             application/json:
               schema:
-                additionalProperties:
-                  $ref: '#/components/schemas/JSONValue-Output'
+                additionalProperties: true
                 type: object
-                title: Response Alert Critical Internal V1 Alertmanager Alerts Critical
-                  Post
+                title: Response Receive Critical Webhook
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '429':
+          description: Too Many Requests
+        '400':
+          description: Bad Request
         '422':
           description: Validation Error
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-        '401':
-          description: Unauthorized
-        '403':
-          description: Forbidden
-        '400':
-          description: Bad Request
-        '429':
-          description: Too Many Requests
   /internal/v1/alertmanager/alerts/warning:
     post:
       tags:
       - alertmanager-webhooks
-      summary: Alert Warning
-      operationId: alert_warning_internal_v1_alertmanager_alerts_warning_post
+      summary: Receive Warning Alert Webhook
+      description: Receives warning alert webhook payloads and dispatches warning
+        notifications for the inferred tenant.
+      operationId: receive_warning_webhook
       requestBody:
         content:
           application/json:
@@ -2234,50 +2304,54 @@ paths:
         required: true
       responses:
         '200':
-          description: Successful Response
+          description: The webhook processing result for the submitted warning alerts.
           content:
             application/json:
               schema:
-                additionalProperties:
-                  $ref: '#/components/schemas/JSONValue-Output'
+                additionalProperties: true
                 type: object
-                title: Response Alert Warning Internal V1 Alertmanager Alerts Warning
-                  Post
+                title: Response Receive Warning Webhook
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '429':
+          description: Too Many Requests
+        '400':
+          description: Bad Request
         '422':
           description: Validation Error
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-        '401':
-          description: Unauthorized
-        '403':
-          description: Forbidden
-        '400':
-          description: Bad Request
-        '429':
-          description: Too Many Requests
   /health:
     get:
-      summary: Health
-      operationId: health_health_get
+      tags:
+      - system
+      summary: Service Health
+      description: Returns a lightweight health status for the notifier service.
+      operationId: health
       responses:
         '200':
-          description: Successful Response
+          description: The current health status for the notifier service.
           content:
             application/json:
               schema:
                 additionalProperties:
                   type: string
                 type: object
-                title: Response Health Health Get
+                title: Response Health
   /ready:
     get:
-      summary: Ready
-      operationId: ready_ready_get
+      tags:
+      - system
+      summary: Service Readiness
+      description: Runs readiness checks required for notifier to serve traffic.
+      operationId: readiness
       responses:
         '200':
-          description: Successful Response
+          description: The readiness result and individual dependency checks.
           content:
             application/json:
               schema: {}
@@ -2291,28 +2365,40 @@ components:
           type: object
           title: Labels
           description: Key-value pairs that identify the alert
+          examples:
+          - alertname: HighCpuUsage
+            severity: critical
         annotations:
           additionalProperties:
             type: string
           type: object
           title: Annotations
           description: Additional information about the alert
+          examples:
+          - description: Node cpu is saturated
+            summary: CPU usage above 95%
         startsAt:
           type: string
           title: Startsat
           description: Time when the alert started firing
+          examples:
+          - '2026-04-03T12:00:00Z'
         endsAt:
           anyOf:
           - type: string
           - type: 'null'
           title: Endsat
           description: Time when the alert stopped firing
+          examples:
+          - '2026-04-03T12:15:00Z'
         generatorURL:
           anyOf:
           - type: string
           - type: 'null'
           title: Generatorurl
           description: URL of the alert generator
+          examples:
+          - https://grafana.example.internal/alerting/grafana/high-cpu
         status:
           $ref: '#/components/schemas/AlertStatus'
           description: Current status of the alert
@@ -2321,19 +2407,24 @@ components:
           - items:
               anyOf:
               - type: string
-              - additionalProperties:
-                  $ref: '#/components/schemas/JSONValue-Input'
+              - additionalProperties: true
                 type: object
             type: array
           - type: 'null'
           title: Receivers
           description: List of receivers for this alert
+          examples:
+          - - primary-oncall
+            - channel: '#alerts'
+              type: slack
         fingerprint:
           anyOf:
           - type: string
           - type: 'null'
           title: Fingerprint
           description: Unique identifier for the alert
+          examples:
+          - 01ARZ3NDEKTSV4RRFFQ69G5FAV
       type: object
       required:
       - labels
@@ -2348,28 +2439,40 @@ components:
           type: object
           title: Labels
           description: Key-value pairs that identify the alert
+          examples:
+          - alertname: HighCpuUsage
+            severity: critical
         annotations:
           additionalProperties:
             type: string
           type: object
           title: Annotations
           description: Additional information about the alert
+          examples:
+          - description: Node cpu is saturated
+            summary: CPU usage above 95%
         startsAt:
           type: string
           title: Startsat
           description: Time when the alert started firing
+          examples:
+          - '2026-04-03T12:00:00Z'
         endsAt:
           anyOf:
           - type: string
           - type: 'null'
           title: Endsat
           description: Time when the alert stopped firing
+          examples:
+          - '2026-04-03T12:15:00Z'
         generatorURL:
           anyOf:
           - type: string
           - type: 'null'
           title: Generatorurl
           description: URL of the alert generator
+          examples:
+          - https://grafana.example.internal/alerting/grafana/high-cpu
         status:
           $ref: '#/components/schemas/AlertStatus'
           description: Current status of the alert
@@ -2378,19 +2481,24 @@ components:
           - items:
               anyOf:
               - type: string
-              - additionalProperties:
-                  $ref: '#/components/schemas/JSONValue-Output'
+              - additionalProperties: true
                 type: object
             type: array
           - type: 'null'
           title: Receivers
           description: List of receivers for this alert
+          examples:
+          - - primary-oncall
+            - channel: '#alerts'
+              type: slack
         fingerprint:
           anyOf:
           - type: string
           - type: 'null'
           title: Fingerprint
           description: Unique identifier for the alert
+          examples:
+          - 01ARZ3NDEKTSV4RRFFQ69G5FAV
       type: object
       required:
       - labels
@@ -2405,10 +2513,14 @@ components:
           type: object
           title: Labels
           description: Common labels for the group
+          examples:
+          - team: platform
         receiver:
           type: string
           title: Receiver
           description: Receiver that will handle these alerts
+          examples:
+          - primary-oncall
         alerts:
           items:
             $ref: '#/components/schemas/Alert-Output'
@@ -2426,22 +2538,34 @@ components:
         id:
           type: string
           title: Id
+          examples:
+          - incident-123
         fingerprint:
           type: string
           title: Fingerprint
+          examples:
+          - 01ARZ3NDEKTSV4RRFFQ69G5FAV
         alertName:
           type: string
           title: Alertname
+          examples:
+          - HighCpuUsage
         severity:
           type: string
           title: Severity
+          examples:
+          - critical
         status:
           $ref: '#/components/schemas/IncidentStatus'
+          examples:
+          - open
         assignee:
           anyOf:
           - type: string
           - type: 'null'
           title: Assignee
+          examples:
+          - alice@example.com
         notes:
           items:
             $ref: '#/components/schemas/IncidentNote'
@@ -2452,66 +2576,96 @@ components:
             type: string
           type: object
           title: Labels
+          examples:
+          - service: api
+            severity: critical
         annotations:
           additionalProperties:
             type: string
           type: object
           title: Annotations
+          examples:
+          - summary: CPU above 95%
         visibility:
           $ref: '#/components/schemas/IncidentVisibility'
           default: public
+          examples:
+          - public
         sharedGroupIds:
           items:
             type: string
           type: array
           title: Sharedgroupids
+          examples:
+          - - group-ops
         jiraTicketKey:
           anyOf:
           - type: string
           - type: 'null'
           title: Jiraticketkey
+          examples:
+          - OPS-321
         jiraTicketUrl:
           anyOf:
           - type: string
           - type: 'null'
           title: Jiraticketurl
+          examples:
+          - https://jira.example.internal/browse/OPS-321
         jiraIntegrationId:
           anyOf:
           - type: string
           - type: 'null'
           title: Jiraintegrationid
+          examples:
+          - jira-int-01
         startsAt:
           anyOf:
           - type: string
-            format: date-time
           - type: 'null'
           title: Startsat
+          examples:
+          - '2026-04-03T11:55:00Z'
         lastSeenAt:
-          type: string
-          format: date-time
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Lastseenat
+          examples:
+          - '2026-04-03T12:05:00Z'
         resolvedAt:
           anyOf:
           - type: string
-            format: date-time
           - type: 'null'
           title: Resolvedat
+          examples:
+          - '2026-04-03T12:20:00Z'
         createdAt:
-          type: string
-          format: date-time
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Createdat
+          examples:
+          - '2026-04-03T12:00:00Z'
         updatedAt:
-          type: string
-          format: date-time
+          anyOf:
+          - type: string
+          - type: 'null'
           title: Updatedat
+          examples:
+          - '2026-04-03T12:10:00Z'
         userManaged:
           type: boolean
           title: Usermanaged
           default: false
+          examples:
+          - false
         hideWhenResolved:
           type: boolean
           title: Hidewhenresolved
           default: false
+          examples:
+          - false
       type: object
       required:
       - id
@@ -2530,25 +2684,35 @@ components:
           - type: string
           - type: 'null'
           title: Status
+          examples:
+          - resolved
         assignee:
           anyOf:
           - type: string
           - type: 'null'
           title: Assignee
+          examples:
+          - alice@example.com
         note:
           anyOf:
           - type: string
           - type: 'null'
           title: Note
+          examples:
+          - Resolved after scaling the deployment
         actorUsername:
           anyOf:
           - type: string
           - type: 'null'
           title: Actorusername
+          examples:
+          - alice
         visibility:
           anyOf:
           - $ref: '#/components/schemas/IncidentVisibility'
           - type: 'null'
+          examples:
+          - group
         sharedGroupIds:
           anyOf:
           - items:
@@ -2556,26 +2720,36 @@ components:
             type: array
           - type: 'null'
           title: Sharedgroupids
+          examples:
+          - - group-ops
         jiraTicketKey:
           anyOf:
           - type: string
           - type: 'null'
           title: Jiraticketkey
+          examples:
+          - OPS-321
         jiraTicketUrl:
           anyOf:
           - type: string
           - type: 'null'
           title: Jiraticketurl
+          examples:
+          - https://jira.example.internal/browse/OPS-321
         jiraIntegrationId:
           anyOf:
           - type: string
           - type: 'null'
           title: Jiraintegrationid
+          examples:
+          - jira-int-01
         hideWhenResolved:
           anyOf:
           - type: boolean
           - type: 'null'
           title: Hidewhenresolved
+          examples:
+          - true
       type: object
       title: AlertIncidentUpdateRequest
     AlertManagerStatus:
@@ -2584,26 +2758,35 @@ components:
           type: string
           title: Version
           description: AlertManager version
+          examples:
+          - 0.28.1
         uptime:
           type: string
           title: Uptime
           description: AlertManager uptime
+          examples:
+          - 72h15m
         configHash:
           type: string
           title: Confighash
           description: Configuration hash
+          examples:
+          - sha256:abc123
         config:
-          additionalProperties:
-            $ref: '#/components/schemas/JSONValue-Output'
+          additionalProperties: true
           type: object
           title: Config
           description: Alertmanager configuration details
+          examples:
+          - route:
+              receiver: primary-oncall
         cluster:
-          additionalProperties:
-            $ref: '#/components/schemas/JSONValue-Output'
+          additionalProperties: true
           type: object
           title: Cluster
           description: Cluster status information
+          examples:
+          - status: ready
       type: object
       required:
       - version
@@ -2619,89 +2802,123 @@ components:
           - type: 'null'
           title: Id
           description: Unique identifier
+          examples:
+          - rule-123
         createdBy:
           anyOf:
           - type: string
           - type: 'null'
           title: Createdby
           description: User ID who created the rule
+          examples:
+          - user-42
         orgId:
           anyOf:
           - type: string
           - type: 'null'
           title: Orgid
           description: Organization ID / API key scoped to this rule
+          examples:
+          - org-abc
         name:
           type: string
           title: Name
           description: Rule name
+          examples:
+          - HighCpuUsage
         expression:
           type: string
           title: Expression
           description: Prometheus expression for the alert rule
+          examples:
+          - sum(rate(node_cpu_seconds_total{mode!="idle"}[5m])) > 0.95
         severity:
           $ref: '#/components/schemas/RuleSeverity'
           description: Severity level of the alert rule
+          examples:
+          - critical
         description:
           anyOf:
           - type: string
           - type: 'null'
           title: Description
           description: Description of the alert rule
+          examples:
+          - CPU usage is critically high
         enabled:
           type: boolean
           title: Enabled
           description: Whether the rule is enabled
           default: true
+          examples:
+          - true
         labels:
           additionalProperties:
             type: string
           type: object
           title: Labels
           description: Labels to add to alerts from this rule
+          examples:
+          - service: api
         annotations:
           additionalProperties:
             type: string
           type: object
           title: Annotations
           description: Annotations to add to alerts from this rule
+          examples:
+          - summary: API CPU alert
         for:
           anyOf:
           - type: string
           - type: 'null'
           title: For
           description: Duration to wait before firing the alert
+          examples:
+          - 5m
         groupName:
           type: string
           title: Groupname
           description: Name of the rule group this rule belongs to
+          examples:
+          - watchdog-default
         groupInterval:
           anyOf:
           - type: string
           - type: 'null'
           title: Groupinterval
           description: Interval between evaluations of this rule group
+          examples:
+          - 1m
         notificationChannels:
           items:
             type: string
           type: array
           title: Notificationchannels
           description: Notification channel IDs for this rule
+          examples:
+          - - channel-1
         visibility:
           $ref: '#/components/schemas/Visibility'
           description: Visibility scope
           default: private
+          examples:
+          - private
         sharedGroupIds:
           items:
             type: string
           type: array
           title: Sharedgroupids
           description: Group IDs this rule is shared with (when visibility=group)
+          examples:
+          - - group-ops
         isHidden:
           type: boolean
           title: Ishidden
           description: Whether this rule is hidden for the current user
           default: false
+          examples:
+          - false
       type: object
       required:
       - name
@@ -2717,74 +2934,103 @@ components:
           - type: 'null'
           title: Orgid
           description: Optional org_id (API key) to scope this rule to
+          examples:
+          - org-abc
         name:
           type: string
           maxLength: 100
           minLength: 1
           title: Name
           description: Rule name
+          examples:
+          - HighCpuUsage
         expression:
           type: string
           title: Expression
           description: Prometheus expression for the alert rule
+          examples:
+          - sum(rate(node_cpu_seconds_total{mode!="idle"}[5m])) > 0.95
         severity:
           $ref: '#/components/schemas/RuleSeverity'
           description: Severity level of the alert rule
+          examples:
+          - critical
         description:
           anyOf:
           - type: string
           - type: 'null'
           title: Description
           description: Description of the alert rule
+          examples:
+          - CPU usage is critically high
         enabled:
           type: boolean
           title: Enabled
           description: Whether the rule is enabled
           default: true
+          examples:
+          - true
         labels:
           additionalProperties:
             type: string
           type: object
           title: Labels
           description: Labels to add to alerts from this rule
+          examples:
+          - service: api
         annotations:
           additionalProperties:
             type: string
           type: object
           title: Annotations
           description: Annotations to add to alerts from this rule
+          examples:
+          - summary: API CPU alert
         for:
           anyOf:
           - type: string
           - type: 'null'
           title: For
           description: Duration to wait before firing the alert
+          examples:
+          - 5m
         groupName:
           type: string
           title: Groupname
           description: Name of the rule group this rule belongs to
+          examples:
+          - watchdog-default
         groupInterval:
           anyOf:
           - type: string
           - type: 'null'
           title: Groupinterval
           description: Interval between evaluations of this rule group
+          examples:
+          - 1m
         notificationChannels:
           items:
             type: string
           type: array
           title: Notificationchannels
           description: Notification channel IDs for this rule
+          examples:
+          - - channel-1
         visibility:
           $ref: '#/components/schemas/Visibility'
           description: Visibility scope
           default: private
+          examples:
+          - private
         sharedGroupIds:
           items:
             type: string
           type: array
           title: Sharedgroupids
           description: Group IDs to share with
+          examples:
+          - - group-ops
+      additionalProperties: false
       type: object
       required:
       - name
@@ -2804,18 +3050,24 @@ components:
         state:
           $ref: '#/components/schemas/AlertState'
           description: Current state of the alert
+          examples:
+          - active
         silencedBy:
           items:
             type: string
           type: array
           title: Silencedby
           description: List of silences that silence this alert
+          examples:
+          - - silence-123
         inhibitedBy:
           items:
             type: string
           type: array
           title: Inhibitedby
           description: List of alerts that inhibit this alert
+          examples:
+          - - alert-456
       type: object
       required:
       - state
@@ -2824,11 +3076,14 @@ components:
       properties:
         alerts:
           items:
-            additionalProperties:
-              $ref: '#/components/schemas/JSONValue-Input'
+            additionalProperties: true
             type: object
           type: array
           title: Alerts
+          examples:
+          - - labels:
+                alertname: HighCpuUsage
+                severity: critical
       additionalProperties: true
       type: object
       title: AlertWebhookRequest
@@ -2848,11 +3103,15 @@ components:
           minLength: 1
           pattern: ^[^\x00]+$
           title: Tenantid
+          examples:
+          - tenant-01
         groupId:
           type: string
           minLength: 1
           pattern: ^[^\x00]+$
           title: Groupid
+          examples:
+          - group-ops
         removedUserIds:
           items:
             type: string
@@ -2860,6 +3119,8 @@ components:
             pattern: ^[^\x00]+$
           type: array
           title: Removeduserids
+          examples:
+          - - user-42
         removedUsernames:
           items:
             type: string
@@ -2867,6 +3128,8 @@ components:
             pattern: ^[^\x00]+$
           type: array
           title: Removedusernames
+          examples:
+          - - alice
       type: object
       required:
       - tenantId
@@ -2881,41 +3144,45 @@ components:
           title: Detail
       type: object
       title: HTTPValidationError
-    HideTogglePayload:
-      properties:
-        hidden:
-          type: boolean
-          title: Hidden
-          default: true
-      type: object
-      title: HideTogglePayload
     IncidentJiraCreateRequest:
       properties:
         integrationId:
           type: string
           title: Integrationid
+          examples:
+          - jira-int-01
         projectKey:
           type: string
           title: Projectkey
+          examples:
+          - OPS
         summary:
           anyOf:
           - type: string
           - type: 'null'
           title: Summary
+          examples:
+          - Investigate HighCpuUsage incident
         description:
           anyOf:
           - type: string
           - type: 'null'
           title: Description
+          examples:
+          - CPU usage has remained above 95% for five minutes.
         issueType:
           anyOf:
           - type: string
           - type: 'null'
           title: Issuetype
+          examples:
+          - Task
         replaceExisting:
           type: boolean
           title: Replaceexisting
           default: false
+          examples:
+          - false
       type: object
       required:
       - integrationId
@@ -2926,13 +3193,18 @@ components:
         author:
           type: string
           title: Author
+          examples:
+          - alice@example.com
         text:
           type: string
           title: Text
+          examples:
+          - Investigating elevated CPU on api-01
         createdAt:
           type: string
-          format: date-time
           title: Createdat
+          examples:
+          - '2026-04-03T12:00:00Z'
       type: object
       required:
       - author
@@ -2952,32 +3224,6 @@ components:
       - private
       - group
       title: IncidentVisibility
-    JSONValue-Input:
-      anyOf:
-      - type: string
-      - type: integer
-      - type: number
-      - type: boolean
-      - additionalProperties:
-          $ref: '#/components/schemas/JSONValue-Input'
-        type: object
-      - items:
-          $ref: '#/components/schemas/JSONValue-Input'
-        type: array
-      - type: 'null'
-    JSONValue-Output:
-      anyOf:
-      - type: string
-      - type: integer
-      - type: number
-      - type: boolean
-      - additionalProperties:
-          $ref: '#/components/schemas/JSONValue-Output'
-        type: object
-      - items:
-          $ref: '#/components/schemas/JSONValue-Output'
-        type: array
-      - type: 'null'
     JiraConfigUpdateRequest:
       properties:
         enabled:
@@ -2985,26 +3231,37 @@ components:
           - type: boolean
           - type: 'null'
           title: Enabled
+          examples:
+          - true
         baseUrl:
           anyOf:
           - type: string
           - type: 'null'
           title: Baseurl
+          examples:
+          - https://jira.example.internal
         email:
           anyOf:
           - type: string
           - type: 'null'
           title: Email
+          examples:
+          - jira-bot@example.com
         apiToken:
           anyOf:
           - type: string
           - type: 'null'
           title: Apitoken
+          examples:
+          - jira-api-token
         bearerToken:
           anyOf:
           - type: string
           - type: 'null'
           title: Bearertoken
+          examples:
+          - jira-bearer-token
+      additionalProperties: false
       type: object
       title: JiraConfigUpdateRequest
     JiraIntegrationCreateRequest:
@@ -3014,49 +3271,70 @@ components:
           - type: string
           - type: 'null'
           title: Name
+          examples:
+          - Primary Jira
         enabled:
           type: boolean
           title: Enabled
           default: true
+          examples:
+          - true
         visibility:
           type: string
           title: Visibility
           default: private
+          examples:
+          - group
         sharedGroupIds:
           items:
             type: string
           type: array
           title: Sharedgroupids
+          examples:
+          - - group-ops
         baseUrl:
           anyOf:
           - type: string
           - type: 'null'
           title: Baseurl
+          examples:
+          - https://jira.example.internal
         email:
           anyOf:
           - type: string
           - type: 'null'
           title: Email
+          examples:
+          - jira-bot@example.com
         apiToken:
           anyOf:
           - type: string
           - type: 'null'
           title: Apitoken
+          examples:
+          - jira-api-token
         bearerToken:
           anyOf:
           - type: string
           - type: 'null'
           title: Bearertoken
+          examples:
+          - jira-bearer-token
         authMode:
           anyOf:
           - type: string
           - type: 'null'
           title: Authmode
+          examples:
+          - api_token
         supportsSso:
           anyOf:
           - type: boolean
           - type: 'null'
           title: Supportssso
+          examples:
+          - false
+      additionalProperties: false
       type: object
       title: JiraIntegrationCreateRequest
     JiraIntegrationUpdateRequest:
@@ -3066,16 +3344,22 @@ components:
           - type: string
           - type: 'null'
           title: Name
+          examples:
+          - Primary Jira
         enabled:
           anyOf:
           - type: boolean
           - type: 'null'
           title: Enabled
+          examples:
+          - true
         visibility:
           anyOf:
           - type: string
           - type: 'null'
           title: Visibility
+          examples:
+          - group
         sharedGroupIds:
           anyOf:
           - items:
@@ -3083,36 +3367,50 @@ components:
             type: array
           - type: 'null'
           title: Sharedgroupids
+          examples:
+          - - group-ops
         baseUrl:
           anyOf:
           - type: string
           - type: 'null'
           title: Baseurl
+          examples:
+          - https://jira.example.internal
         email:
           anyOf:
           - type: string
           - type: 'null'
           title: Email
+          examples:
+          - jira-bot@example.com
         apiToken:
           anyOf:
           - type: string
           - type: 'null'
           title: Apitoken
+          examples:
+          - jira-api-token
         bearerToken:
           anyOf:
           - type: string
           - type: 'null'
           title: Bearertoken
+          examples:
+          - jira-bearer-token
         authMode:
           anyOf:
           - type: string
           - type: 'null'
           title: Authmode
+          examples:
+          - api_token
         supportsSso:
           anyOf:
           - type: boolean
           - type: 'null'
           title: Supportssso
+          examples:
+          - false
       additionalProperties: false
       type: object
       title: JiraIntegrationUpdateRequest
@@ -3122,20 +3420,29 @@ components:
           type: string
           title: Name
           description: Label name to match
+          examples:
+          - alertname
         value:
           type: string
           title: Value
           description: Value to match against
+          examples:
+          - HighCpuUsage
         isRegex:
           type: boolean
           title: Isregex
           description: Whether the value is a regular expression
           default: false
+          examples:
+          - false
         isEqual:
           type: boolean
           title: Isequal
           description: Whether to match equal values
           default: true
+          examples:
+          - true
+      additionalProperties: false
       type: object
       required:
       - name
@@ -3149,45 +3456,62 @@ components:
           - type: 'null'
           title: Id
           description: Unique identifier
+          examples:
+          - channel-123
         name:
           type: string
           title: Name
           description: Channel name
+          examples:
+          - Primary Slack
         type:
           $ref: '#/components/schemas/ChannelType'
           description: Channel type
+          examples:
+          - slack
         enabled:
           type: boolean
           title: Enabled
           description: Whether the channel is enabled
           default: true
+          examples:
+          - true
         config:
-          additionalProperties:
-            $ref: '#/components/schemas/JSONValue-Output'
+          additionalProperties: true
           type: object
           title: Config
           description: Channel-specific configuration
+          examples:
+          - webhookUrl: https://hooks.slack.com/services/T000/B000/XXX
         createdBy:
           anyOf:
           - type: string
           - type: 'null'
           title: Createdby
           description: Owner user id
+          examples:
+          - user-42
         visibility:
           $ref: '#/components/schemas/Visibility'
           description: Visibility scope
           default: private
+          examples:
+          - private
         sharedGroupIds:
           items:
             type: string
           type: array
           title: Sharedgroupids
           description: Group IDs this channel is shared with (when visibility=group)
+          examples:
+          - - group-ops
         isHidden:
           type: boolean
           title: Ishidden
           description: Whether this channel is hidden for the current user
           default: false
+          examples:
+          - false
       type: object
       required:
       - name
@@ -3202,30 +3526,42 @@ components:
           minLength: 1
           title: Name
           description: Channel name
+          examples:
+          - Primary Slack
         type:
           $ref: '#/components/schemas/ChannelType'
           description: Channel type
+          examples:
+          - slack
         enabled:
           type: boolean
           title: Enabled
           description: Whether the channel is enabled
           default: true
+          examples:
+          - true
         config:
-          additionalProperties:
-            $ref: '#/components/schemas/JSONValue-Input'
+          additionalProperties: true
           type: object
           title: Config
           description: Channel-specific configuration
+          examples:
+          - webhookUrl: https://hooks.slack.com/services/T000/B000/XXX
         visibility:
           $ref: '#/components/schemas/Visibility'
           description: Visibility scope
           default: private
+          examples:
+          - private
         sharedGroupIds:
           items:
             type: string
           type: array
           title: Sharedgroupids
           description: Group IDs to share with
+          examples:
+          - - group-ops
+      additionalProperties: false
       type: object
       required:
       - name
@@ -3239,15 +3575,21 @@ components:
           - type: string
           - type: 'null'
           title: Yamlcontent
+          examples:
+          - "groups:\n  - name: watchdog-default\n    rules:\n      - alert: HighCpuUsage"
         defaults:
-          additionalProperties:
-            $ref: '#/components/schemas/JSONValue-Input'
+          additionalProperties: true
           type: object
           title: Defaults
+          examples:
+          - labels:
+              team: platform
         dryRun:
           type: boolean
           title: Dryrun
           default: false
+          examples:
+          - true
       type: object
       title: RuleImportRequest
     RuleSeverity:
@@ -3266,28 +3608,43 @@ components:
           - type: 'null'
           title: Id
           description: Unique identifier for the silence
+          examples:
+          - silence-123
         matchers:
           items:
             $ref: '#/components/schemas/Matcher'
           type: array
           title: Matchers
           description: Matchers that define which alerts to silence
+          examples:
+          - - isEqual: true
+              isRegex: false
+              name: alertname
+              value: HighCpuUsage
         startsAt:
           type: string
           title: Startsat
           description: Time when the silence starts
+          examples:
+          - '2026-04-03T12:00:00Z'
         endsAt:
           type: string
           title: Endsat
           description: Time when the silence ends
+          examples:
+          - '2026-04-03T13:00:00Z'
         createdBy:
           type: string
           title: Createdby
           description: User who created the silence
+          examples:
+          - user-42
         comment:
           type: string
           title: Comment
           description: Comment explaining the silence
+          examples:
+          - Suppress noisy deploy alert while maintenance is in progress
         status:
           anyOf:
           - additionalProperties:
@@ -3296,22 +3653,30 @@ components:
           - type: 'null'
           title: Status
           description: Current status of the silence
+          examples:
+          - state: active
         visibility:
           anyOf:
           - $ref: '#/components/schemas/Visibility'
           - type: 'null'
           description: Visibility scope
+          examples:
+          - private
         sharedGroupIds:
           items:
             type: string
           type: array
           title: Sharedgroupids
           description: Group IDs this silence is shared with
+          examples:
+          - - group-ops
         isHidden:
           type: boolean
           title: Ishidden
           description: Whether this silence is hidden for the current user
           default: false
+          examples:
+          - false
       type: object
       required:
       - matchers
@@ -3326,30 +3691,47 @@ components:
           items:
             $ref: '#/components/schemas/Matcher'
           type: array
+          minItems: 1
           title: Matchers
           description: Matchers that define which alerts to silence
+          examples:
+          - - isEqual: true
+              isRegex: false
+              name: alertname
+              value: HighCpuUsage
         startsAt:
           type: string
           title: Startsat
           description: Time when the silence starts
+          examples:
+          - '2026-04-03T12:00:00Z'
         endsAt:
           type: string
           title: Endsat
           description: Time when the silence ends
+          examples:
+          - '2026-04-03T13:00:00Z'
         comment:
           type: string
           title: Comment
           description: Comment explaining the silence
+          examples:
+          - Suppress noisy deploy alert while maintenance is in progress
         visibility:
           $ref: '#/components/schemas/Visibility'
           description: Visibility scope
           default: private
+          examples:
+          - private
         sharedGroupIds:
           items:
             type: string
           type: array
           title: Sharedgroupids
           description: Group IDs to share with
+          examples:
+          - - group-ops
+      additionalProperties: false
       type: object
       required:
       - matchers
@@ -3391,7 +3773,26 @@ components:
       - tenant
       - public
       title: Visibility
+    routers__observability__alerts__shared__HideTogglePayload:
+      properties:
+        hidden:
+          type: boolean
+          title: Hidden
+          default: true
+          examples:
+          - true
+      type: object
+      title: HideTogglePayload
+    routers__observability__jira__shared__HideTogglePayload:
+      properties:
+        hidden:
+          type: boolean
+          title: Hidden
+          default: true
+      type: object
+      title: HideTogglePayload
   securitySchemes:
     HTTPBearer:
       type: http
       scheme: bearer
+jsonSchemaDialect: https://json-schema.org/draft/2020-12/schema
