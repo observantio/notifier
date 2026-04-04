@@ -1,12 +1,12 @@
 """
-Shared router-level error handling helpers (moved from routers).
-Decorators for mapping expected exceptions to HTTP status codes consistently across route handlers.
+Shared router-level error handling helpers (moved from routers). Decorators for mapping expected exceptions to HTTP
+status codes consistently across route handlers.
 
 Copyright (c) 2026 Stefan Kumarasinghe
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
+License. You may obtain a copy of the License at
+http://www.apache.org/licenses/LICENSE-2.0
 """
 
 from functools import wraps
@@ -17,8 +17,10 @@ import httpx
 from fastapi import HTTPException, status, Request
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
+
 logger = logging.getLogger(__name__)
 RouteResult = TypeVar("RouteResult")
+
 
 def handle_route_errors(
     *,

@@ -1,14 +1,15 @@
 """
-Copyright (c) 2026 Stefan Kumarasinghe
+Copyright (c) 2026 Stefan Kumarasinghe.
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
+License. You may obtain a copy of the License at
+http://www.apache.org/licenses/LICENSE-2.0
 """
 
 import pytest
 
 from tests._env import ensure_test_env
+
 ensure_test_env()
 
 from models.access.auth_models import TokenData
@@ -65,7 +66,7 @@ async def test_patch_incident_sends_assignment_email(monkeypatch):
     called = {}
 
     async def fake_email(recipient_email, incident_title, incident_status, incident_severity, actor):
-        called['args'] = (recipient_email, incident_title, incident_status, incident_severity, actor)
+        called["args"] = (recipient_email, incident_title, incident_status, incident_severity, actor)
         return True
 
     monkeypatch.setattr(notification_service, "send_incident_assignment_email", fake_email)
@@ -85,10 +86,10 @@ async def test_patch_incident_sends_assignment_email(monkeypatch):
     result = await update_incident("i1", payload, current_user=user)
 
     assert result.assignee == "bob@example.com"
-    assert 'args' in called
-    assert called['args'][0] == "bob@example.com"
-    assert called['args'][1] == "Alert1"
-    assert called['args'][3] == "critical"
+    assert "args" in called
+    assert called["args"][0] == "bob@example.com"
+    assert called["args"][1] == "Alert1"
+    assert called["args"][3] == "critical"
 
 
 @pytest.mark.asyncio

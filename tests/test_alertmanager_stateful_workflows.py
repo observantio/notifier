@@ -83,7 +83,9 @@ class _FakeStorage:
         self._rule_counter = 0
         self.incident_sync_calls = 0
 
-    def create_notification_channel(self, channel_create: NotificationChannelCreate, tenant_id: str, user_id: str, group_ids):
+    def create_notification_channel(
+        self, channel_create: NotificationChannelCreate, tenant_id: str, user_id: str, group_ids
+    ):
         _ = group_ids
         self._channel_counter += 1
         channel_id = f"ch-{self._channel_counter}"
@@ -134,18 +136,20 @@ class _FakeStorage:
         return self.rules.get(f"{tenant_id}:{rule_id}")
 
     def get_alert_rules_for_org(self, tenant_id: str, org_id: str):
-        return [r for key, r in self.rules.items() if key.startswith(f"{tenant_id}:") and str(r.org_id or "") == str(org_id)]
+        return [
+            r for key, r in self.rules.items() if key.startswith(f"{tenant_id}:") and str(r.org_id or "") == str(org_id)
+        ]
 
     def get_notification_channels_for_rule_name(self, tenant_id: str, rule_name: str, org_id: str | None = None):
         matched_rules = [
-            r
-            for key, r in self.rules.items()
-            if key.startswith(f"{tenant_id}:") and r.enabled and r.name == rule_name
+            r for key, r in self.rules.items() if key.startswith(f"{tenant_id}:") and r.enabled and r.name == rule_name
         ]
         if org_id:
-            matched_rules = [
-                r for r in matched_rules if str(r.org_id or "") == str(org_id)
-            ] or [r for r in matched_rules if not r.org_id] or matched_rules
+            matched_rules = (
+                [r for r in matched_rules if str(r.org_id or "") == str(org_id)]
+                or [r for r in matched_rules if not r.org_id]
+                or matched_rules
+            )
         if not matched_rules:
             return []
 
@@ -220,15 +224,23 @@ async def test_stateful_channel_rule_test_and_webhook_workflow(monkeypatch):
     monkeypatch.setattr(rules_router, "storage_service", fake_storage)
     monkeypatch.setattr(rules_router, "notification_service", fake_notification)
 
-    monkeypatch.setattr(channels_router.alertmanager_service, "user_scope", lambda _u: (_u.tenant_id, _u.user_id, _u.group_ids))
-    monkeypatch.setattr(rules_router.alertmanager_service, "user_scope", lambda _u: (_u.tenant_id, _u.user_id, _u.group_ids))
-    monkeypatch.setattr(rules_router.alertmanager_service, "resolve_rule_org_id", lambda org_id, _u: org_id or _u.org_id)
+    monkeypatch.setattr(
+        channels_router.alertmanager_service, "user_scope", lambda _u: (_u.tenant_id, _u.user_id, _u.group_ids)
+    )
+    monkeypatch.setattr(
+        rules_router.alertmanager_service, "user_scope", lambda _u: (_u.tenant_id, _u.user_id, _u.group_ids)
+    )
+    monkeypatch.setattr(
+        rules_router.alertmanager_service, "resolve_rule_org_id", lambda org_id, _u: org_id or _u.org_id
+    )
     monkeypatch.setattr(rules_router.alertmanager_service, "sync_mimir_rules_for_org", _sync_mimir)
 
     # webhooks integration points
     monkeypatch.setattr(webhooks_router, "storage_service", fake_storage)
     monkeypatch.setattr(webhooks_router, "notification_service", fake_notification)
-    monkeypatch.setattr(webhooks_router.alertmanager_service, "enforce_webhook_security", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        webhooks_router.alertmanager_service, "enforce_webhook_security", lambda *_args, **_kwargs: None
+    )
     monkeypatch.setattr(webhooks_router.alertmanager_service, "notify_for_alerts", _notify_for_alerts)
     monkeypatch.setattr(webhooks_router, "scope_header", lambda _request: "org-a")
     monkeypatch.setattr(webhooks_router, "infer_tenant_id_from_alerts", lambda _scope, _alerts: "tenant-a")

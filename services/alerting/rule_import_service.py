@@ -1,11 +1,12 @@
 """
-Rule import service for parsing and normalizing alert rules from YAML content, supporting various input formats, default values, and error handling.
+Rule import service for parsing and normalizing alert rules from YAML content, supporting various input formats, default
+values, and error handling.
 
 Copyright (c) 2026 Stefan Kumarasinghe
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
+License. You may obtain a copy of the License at
+http://www.apache.org/licenses/LICENSE-2.0
 """
 
 from __future__ import annotations
@@ -20,8 +21,10 @@ import yaml
 
 VALID_SEVERITIES = {"info", "warning", "error", "critical"}
 
+
 class RuleImportError(ValueError):
     pass
+
 
 def _as_str_map(raw: object) -> dict[str, str]:
     if not isinstance(raw, dict):
@@ -36,6 +39,7 @@ def _normalize_visibility(value: object, default_value: str = "private") -> str:
         public_alias="public",
         allowed=frozenset({"tenant", "group", "private", "public"}),
     )
+
 
 def _normalize_rule_entry(
     group_name: str,
@@ -56,9 +60,9 @@ def _normalize_rule_entry(
     labels = _as_str_map(rule_data.get("labels"))
     annotations = _as_str_map(rule_data.get("annotations"))
 
-    severity = str(
-        be_meta.get("severity") or labels.get("severity") or defaults.get("severity") or "warning"
-    ).strip().lower()
+    severity = (
+        str(be_meta.get("severity") or labels.get("severity") or defaults.get("severity") or "warning").strip().lower()
+    )
     if severity not in VALID_SEVERITIES:
         severity = "warning"
     severity_enum = RuleSeverity(severity)

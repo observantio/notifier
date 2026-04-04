@@ -37,7 +37,9 @@ async def list_alerts(
     current_user: TokenData = Depends(require_permission_with_scope(Permission.READ_ALERTS, "alertmanager")),
 ) -> List[Alert]:
     labels = alertmanager_service.parse_filter_labels(filter_labels)
-    alerts = await alertmanager_service.get_alerts(filter_labels=labels, active=active, silenced=silenced, inhibited=inhibited)
+    alerts = await alertmanager_service.get_alerts(
+        filter_labels=labels, active=active, silenced=silenced, inhibited=inhibited
+    )
     alert_dicts = [alert.model_dump(by_alias=True) for alert in alerts]
     await sync_incidents(current_user.tenant_id, alert_dicts, log_context="get_alerts")
 
@@ -60,7 +62,12 @@ async def list_alerts(
             filtered = [
                 alert
                 for alert in filtered
-                if str(_json_dict(alert).get("labels") and _json_dict(_json_dict(alert).get("labels")).get("alertname") or "") not in hidden_rule_names
+                if str(
+                    _json_dict(alert).get("labels")
+                    and _json_dict(_json_dict(alert).get("labels")).get("alertname")
+                    or ""
+                )
+                not in hidden_rule_names
             ]
     return [Alert.model_validate(_json_dict(item)) for item in filtered]
 
@@ -79,7 +86,9 @@ async def list_alert_groups(
     current_user: TokenData = Depends(require_permission_with_scope(Permission.READ_ALERTS, "alertmanager")),
 ) -> List[AlertGroup]:
     _ = current_user
-    return await alertmanager_service.get_alert_groups(filter_labels=alertmanager_service.parse_filter_labels(filter_labels))
+    return await alertmanager_service.get_alert_groups(
+        filter_labels=alertmanager_service.parse_filter_labels(filter_labels)
+    )
 
 
 @router.post(

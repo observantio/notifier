@@ -1,4 +1,6 @@
-"""Jira integration routers split by resource domain."""
+"""
+Jira integration routers split by resource domain.
+"""
 
 from fastapi import APIRouter
 

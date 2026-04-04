@@ -1,9 +1,9 @@
 """
-Copyright (c) 2026 Stefan Kumarasinghe
+Copyright (c) 2026 Stefan Kumarasinghe.
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
+License. You may obtain a copy of the License at
+http://www.apache.org/licenses/LICENSE-2.0
 """
 
 from __future__ import annotations
@@ -43,7 +43,9 @@ class FakeResponse:
 @pytest.mark.asyncio
 async def test_notify_for_alerts_covers_skip_suppressed_and_dispatch_paths(monkeypatch):
     sent = []
-    service = SimpleNamespace(logger=SimpleNamespace(info=lambda *_args, **_kwargs: None, debug=lambda *_args, **_kwargs: None))
+    service = SimpleNamespace(
+        logger=SimpleNamespace(info=lambda *_args, **_kwargs: None, debug=lambda *_args, **_kwargs: None)
+    )
     storage_service = SimpleNamespace()
     notification_service = SimpleNamespace()
 
@@ -100,7 +102,9 @@ async def test_notify_for_alerts_covers_skip_suppressed_and_dispatch_paths(monke
     # cover matched-rule optional annotation branches and unmatched-rule path
     sent.clear()
     sparse_rule = SimpleNamespace(id="rule-2", group="infra", created_by="owner", name="CPUHigh", annotations={})
-    storage_service.get_notification_channels_for_rule_name = lambda *_args, **_kwargs: [SimpleNamespace(name="webhook")]
+    storage_service.get_notification_channels_for_rule_name = lambda *_args, **_kwargs: [
+        SimpleNamespace(name="webhook")
+    ]
     storage_service.get_alert_rule_by_name_for_delivery = lambda *_args, **_kwargs: sparse_rule
     await channels_ops.notify_for_alerts(
         service,
@@ -133,9 +137,9 @@ async def test_channels_status_and_receivers_helpers(monkeypatch):
             payload={
                 "cluster": {"name": "am"},
                 "config": {"receivers": [{"name": "default"}, {"name": "ops"}, {"name": None}, "bad"]},
-                    "version": "1.0.0",
+                "version": "1.0.0",
                 "versionInfo": {},
-                    "configHash": "hash-1",
+                "configHash": "hash-1",
                 "uptime": "1h",
             }
         )
@@ -153,7 +157,16 @@ async def test_channels_status_and_receivers_helpers(monkeypatch):
     assert await channels_ops.get_receivers(service) == []
 
     async def status_with_non_list_receivers(*_args, **_kwargs):
-        return FakeResponse(payload={"cluster": {}, "config": {"receivers": "default"}, "version": "1", "versionInfo": {}, "configHash": "x", "uptime": "1s"})
+        return FakeResponse(
+            payload={
+                "cluster": {},
+                "config": {"receivers": "default"},
+                "version": "1",
+                "versionInfo": {},
+                "configHash": "x",
+                "uptime": "1s",
+            }
+        )
 
     monkeypatch.setattr(service._client, "get", status_with_non_list_receivers, raising=False)
     assert await channels_ops.get_receivers(service) == []

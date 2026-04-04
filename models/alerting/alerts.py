@@ -3,9 +3,9 @@ Module defines Pydantic models for alerting-related data structures used in the 
 
 Copyright (c) 2026 Stefan Kumarasinghe
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
+License. You may obtain a copy of the License at
+http://www.apache.org/licenses/LICENSE-2.0
 """
 
 from typing import Dict, List, Optional, Union
@@ -28,6 +28,7 @@ DESC_UNIQUE_IDENTIFIER_ALERT = "Unique identifier for the alert"
 DESC_COMMON_LABELS_GROUP = "Common labels for the group"
 DESC_RECEIVER_HANDLE_ALERTS = "Receiver that will handle these alerts"
 DESC_LIST_ALERTS_GROUP = "List of alerts in this group"
+
 
 class AlertState(str, Enum):
     UNPROCESSED = "unprocessed"
@@ -87,7 +88,9 @@ class Alert(BaseModel):
         description=DESC_LIST_RECEIVERS_ALERT,
         examples=[["primary-oncall", {"type": "slack", "channel": "#alerts"}]],
     )
-    fingerprint: Optional[str] = Field(None, description=DESC_UNIQUE_IDENTIFIER_ALERT, examples=["01ARZ3NDEKTSV4RRFFQ69G5FAV"])
+    fingerprint: Optional[str] = Field(
+        None, description=DESC_UNIQUE_IDENTIFIER_ALERT, examples=["01ARZ3NDEKTSV4RRFFQ69G5FAV"]
+    )
     model_config = ConfigDict(populate_by_name=True)
 
 

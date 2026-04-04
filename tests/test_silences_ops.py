@@ -1,9 +1,9 @@
 """
-Copyright (c) 2026 Stefan Kumarasinghe
+Copyright (c) 2026 Stefan Kumarasinghe.
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
+License. You may obtain a copy of the License at
+http://www.apache.org/licenses/LICENSE-2.0
 """
 
 from __future__ import annotations
@@ -128,7 +128,9 @@ def _silence(**kwargs) -> Silence:
 
 
 def test_silence_metadata_and_access_helpers():
-    service = SimpleNamespace(decode_silence_comment=lambda comment: {"comment": "plain", "visibility": "group", "shared_group_ids": ["g1"]})
+    service = SimpleNamespace(
+        decode_silence_comment=lambda comment: {"comment": "plain", "visibility": "group", "shared_group_ids": ["g1"]}
+    )
 
     assert sil_mod._visibility_value("bad") == Visibility.TENANT
     silence = sil_mod.apply_silence_metadata(service, _silence())
@@ -138,8 +140,12 @@ def test_silence_metadata_and_access_helpers():
 
     assert sil_mod.silence_accessible(_silence(createdBy="u1"), _user()) is True
     assert sil_mod.silence_accessible(_silence(createdBy="u2", visibility="tenant"), _user()) is True
-    assert sil_mod.silence_accessible(_silence(createdBy="u2", visibility="group", sharedGroupIds=["g1"]), _user()) is True
-    assert sil_mod.silence_accessible(_silence(createdBy="u2", visibility="private", sharedGroupIds=[]), _user()) is False
+    assert (
+        sil_mod.silence_accessible(_silence(createdBy="u2", visibility="group", sharedGroupIds=["g1"]), _user()) is True
+    )
+    assert (
+        sil_mod.silence_accessible(_silence(createdBy="u2", visibility="private", sharedGroupIds=[]), _user()) is False
+    )
     assert sil_mod.silence_owned_by(_silence(createdBy="u1"), _user()) is True
     assert sil_mod.silence_owned_by(_silence(createdBy="u2"), _user()) is False
 
@@ -154,7 +160,7 @@ async def test_get_silences_get_single_create_and_update(monkeypatch):
         post_payload={"silenceID": "new-id"},
     )
     service = SimpleNamespace(_client=client, alertmanager_url="https://am")
-    monkeypatch.setattr(sil_mod, "get_db_session", lambda: _Ctx(_DB([SimpleNamespace(id="purged")])) )
+    monkeypatch.setattr(sil_mod, "get_db_session", lambda: _Ctx(_DB([SimpleNamespace(id="purged")])))
 
     silences = await sil_mod.get_silences(service, filter_labels={"severity": "critical"})
     assert [item.id for item in silences] == ["keep"]
@@ -193,7 +199,17 @@ async def test_get_silences_get_single_create_and_update(monkeypatch):
 
     monkeypatch.setattr(sil_mod, "delete_silence", fake_delete)
     monkeypatch.setattr(sil_mod, "create_silence", fake_create)
-    updated = await sil_mod.update_silence(service, "old-id", SilenceCreate(matchers=[Matcher(name="a", value="b")], startsAt="2024-01-01T00:00:00Z", endsAt="2024-01-01T01:00:00Z", createdBy="u1", comment="updated"))
+    updated = await sil_mod.update_silence(
+        service,
+        "old-id",
+        SilenceCreate(
+            matchers=[Matcher(name="a", value="b")],
+            startsAt="2024-01-01T00:00:00Z",
+            endsAt="2024-01-01T01:00:00Z",
+            createdBy="u1",
+            comment="updated",
+        ),
+    )
     assert updated == "recreated"
     assert deleted == ["old-id"]
     assert created_payloads == ["updated"]
@@ -209,10 +225,12 @@ async def test_silence_error_and_delete_paths(monkeypatch):
 
     service = SimpleNamespace(_client=_Client(get_payload=[], delete_status=200), alertmanager_url="https://am")
 
-    states = iter([
-        _silence(status={"state": "active"}),
-        _silence(status={"state": "expired"}),
-    ])
+    states = iter(
+        [
+            _silence(status={"state": "active"}),
+            _silence(status={"state": "expired"}),
+        ]
+    )
 
     async def fake_get_silence(_service, _silence_id):
         return next(states)
@@ -224,7 +242,13 @@ async def test_silence_error_and_delete_paths(monkeypatch):
     monkeypatch.setattr(sil_mod.asyncio, "sleep", fake_sleep)
     assert await sil_mod.delete_silence(service, "s1") is True
 
-    states = iter([_silence(status={"state": "active"}), _silence(status={"state": "active"}), _silence(status={"state": "active"})])
+    states = iter(
+        [
+            _silence(status={"state": "active"}),
+            _silence(status={"state": "active"}),
+            _silence(status={"state": "active"}),
+        ]
+    )
     assert await sil_mod.delete_silence(service, "s1") is False
 
 
@@ -232,7 +256,11 @@ async def test_silence_error_and_delete_paths(monkeypatch):
 async def test_prune_removed_member_group_silences(monkeypatch):
     service = SimpleNamespace(
         encode_silence_comment=lambda comment, visibility, shared_group_ids: f"{comment}|{visibility}|{','.join(shared_group_ids)}",
-        decode_silence_comment=lambda comment: {"comment": "decoded", "visibility": "group", "shared_group_ids": ["g1", "g2"]},
+        decode_silence_comment=lambda comment: {
+            "comment": "decoded",
+            "visibility": "group",
+            "shared_group_ids": ["g1", "g2"],
+        },
     )
 
     assert await sil_mod.prune_removed_member_group_silences(service, group_id="", removed_user_ids=["u1"]) == 0
@@ -255,6 +283,8 @@ async def test_prune_removed_member_group_silences(monkeypatch):
     monkeypatch.setattr(sil_mod, "get_silences", fake_get_silences)
     monkeypatch.setattr(sil_mod, "update_silence", fake_update)
 
-    result = await sil_mod.prune_removed_member_group_silences(service, group_id="g1", removed_user_ids=["u1"], removed_usernames=["alice"])
+    result = await sil_mod.prune_removed_member_group_silences(
+        service, group_id="g1", removed_user_ids=["u1"], removed_usernames=["alice"]
+    )
     assert result == 1
     assert updated == [("s1", "decoded|group|g2")]

@@ -1,11 +1,16 @@
 """
-Payload construction utilities for notification services, providing functions to build message payloads for different notification channels such as Slack, Microsoft Teams, and PagerDuty based on alert data. This module includes functions to extract relevant information from alert objects, format alert details into human-readable text, and construct structured payloads that conform to the expected formats of each notification channel. The utilities ensure that notifications are informative and properly formatted to facilitate quick understanding and response by recipients when alerts are triggered or resolved.
+Payload construction utilities for notification services, providing functions to build message payloads for different
+notification channels such as Slack, Microsoft Teams, and PagerDuty based on alert data. This module includes functions
+to extract relevant information from alert objects, format alert details into human-readable text, and construct
+structured payloads that conform to the expected formats of each notification channel. The utilities ensure that
+notifications are informative and properly formatted to facilitate quick understanding and response by recipients when
+alerts are triggered or resolved.
 
 Copyright (c) 2026 Stefan Kumarasinghe
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
+License. You may obtain a copy of the License at
+http://www.apache.org/licenses/LICENSE-2.0
 """
 
 from datetime import datetime
@@ -31,6 +36,7 @@ def _status_text(action: str) -> str:
     if normalized == "resolved":
         return "RESOLVED"
     return "FIRING"
+
 
 def _fmt(value: object) -> str:
     if isinstance(value, datetime):
@@ -149,14 +155,16 @@ def format_alert_body(alert: Alert, action: str) -> str:
         for key, value in context:
             lines.append(f"  {key}: {value}")
 
-    lines.extend([
-        "",
-        "Summary:",
-        summary,
-        "",
-        "Description:",
-        description,
-    ])
+    lines.extend(
+        [
+            "",
+            "Summary:",
+            summary,
+            "",
+            "Description:",
+            description,
+        ]
+    )
 
     labels = _important_labels(alert)
     if labels:
@@ -183,7 +191,12 @@ def build_slack_payload(alert: Alert, action: str) -> JSONDict:
     fields: list[JSONDict] = [
         {"title": "Severity", "value": severity or "unknown", "short": True},
         {"title": "Status", "value": status_text, "short": True},
-        {"title": "Correlation ID", "value": _context_value(alert, "watchdogCorrelationId", "correlation_id", "correlationId", "group") or NO_VALUE, "short": True},
+        {
+            "title": "Correlation ID",
+            "value": _context_value(alert, "watchdogCorrelationId", "correlation_id", "correlationId", "group")
+            or NO_VALUE,
+            "short": True,
+        },
         {
             "title": "Created by",
             "value": _context_value(
@@ -198,7 +211,11 @@ def build_slack_payload(alert: Alert, action: str) -> JSONDict:
             or NO_VALUE,
             "short": True,
         },
-        {"title": "Product", "value": _context_value(alert, "watchdogProductName", "product") or NO_VALUE, "short": True},
+        {
+            "title": "Product",
+            "value": _context_value(alert, "watchdogProductName", "product") or NO_VALUE,
+            "short": True,
+        },
         {"title": "Summary", "value": get_annotation(alert, "summary") or NO_VALUE, "short": False},
         {"title": "Description", "value": get_annotation(alert, "description") or NO_VALUE, "short": False},
     ]
@@ -234,30 +251,38 @@ def build_teams_payload(alert: Alert, action: str) -> JSONDict:
         "themeColor": theme_color,
         "title": f"[{status_text}] {get_label(alert, 'alertname', 'Alert')}",
         "text": get_alert_text(alert),
-        "sections": [{
-            "facts": [
-                {"name": "Severity", "value": severity or "unknown"},
-                {"name": "Status", "value": status_text},
-                {"name": "Correlation ID", "value": _context_value(alert, "watchdogCorrelationId", "correlation_id", "correlationId", "group") or NO_VALUE},
-                {
-                    "name": "Created by",
-                    "value": _context_value(
-                        alert,
-                        "watchdogCreatedByUsername",
-                        "created_by_username",
-                        "createdByUsername",
-                        "watchdogCreatedBy",
-                        "created_by",
-                        "createdBy",
-                    )
-                    or NO_VALUE,
-                },
-                {"name": "Product", "value": _context_value(alert, "watchdogProductName", "product") or NO_VALUE},
-                {"name": "Started", "value": _fmt(alert.starts_at)},
-                {"name": "Summary", "value": get_annotation(alert, "summary") or NO_VALUE},
-                {"name": "Description", "value": get_annotation(alert, "description") or NO_VALUE},
-            ]
-        }]
+        "sections": [
+            {
+                "facts": [
+                    {"name": "Severity", "value": severity or "unknown"},
+                    {"name": "Status", "value": status_text},
+                    {
+                        "name": "Correlation ID",
+                        "value": _context_value(
+                            alert, "watchdogCorrelationId", "correlation_id", "correlationId", "group"
+                        )
+                        or NO_VALUE,
+                    },
+                    {
+                        "name": "Created by",
+                        "value": _context_value(
+                            alert,
+                            "watchdogCreatedByUsername",
+                            "created_by_username",
+                            "createdByUsername",
+                            "watchdogCreatedBy",
+                            "created_by",
+                            "createdBy",
+                        )
+                        or NO_VALUE,
+                    },
+                    {"name": "Product", "value": _context_value(alert, "watchdogProductName", "product") or NO_VALUE},
+                    {"name": "Started", "value": _fmt(alert.starts_at)},
+                    {"name": "Summary", "value": get_annotation(alert, "summary") or NO_VALUE},
+                    {"name": "Description", "value": get_annotation(alert, "description") or NO_VALUE},
+                ]
+            }
+        ],
     }
 
 

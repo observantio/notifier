@@ -1,11 +1,12 @@
 """
-Rules management endpoints for AlertManager integration, allowing users to create, update, delete, hide, and test alert rules, as well as import rules from YAML and query metrics for rule creation.
+Rules management endpoints for AlertManager integration, allowing users to create, update, delete, hide, and test alert
+rules, as well as import rules from YAML and query metrics for rule creation.
 
 Copyright (c) 2026 Stefan Kumarasinghe
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
+License. You may obtain a copy of the License at
+http://www.apache.org/licenses/LICENSE-2.0
 """
 
 import asyncio
@@ -76,7 +77,11 @@ async def import_rules(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
     if payload.dryRun:
-        return {"status": "preview", "count": len(parsed_rules), "rules": [item.model_dump(by_alias=True) for item in parsed_rules]}
+        return {
+            "status": "preview",
+            "count": len(parsed_rules),
+            "rules": [item.model_dump(by_alias=True) for item in parsed_rules],
+        }
 
     existing_rules = await run_in_threadpool(storage_service.get_alert_rules, tenant_id, user_id, group_ids)
     existing_index = {(item.name, item.group, item.org_id or ""): item for item in existing_rules}
@@ -91,7 +96,9 @@ async def import_rules(
             current_id = current.id
             if current_id is None:
                 continue
-            updated_rule = await run_in_threadpool(storage_service.update_alert_rule, current_id, rule, tenant_id, user_id, group_ids)
+            updated_rule = await run_in_threadpool(
+                storage_service.update_alert_rule, current_id, rule, tenant_id, user_id, group_ids
+            )
             if updated_rule:
                 updated += 1
                 imported_rules.append(updated_rule)
@@ -140,7 +147,9 @@ async def list_rules(
             user_id,
         )
     )
-    rules_with_owner = await run_in_threadpool(storage_service.get_alert_rules_with_owner, tenant_id, user_id, group_ids, limit, offset)
+    rules_with_owner = await run_in_threadpool(
+        storage_service.get_alert_rules_with_owner, tenant_id, user_id, group_ids, limit, offset
+    )
     result: List[AlertRule] = []
     for rule, owner in rules_with_owner:
         rule.is_hidden = bool(rule.id and rule.id in hidden_ids)
@@ -199,7 +208,10 @@ async def list_metric_names(
 ) -> JSONDict:
     tenant_org_id = org_id or getattr(current_user, "org_id", None)
     if not tenant_org_id:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No org_id available to query metrics. Set a product / API key first.")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No org_id available to query metrics. Set a product / API key first.",
+        )
     return {"orgId": tenant_org_id, "metrics": await alertmanager_service.list_metric_names(tenant_org_id)}
 
 
@@ -411,7 +423,9 @@ async def update_rule(
     resolved_org_id = alertmanager_service.resolve_rule_org_id(rule.org_id, current_user)
     if rule.org_id != resolved_org_id:
         rule = rule.model_copy(update={"org_id": resolved_org_id})
-    updated_rule = await run_in_threadpool(storage_service.update_alert_rule, rule_id, rule, tenant_id, user_id, group_ids)
+    updated_rule = await run_in_threadpool(
+        storage_service.update_alert_rule, rule_id, rule, tenant_id, user_id, group_ids
+    )
     if not updated_rule:
         raise HTTPException(status_code=404, detail=f"Alert rule {rule_id} not found or access denied")
     updated_org_id = updated_rule.org_id or resolved_org_id

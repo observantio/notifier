@@ -68,7 +68,9 @@ async def create_incident_link(
 
     integration = resolve_jira_integration(current_user.tenant_id, integration_id, current_user, require_write=True)
     if not integration_is_usable(integration):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Selected Jira integration is not enabled or incomplete")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Selected Jira integration is not enabled or incomplete"
+        )
 
     project = (payload.projectKey or "").strip()
     if not project:
@@ -164,7 +166,9 @@ async def sync_incident_notes(
 
     credentials = resolve_incident_jira_credentials(incident, current_user.tenant_id, current_user)
     if credentials is None:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No usable Jira credentials found for this incident")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="No usable Jira credentials found for this incident"
+        )
 
     note_bodies = build_formatted_incident_note_bodies(incident, current_user)
     if not note_bodies:
@@ -176,9 +180,7 @@ async def sync_incident_notes(
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
 
     existing_bodies = {
-        str(item.get("body") or "").strip()
-        for item in (existing_comments or [])
-        if isinstance(item, dict)
+        str(item.get("body") or "").strip() for item in (existing_comments or []) if isinstance(item, dict)
     }
 
     synced = 0

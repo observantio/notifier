@@ -1,4 +1,6 @@
-"""Alertmanager routers split by resource domain."""
+"""
+Alertmanager routers split by resource domain.
+"""
 
 from fastapi import APIRouter
 

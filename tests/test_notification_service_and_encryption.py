@@ -1,9 +1,9 @@
 """
-Copyright (c) 2026 Stefan Kumarasinghe
+Copyright (c) 2026 Stefan Kumarasinghe.
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
+License. You may obtain a copy of the License at
+http://www.apache.org/licenses/LICENSE-2.0
 """
 
 from __future__ import annotations
@@ -83,7 +83,11 @@ async def test_notification_service_paths(monkeypatch):
 
     monkeypatch.delattr(notif_mod.notification_validators, "_as_bool", raising=False)
     assert service._as_bool("yes") is True
-    monkeypatch.setattr(notif_mod.notification_validators, "validate_channel_config", lambda channel_type, channel_config: [channel_type])
+    monkeypatch.setattr(
+        notif_mod.notification_validators,
+        "validate_channel_config",
+        lambda channel_type, channel_config: [channel_type],
+    )
     assert service.validate_channel_config("email", {}) == ["email"]
 
     disabled = _channel(enabled=False)
@@ -119,30 +123,54 @@ async def test_notification_service_paths(monkeypatch):
         return True
 
     monkeypatch.setattr(service, "_send_smtp_with_retry", fake_send_smtp_with_retry)
-    assert await service.send_incident_assignment_email("user@example.com", "CPUHigh", "open", "critical", "alice") is True
+    assert (
+        await service.send_incident_assignment_email("user@example.com", "CPUHigh", "open", "critical", "alice") is True
+    )
     assert smtp_calls[0]["port"] == 587
 
     secrets["INCIDENT_ASSIGNMENT_EMAIL_ENABLED"] = "false"
-    assert await service.send_incident_assignment_email("user@example.com", "CPUHigh", "open", "critical", "alice") is False
+    assert (
+        await service.send_incident_assignment_email("user@example.com", "CPUHigh", "open", "critical", "alice")
+        is False
+    )
     secrets["INCIDENT_ASSIGNMENT_EMAIL_ENABLED"] = "true"
     secrets["INCIDENT_ASSIGNMENT_SMTP_HOST"] = ""
-    assert await service.send_incident_assignment_email("user@example.com", "CPUHigh", "open", "critical", "alice") is False
+    assert (
+        await service.send_incident_assignment_email("user@example.com", "CPUHigh", "open", "critical", "alice")
+        is False
+    )
     secrets["INCIDENT_ASSIGNMENT_SMTP_HOST"] = "smtp.example.com"
 
     async def failing_send_smtp_with_retry(**kwargs):
         raise TimeoutError("timeout")
 
     monkeypatch.setattr(service, "_send_smtp_with_retry", failing_send_smtp_with_retry)
-    assert await service.send_incident_assignment_email("user@example.com", "CPUHigh", "open", "critical", "alice") is False
+    assert (
+        await service.send_incident_assignment_email("user@example.com", "CPUHigh", "open", "critical", "alice")
+        is False
+    )
 
 
 @pytest.mark.asyncio
 async def test_notification_email_provider_paths(monkeypatch):
     service = notif_mod.NotificationService()
     service._client = object()
-    monkeypatch.setattr(notif_mod.notification_payloads, "format_alert_body", lambda alert, action: f"{action}:{alert.labels['alertname']}")
+    monkeypatch.setattr(
+        notif_mod.notification_payloads,
+        "format_alert_body",
+        lambda alert, action: f"{action}:{alert.labels['alertname']}",
+    )
     monkeypatch.setattr(notif_mod.config, "DEFAULT_ADMIN_EMAIL", "admin@example.com", raising=False)
-    monkeypatch.setattr(notif_mod.notification_email, "build_smtp_message", lambda subject, body, from_addr, recipients: {"subject": subject, "body": body, "from": from_addr, "to": recipients})
+    monkeypatch.setattr(
+        notif_mod.notification_email,
+        "build_smtp_message",
+        lambda subject, body, from_addr, recipients: {
+            "subject": subject,
+            "body": body,
+            "from": from_addr,
+            "to": recipients,
+        },
+    )
 
     sendgrid_calls = []
     resend_calls = []
@@ -165,19 +193,57 @@ async def test_notification_email_provider_paths(monkeypatch):
     monkeypatch.setattr(notif_mod.notification_email, "send_via_smtp", fake_smtp)
 
     assert await service._send_email(_channel(config={}), _alert(), "firing") is False
-    assert await service._send_email(_channel(config={"to": "ops@example.com", "email_provider": "sendgrid"}), _alert(), "firing") is False
-    assert await service._send_email(_channel(config={"to": "ops@example.com", "email_provider": "sendgrid", "sendgrid_api_key": "sg"}), _alert(), "firing") is True
+    assert (
+        await service._send_email(
+            _channel(config={"to": "ops@example.com", "email_provider": "sendgrid"}), _alert(), "firing"
+        )
+        is False
+    )
+    assert (
+        await service._send_email(
+            _channel(config={"to": "ops@example.com", "email_provider": "sendgrid", "sendgrid_api_key": "sg"}),
+            _alert(),
+            "firing",
+        )
+        is True
+    )
     assert sendgrid_calls == [("sg", ["ops@example.com"], "admin@example.com")]
 
-    assert await service._send_email(_channel(config={"to": "ops@example.com", "email_provider": "resend", "resend_api_key": "rk"}), _alert(), "firing") is False
+    assert (
+        await service._send_email(
+            _channel(config={"to": "ops@example.com", "email_provider": "resend", "resend_api_key": "rk"}),
+            _alert(),
+            "firing",
+        )
+        is False
+    )
     assert resend_calls == [("rk", ["ops@example.com"], "admin@example.com")]
 
-    assert await service._send_email(_channel(config={"to": "ops@example.com", "email_provider": "unknown"}), _alert(), "firing") is False
-    assert await service._send_email(_channel(config={"to": "ops@example.com", "smtp_port": 25}), _alert(), "firing") is False
+    assert (
+        await service._send_email(
+            _channel(config={"to": "ops@example.com", "email_provider": "unknown"}), _alert(), "firing"
+        )
+        is False
+    )
+    assert (
+        await service._send_email(_channel(config={"to": "ops@example.com", "smtp_port": 25}), _alert(), "firing")
+        is False
+    )
 
-    smtp_channel = _channel(config={"to": "a@example.com;b@example.com", "smtp_host": "smtp.example.com", "smtp_port": 0, "smtp_auth_type": "api_key", "smtp_api_key": "api", "smtp_starttls": True})
+    smtp_channel = _channel(
+        config={
+            "to": "a@example.com;b@example.com",
+            "smtp_host": "smtp.example.com",
+            "smtp_port": 0,
+            "smtp_auth_type": "api_key",
+            "smtp_api_key": "api",
+            "smtp_starttls": True,
+        }
+    )
     assert await service._send_email(smtp_channel, _alert(), "resolved") is True
     assert smtp_calls[0][1:4] == ("smtp.example.com", 587, "apikey")
 
-    noauth_channel = _channel(config={"to": "ops@example.com", "smtp_host": "smtp.example.com", "smtp_port": 25, "smtp_auth_type": "none"})
+    noauth_channel = _channel(
+        config={"to": "ops@example.com", "smtp_host": "smtp.example.com", "smtp_port": 25, "smtp_auth_type": "none"}
+    )
     assert await service._send_email(noauth_channel, _alert(), "resolved") is True

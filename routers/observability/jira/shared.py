@@ -1,4 +1,6 @@
-"""Shared Jira router state and helpers."""
+"""
+Shared Jira router state and helpers.
+"""
 
 from pydantic import BaseModel
 

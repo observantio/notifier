@@ -3,9 +3,9 @@ Silence management endpoints for AlertManager integration, allowing users to cre
 
 Copyright (c) 2026 Stefan Kumarasinghe
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
+License. You may obtain a copy of the License at
+http://www.apache.org/licenses/LICENSE-2.0
 """
 
 from typing import Dict, List, Optional
@@ -54,7 +54,9 @@ async def list_silences(
 ) -> List[Silence]:
     if request is not None:
         reject_unknown_query_params(request, {"filter_labels", "include_expired", "show_hidden"})
-    silences = await alertmanager_service.get_silences(filter_labels=alertmanager_service.parse_filter_labels(filter_labels))
+    silences = await alertmanager_service.get_silences(
+        filter_labels=alertmanager_service.parse_filter_labels(filter_labels)
+    )
     hidden_ids = set(
         await run_in_threadpool(
             storage_service.get_hidden_silence_ids,

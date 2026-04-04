@@ -1,4 +1,6 @@
-"""Helpers for identifying suppressed Alertmanager alerts."""
+"""
+Helpers for identifying suppressed Alertmanager alerts.
+"""
 
 from __future__ import annotations
 

@@ -1,9 +1,9 @@
 """
-Copyright (c) 2026 Stefan Kumarasinghe
+Copyright (c) 2026 Stefan Kumarasinghe.
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
+License. You may obtain a copy of the License at
+http://www.apache.org/licenses/LICENSE-2.0
 """
 
 import json
@@ -119,7 +119,7 @@ def test_prune_removed_member_group_shares_revokes_visibility_across_resources()
     assert inc_meta.get("visibility") == "private"
     assert inc_meta.get("shared_group_ids") == []
     assert db_tenant is not None
-    jira_items = ((db_tenant.settings or {}).get("jira_integrations") or [])
+    jira_items = (db_tenant.settings or {}).get("jira_integrations") or []
     assert isinstance(jira_items, list) and jira_items
     assert jira_items[0].get("visibility") == "private"
     assert jira_items[0].get("sharedGroupIds") == []
@@ -224,7 +224,7 @@ def test_prune_removed_member_group_shares_matches_username_creators():
     assert inc_meta.get("visibility") == "private"
     assert inc_meta.get("shared_group_ids") == []
     assert db_tenant is not None
-    jira_items = ((db_tenant.settings or {}).get("jira_integrations") or [])
+    jira_items = (db_tenant.settings or {}).get("jira_integrations") or []
     assert isinstance(jira_items, list) and jira_items
     assert jira_items[0].get("visibility") == "private"
     assert jira_items[0].get("sharedGroupIds") == []
@@ -323,14 +323,22 @@ def test_prune_removed_member_group_shares_keeps_group_visibility_when_groups_re
     db_incident = db.query(AlertIncident).filter_by(id="i2", tenant_id="t2").first()
     db_tenant = db.query(Tenant).filter_by(id="t2").first()
 
-    assert db_rule is not None and db_rule.visibility == "group" and [g.id for g in (db_rule.shared_groups or [])] == ["g2"]
-    assert db_channel is not None and db_channel.visibility == "group" and [g.id for g in (db_channel.shared_groups or [])] == ["g2"]
+    assert (
+        db_rule is not None
+        and db_rule.visibility == "group"
+        and [g.id for g in (db_rule.shared_groups or [])] == ["g2"]
+    )
+    assert (
+        db_channel is not None
+        and db_channel.visibility == "group"
+        and [g.id for g in (db_channel.shared_groups or [])] == ["g2"]
+    )
     assert db_incident is not None
     inc_meta = parse_meta(db_incident.annotations or {})
     assert inc_meta.get("visibility") == "group"
     assert inc_meta.get("shared_group_ids") == ["g2"]
     assert db_tenant is not None
-    jira_items = ((db_tenant.settings or {}).get("jira_integrations") or [])
+    jira_items = (db_tenant.settings or {}).get("jira_integrations") or []
     assert jira_items[0].get("visibility") == "group"
     assert jira_items[0].get("sharedGroupIds") == ["g2"]
 

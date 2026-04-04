@@ -1,11 +1,12 @@
 """
-Silence metadata encoding and decoding for Alertmanager silences, allowing storage of visibility and shared group information within the silence comment field.
+Silence metadata encoding and decoding for Alertmanager silences, allowing storage of visibility and shared group
+information within the silence comment field.
 
 Copyright (c) 2026 Stefan Kumarasinghe
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
+License. You may obtain a copy of the License at
+http://www.apache.org/licenses/LICENSE-2.0
 """
 
 import json
@@ -16,6 +17,7 @@ from services.common.visibility import normalize_visibility as normalize_common_
 SILENCE_META_PREFIX = "[watchdog-meta]"
 VALID_VISIBILITIES = {v.value for v in Visibility}
 
+
 def normalize_visibility(value: Optional[str]) -> str:
     raw = value.value if isinstance(value, Visibility) else (str(value).lower() if value else "")
     return normalize_common_visibility(
@@ -25,9 +27,11 @@ def normalize_visibility(value: Optional[str]) -> str:
         allowed=frozenset({Visibility.PRIVATE.value, Visibility.GROUP.value, Visibility.TENANT.value}),
     )
 
+
 def encode_silence_comment(comment: str, visibility: str, shared_group_ids: List[str]) -> str:
     payload = json.dumps({"visibility": visibility, "shared_group_ids": shared_group_ids or []}, separators=(",", ":"))
     return f"{SILENCE_META_PREFIX}{payload}\n{comment}"
+
 
 def decode_silence_comment(comment: Optional[str]) -> Dict[str, object]:
     _default_visibility = Visibility.TENANT.value
@@ -35,7 +39,7 @@ def decode_silence_comment(comment: Optional[str]) -> Dict[str, object]:
     if not comment or not comment.startswith(SILENCE_META_PREFIX):
         return {"comment": comment or "", "visibility": _default_visibility, "shared_group_ids": []}
 
-    raw = comment[len(SILENCE_META_PREFIX):]
+    raw = comment[len(SILENCE_META_PREFIX) :]
     meta_str, comment_text = raw.split("\n", 1) if "\n" in raw else (raw, "")
 
     try:

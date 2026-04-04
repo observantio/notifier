@@ -1,11 +1,12 @@
 """
-Service for managing interactions with AlertManager, providing functions to retrieve and manage alerts, silences, and notification channels.
+Service for managing interactions with AlertManager, providing functions to retrieve and manage alerts, silences, and
+notification channels.
 
 Copyright (c) 2026 Stefan Kumarasinghe
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
+License. You may obtain a copy of the License at
+http://www.apache.org/licenses/LICENSE-2.0
 """
 
 import json
@@ -78,10 +79,11 @@ LABELS_JSON_ERROR = "Invalid filter_labels JSON"
 MIMIR_RULES_NAMESPACE = "watchdog"
 MIMIR_RULER_CONFIG_BASEPATH = "/prometheus/config/v1/rules"
 
+
 class AlertManagerService:
     def __init__(self, alertmanager_url: str = config.ALERTMANAGER_URL) -> None:
-        self.MIMIR_RULES_NAMESPACE = MIMIR_RULES_NAMESPACE
-        self.MIMIR_RULER_CONFIG_BASEPATH = MIMIR_RULER_CONFIG_BASEPATH
+        self.mimir_rules_namespace = MIMIR_RULES_NAMESPACE
+        self.mimir_ruler_config_basepath = MIMIR_RULER_CONFIG_BASEPATH
         self.alertmanager_url = alertmanager_url.rstrip("/")
         self.timeout = config.DEFAULT_TIMEOUT
         self.logger = logger

@@ -1,11 +1,12 @@
 """
-Alerting-related operations for interacting with Alertmanager and Mimir, including fetching metrics, listing alerts and groups, posting new alerts, and deleting alerts via silences.
+Alerting-related operations for interacting with Alertmanager and Mimir, including fetching metrics, listing alerts and
+groups, posting new alerts, and deleting alerts via silences.
 
 Copyright (c) 2026 Stefan Kumarasinghe
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
+License. You may obtain a copy of the License at
+http://www.apache.org/licenses/LICENSE-2.0
 """
 
 from __future__ import annotations
@@ -23,6 +24,7 @@ if TYPE_CHECKING:
 
 QueryParamValue = str | int | float | bool | None
 QueryParamMapping = Mapping[str, QueryParamValue | Sequence[QueryParamValue]]
+
 
 async def list_metric_names(service: AlertManagerService, org_id: str) -> List[str]:
     response = await service._mimir_client.get(
@@ -186,7 +188,9 @@ async def get_alerts(
         return []
 
 
-async def get_alert_groups(service: AlertManagerService, filter_labels: Optional[Dict[str, str]] = None) -> List[AlertGroup]:
+async def get_alert_groups(
+    service: AlertManagerService, filter_labels: Optional[Dict[str, str]] = None
+) -> List[AlertGroup]:
     params: Dict[str, QueryParamValue | Sequence[QueryParamValue]] = {}
     if filter_labels:
         params["filter"] = [f'{k}="{v}"' for k, v in filter_labels.items()]
@@ -201,6 +205,7 @@ async def get_alert_groups(service: AlertManagerService, filter_labels: Optional
     except httpx.HTTPError as exc:
         service.logger.error("Error fetching alert groups: %s", exc)
         return []
+
 
 async def post_alerts(service: AlertManagerService, alerts: List[Alert]) -> bool:
     try:
@@ -220,10 +225,7 @@ async def delete_alerts(service: AlertManagerService, filter_labels: Optional[Di
         service.logger.warning("Cannot delete all alerts without filter")
         return False
 
-    matchers = [
-        Matcher(name=key, value=value, isRegex=False, isEqual=True)
-        for key, value in filter_labels.items()
-    ]
+    matchers = [Matcher(name=key, value=value, isRegex=False, isEqual=True) for key, value in filter_labels.items()]
 
     now = datetime.now(timezone.utc)
     end = now + timedelta(seconds=60)

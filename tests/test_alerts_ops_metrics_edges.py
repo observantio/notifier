@@ -1,9 +1,9 @@
 """
-Copyright (c) 2026 Stefan Kumarasinghe
+Copyright (c) 2026 Stefan Kumarasinghe.
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
+License. You may obtain a copy of the License at
+http://www.apache.org/licenses/LICENSE-2.0
 """
 
 from __future__ import annotations
@@ -33,7 +33,9 @@ class _Response:
 
     def raise_for_status(self):
         if self.status_code >= 400:
-            raise httpx.HTTPStatusError("bad", request=self.request, response=httpx.Response(self.status_code, request=self.request))
+            raise httpx.HTTPStatusError(
+                "bad", request=self.request, response=httpx.Response(self.status_code, request=self.request)
+            )
 
     def json(self):
         return self._payload
@@ -85,9 +87,13 @@ async def test_metric_queries_and_http_status_handling():
             if self.mode == "scalar-short":
                 return _Response({"status": "success", "data": {"resultType": "scalar", "result": [123]}}, content=b"x")
             if self.mode == "scalar":
-                return _Response({"status": "success", "data": {"resultType": "scalar", "result": [123, "7"]}}, content=b"x")
+                return _Response(
+                    {"status": "success", "data": {"resultType": "scalar", "result": [123, "7"]}}, content=b"x"
+                )
             if self.mode == "string":
-                return _Response({"status": "success", "data": {"resultType": "string", "result": [124, "ok"]}}, content=b"x")
+                return _Response(
+                    {"status": "success", "data": {"resultType": "string", "result": [124, "ok"]}}, content=b"x"
+                )
             return _Response(
                 {
                     "status": "success",
@@ -199,15 +205,35 @@ async def test_alert_and_group_get_post_delete_paths():
 
     client = _Client()
     logs = []
-    service = SimpleNamespace(_client=client, alertmanager_url="https://alertmanager", logger=SimpleNamespace(error=lambda *_args: logs.append("error"), warning=lambda *_args: logs.append("warning")))
+    service = SimpleNamespace(
+        _client=client,
+        alertmanager_url="https://alertmanager",
+        logger=SimpleNamespace(
+            error=lambda *_args: logs.append("error"), warning=lambda *_args: logs.append("warning")
+        ),
+    )
 
-    alerts = await alerts_ops.get_alerts(service, filter_labels={"alertname": "CPUHigh"}, active=True, silenced=False, inhibited=False)
+    alerts = await alerts_ops.get_alerts(
+        service, filter_labels={"alertname": "CPUHigh"}, active=True, silenced=False, inhibited=False
+    )
     assert alerts and alerts[0].labels["alertname"] == "CPUHigh"
 
     groups = await alerts_ops.get_alert_groups(service, filter_labels={"alertname": "CPUHigh"})
     assert groups and groups[0].receiver == "default"
 
-    ok_post = await alerts_ops.post_alerts(service, [Alert.model_validate({"labels": {"alertname": "CPUHigh", "severity": "critical"}, "annotations": {}, "startsAt": "2026-01-01T00:00:00Z", "status": {"state": "active", "silencedBy": [], "inhibitedBy": []}})])
+    ok_post = await alerts_ops.post_alerts(
+        service,
+        [
+            Alert.model_validate(
+                {
+                    "labels": {"alertname": "CPUHigh", "severity": "critical"},
+                    "annotations": {},
+                    "startsAt": "2026-01-01T00:00:00Z",
+                    "status": {"state": "active", "silencedBy": [], "inhibitedBy": []},
+                }
+            )
+        ],
+    )
     assert ok_post is True
 
     async def _create_silence(_silence):

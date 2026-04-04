@@ -1,13 +1,13 @@
 """
-Storage service for managing alert incidents, rules, and notification channels, providing a unified interface for database operations and ensuring proper access control and data handling based on user permissions.
+Storage service for managing alert incidents, rules, and notification channels, providing a unified interface for
+database operations and ensuring proper access control and data handling based on user permissions.
 
 Copyright (c) 2026 Stefan Kumarasinghe
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
+License. You may obtain a copy of the License at
+http://www.apache.org/licenses/LICENSE-2.0
 """
-
 
 from __future__ import annotations
 
@@ -47,7 +47,7 @@ class DatabaseStorageService:
         group_id: Optional[str] = None,
         limit: Optional[int] = None,
         offset: int = 0,
-        ) -> List[AlertIncident]:
+    ) -> List[AlertIncident]:
         return self.incidents.list_incidents(
             tenant_id=tenant_id,
             user_id=user_id,
@@ -149,7 +149,9 @@ class DatabaseStorageService:
         limit: Optional[int] = None,
         offset: int = 0,
     ) -> List[Tuple[AlertRule, str]]:
-        return self.rules.get_alert_rules_with_owner(tenant_id, user_id, group_ids=group_ids, limit=limit, offset=offset)
+        return self.rules.get_alert_rules_with_owner(
+            tenant_id, user_id, group_ids=group_ids, limit=limit, offset=offset
+        )
 
     def get_alert_rule_raw(self, rule_id: str, tenant_id: str) -> AlertRuleDB | None:
         return self.rules.get_alert_rule_raw(rule_id, tenant_id)
@@ -207,7 +209,9 @@ class DatabaseStorageService:
         limit: Optional[int] = None,
         offset: int = 0,
     ) -> List[NotificationChannel]:
-        return self.channels.get_notification_channels(tenant_id, user_id, group_ids=group_ids, limit=limit, offset=offset)
+        return self.channels.get_notification_channels(
+            tenant_id, user_id, group_ids=group_ids, limit=limit, offset=offset
+        )
 
     def get_notification_channel(
         self,
@@ -235,7 +239,9 @@ class DatabaseStorageService:
         user_id: str,
         group_ids: Optional[List[str]] = None,
     ) -> Optional[NotificationChannel]:
-        return self.channels.update_notification_channel(channel_id, channel_update, tenant_id, user_id, group_ids=group_ids)
+        return self.channels.update_notification_channel(
+            channel_id, channel_update, tenant_id, user_id, group_ids=group_ids
+        )
 
     def delete_notification_channel(self, channel_id: str, tenant_id: str, user_id: str) -> bool:
         return self.channels.delete_notification_channel(channel_id, tenant_id, user_id)

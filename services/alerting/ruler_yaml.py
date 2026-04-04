@@ -1,17 +1,19 @@
 """
-Rule import and alert processing logic for Alertmanager integration, including parsing incoming alerts, determining notification channels, and sending notifications based on alert status and configuration.
+Rule import and alert processing logic for Alertmanager integration, including parsing incoming alerts, determining
+notification channels, and sending notifications based on alert status and configuration.
 
 Copyright (c) 2026 Stefan Kumarasinghe
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
+License. You may obtain a copy of the License at
+http://www.apache.org/licenses/LICENSE-2.0
 """
 
 from typing import Dict, List
 
 from config import config
 from models.alerting.rules import AlertRule
+
 
 def yaml_quote(value: object) -> str:
     text = str(value)
@@ -60,7 +62,7 @@ def extract_mimir_group_names(namespace_yaml: str) -> List[str]:
         stripped = line.strip()
         if not stripped.startswith("- name:"):
             continue
-        value = stripped[len("- name:"):].strip()
+        value = stripped[len("- name:") :].strip()
         if (value.startswith('"') and value.endswith('"')) or (value.startswith("'") and value.endswith("'")):
             value = value[1:-1]
         if value:

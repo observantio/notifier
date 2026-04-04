@@ -1,13 +1,13 @@
 """
-Storage service for managing notification channels, including CRUD operations, access control, and testing functionality.
+Storage service for managing notification channels, including CRUD operations, access control, and testing
+functionality.
 
 Copyright (c) 2026 Stefan Kumarasinghe
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
+License. You may obtain a copy of the License at
+http://www.apache.org/licenses/LICENSE-2.0
 """
-
 
 from __future__ import annotations
 
@@ -58,14 +58,10 @@ class ChannelStorageService:
         rule_owner = str(getattr(rule, "created_by", "") or "").strip()
         channel_owner = str(getattr(channel, "created_by", "") or "").strip()
         rule_groups = {
-            str(g.id)
-            for g in (getattr(rule, "shared_groups", None) or [])
-            if str(getattr(g, "id", "")).strip()
+            str(g.id) for g in (getattr(rule, "shared_groups", None) or []) if str(getattr(g, "id", "")).strip()
         }
         channel_groups = {
-            str(g.id)
-            for g in (getattr(channel, "shared_groups", None) or [])
-            if str(getattr(g, "id", "")).strip()
+            str(g.id) for g in (getattr(channel, "shared_groups", None) or []) if str(getattr(g, "id", "")).strip()
         }
         if rule_visibility == "private":
             return bool(channel_visibility == "private" and rule_owner and rule_owner == channel_owner)
@@ -237,10 +233,14 @@ class ChannelStorageService:
 
     def is_notification_channel_owner(self, channel_id: str, tenant_id: str, user_id: str) -> bool:
         with get_db_session() as db:
-            ch = db.query(NotificationChannelDB).filter(
-                NotificationChannelDB.id == channel_id,
-                NotificationChannelDB.tenant_id == tenant_id,
-            ).first()
+            ch = (
+                db.query(NotificationChannelDB)
+                .filter(
+                    NotificationChannelDB.id == channel_id,
+                    NotificationChannelDB.tenant_id == tenant_id,
+                )
+                .first()
+            )
             return bool(ch and ch.created_by == user_id)
 
     def test_notification_channel(
@@ -254,7 +254,10 @@ class ChannelStorageService:
         if not channel:
             return {"success": False, "error": "Channel not found"}
         logger.info("Testing channel: %s (%s)", channel.name, channel.type)
-        return {"success": True, "message": f"Test notification would be sent to {channel.type} channel: {channel.name}"}
+        return {
+            "success": True,
+            "message": f"Test notification would be sent to {channel.type} channel: {channel.name}",
+        }
 
     def get_notification_channels_for_rule_name(
         self,

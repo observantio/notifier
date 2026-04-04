@@ -1,9 +1,9 @@
 """
-Copyright (c) 2026 Stefan Kumarasinghe
+Copyright (c) 2026 Stefan Kumarasinghe.
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
+License. You may obtain a copy of the License at
+http://www.apache.org/licenses/LICENSE-2.0
 """
 
 try:
@@ -22,12 +22,16 @@ def test_send_smtp_with_retry_calls_aiosmtplib(monkeypatch):
     called = {}
 
     async def fake_send(*args, **kwargs):
-        called['args'] = args
-        called['kwargs'] = kwargs
+        called["args"] = args
+        called["kwargs"] = kwargs
         return "ok"
 
     monkeypatch.setattr(aiosmtplib, "send", fake_send)
 
-    result = asyncio.run(transport.send_smtp_with_retry(message="m", hostname="h", port=25, username=None, password=None, start_tls=False, use_tls=False))
+    result = asyncio.run(
+        transport.send_smtp_with_retry(
+            message="m", hostname="h", port=25, username=None, password=None, start_tls=False, use_tls=False
+        )
+    )
     assert result == "ok"
-    assert called['kwargs']['hostname'] == "h"
+    assert called["kwargs"]["hostname"] == "h"

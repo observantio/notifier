@@ -3,9 +3,9 @@ Redis-based fixed window rate limiter for Watchdog middleware.
 
 Copyright (c) 2026 Stefan Kumarasinghe
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
+License. You may obtain a copy of the License at
+http://www.apache.org/licenses/LICENSE-2.0
 """
 
 from __future__ import annotations
@@ -57,9 +57,7 @@ class RedisFixedWindowRateLimiter:
             if not client.ping():
                 raise RuntimeError("redis ping returned falsy response")
         except (ConnectionError, OSError, RuntimeError, TimeoutError) as exc:
-            raise RuntimeError(
-                f"unable to connect to Redis at {_sanitize_redis_url(redis_url)}: {exc}"
-            ) from exc
+            raise RuntimeError(f"unable to connect to Redis at {_sanitize_redis_url(redis_url)}: {exc}") from exc
 
         self._client = client
         logger.info("Connected to Redis for rate limiting: %s", _sanitize_redis_url(redis_url))

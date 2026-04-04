@@ -1,11 +1,15 @@
 """
-Service for managing interactions with Jira, providing functions to create issues, list projects and issue types, and manage comments on issues. This module includes logic to handle authentication with Jira using either API tokens or bearer tokens, to construct appropriate API requests to the Jira REST API, and to process the responses received from Jira. The service ensures that the base URL for Jira is properly configured and validated, and it provides error handling for various scenarios that may arise when interacting with the Jira API.
+Service for managing interactions with Jira, providing functions to create issues, list projects and issue types, and
+manage comments on issues. This module includes logic to handle authentication with Jira using either API tokens or
+bearer tokens, to construct appropriate API requests to the Jira REST API, and to process the responses received from
+Jira. The service ensures that the base URL for Jira is properly configured and validated, and it provides error
+handling for various scenarios that may arise when interacting with the Jira API.
 
 Copyright (c) 2026 Stefan Kumarasinghe
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
+License. You may obtain a copy of the License at
+http://www.apache.org/licenses/LICENSE-2.0
 """
 
 import base64
@@ -36,8 +40,10 @@ def _json_dict(value: object) -> JSONDict:
 def _json_dict_list(value: object) -> List[JSONDict]:
     return [item for item in value if isinstance(item, dict)] if isinstance(value, list) else []
 
+
 class JiraError(Exception):
     pass
+
 
 class JiraService:
     def __init__(self, timeout: Optional[float] = None) -> None:
@@ -57,11 +63,7 @@ class JiraService:
         scoped = credentials or {}
         auth_mode = str(scoped.get("auth_mode") or scoped.get("authMode") or "").strip().lower()
         bearer_value = (
-            scoped.get("bearer")
-            or scoped.get("bearer_token")
-            or scoped.get("bearerToken")
-            or self.bearer
-            or ""
+            scoped.get("bearer") or scoped.get("bearer_token") or scoped.get("bearerToken") or self.bearer or ""
         )
         bearer = _string_value(bearer_value)
         email = _string_value(scoped.get("email") or self.email or "")
@@ -163,9 +165,7 @@ class JiraService:
         }
         if priority:
             fields["priority"] = {"name": str(priority).strip()}
-        payload: JSONDict = {
-            "fields": fields
-        }
+        payload: JSONDict = {"fields": fields}
         data = await self._post("/rest/api/2/issue", payload, credentials)
         data_dict = _json_dict(data)
         key = data_dict.get("key")
@@ -187,11 +187,7 @@ class JiraService:
     async def list_issue_types(self, project_key: str, credentials: Credentials = None) -> List[str]:
         project = await self._get(f"/rest/api/2/project/{project_key}", credentials)
         issue_types = _json_dict(project).get("issueTypes")
-        return [
-            name
-            for it in _json_dict_list(issue_types)
-            if (name := str(it.get("name") or "").strip())
-        ]
+        return [name for it in _json_dict_list(issue_types) if (name := str(it.get("name") or "").strip())]
 
     async def list_transitions(self, issue_key: str, credentials: Credentials = None) -> List[JSONDict]:
         data = await self._get(f"/rest/api/2/issue/{issue_key}/transitions", credentials)
@@ -204,11 +200,13 @@ class JiraService:
         transition_id: str,
         credentials: Credentials = None,
     ) -> JSONDict:
-        return _json_dict(await self._post(
-            f"/rest/api/2/issue/{issue_key}/transitions",
-            {"transition": {"id": str(transition_id)}},
-            credentials,
-        ))
+        return _json_dict(
+            await self._post(
+                f"/rest/api/2/issue/{issue_key}/transitions",
+                {"transition": {"id": str(transition_id)}},
+                credentials,
+            )
+        )
 
     async def transition_issue_to_todo(self, issue_key: str, credentials: Credentials = None) -> bool:
         return await self._transition_issue_by_target(
@@ -300,5 +298,6 @@ def _extract_display_name(author: object) -> str:
     if not isinstance(author, dict):
         return "jira"
     return str(author.get("displayName") or author.get("name") or "jira")
+
 
 jira_service = JiraService()

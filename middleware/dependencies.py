@@ -1,11 +1,12 @@
 """
-Dependency and authentication utilities for Be Notified Service, including context token verification and permission checks.
+Dependency and authentication utilities for Be Notified Service, including context token verification and permission
+checks.
 
 Copyright (c) 2026 Stefan Kumarasinghe
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
+License. You may obtain a copy of the License at
+http://www.apache.org/licenses/LICENSE-2.0
 """
 
 from __future__ import annotations
@@ -34,6 +35,7 @@ security = HTTPBearer(auto_error=False)
 _jti_lock = threading.Lock()
 _jti_cache: dict[str, float] = {}
 
+
 def _extract_bearer_token(request: Request, credentials: HTTPAuthorizationCredentials | None) -> Optional[str]:
     if credentials and getattr(credentials, "credentials", None):
         return credentials.credentials
@@ -44,9 +46,8 @@ def _extract_bearer_token(request: Request, credentials: HTTPAuthorizationCreden
 
 
 def _compare_service_token(request: Request) -> None:
-    expected = (
-        config.get_secret("NOTIFIER_EXPECTED_SERVICE_TOKEN")
-        or config.get_secret("GATEWAY_INTERNAL_SERVICE_TOKEN")
+    expected = config.get_secret("NOTIFIER_EXPECTED_SERVICE_TOKEN") or config.get_secret(
+        "GATEWAY_INTERNAL_SERVICE_TOKEN"
     )
     if not expected:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Service token not configured")
@@ -56,12 +57,11 @@ def _compare_service_token(request: Request) -> None:
 
 
 def _verify_context_token(token: str) -> TokenData:
-    key = (
-        config.get_secret("NOTIFIER_CONTEXT_VERIFY_KEY")
-        or config.get_secret("NOTIFIER_CONTEXT_SIGNING_KEY")
-    )
+    key = config.get_secret("NOTIFIER_CONTEXT_VERIFY_KEY") or config.get_secret("NOTIFIER_CONTEXT_SIGNING_KEY")
     if not key:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Context verification key not configured")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Context verification key not configured"
+        )
 
     algorithm = str(getattr(config, "NOTIFIER_CONTEXT_ALGORITHM", "HS256")).strip().upper()
     audience = config.get_secret("NOTIFIER_CONTEXT_AUDIENCE") or "notifier"

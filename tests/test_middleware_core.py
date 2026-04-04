@@ -1,9 +1,9 @@
 """
-Copyright (c) 2026 Stefan Kumarasinghe
+Copyright (c) 2026 Stefan Kumarasinghe.
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
+License. You may obtain a copy of the License at
+http://www.apache.org/licenses/LICENSE-2.0
 """
 
 from __future__ import annotations
@@ -113,7 +113,9 @@ async def test_error_handlers_and_security_headers():
     assert general_bad_request.status_code == 400
     assert json.loads(general_bad_request.body.decode("utf-8"))["detail"] == "Invalid request"
 
-    general_internal_route = general_exception_handler(_request("/internal/v1/api/alertmanager/rules"), RuntimeError("boom"))
+    general_internal_route = general_exception_handler(
+        _request("/internal/v1/api/alertmanager/rules"), RuntimeError("boom")
+    )
     assert general_internal_route.status_code == 400
     assert json.loads(general_internal_route.body.decode("utf-8"))["detail"] == "Invalid request"
 
@@ -214,9 +216,11 @@ async def test_request_size_limit_middleware_paths():
     assert sent_messages[0]["status"] == 413
 
     sent_messages.clear()
-    disconnect_chunks = iter([
-        {"type": "http.disconnect", "more_body": False},
-    ])
+    disconnect_chunks = iter(
+        [
+            {"type": "http.disconnect", "more_body": False},
+        ]
+    )
 
     async def receive_disconnect():
         return next(disconnect_chunks)

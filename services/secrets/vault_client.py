@@ -1,13 +1,17 @@
 """
-Vault client for fetching secrets from HashiCorp Vault, supporting both token-based and AppRole authentication methods, with caching of secrets to reduce load on Vault and improve performance. This module provides a VaultSecretProvider class that can be used to retrieve secrets from Vault based on a specified key, with support for both KV version 1 and version 2 secret engines. The client handles authentication, secret retrieval, error handling, and caching of secrets with a configurable time-to-live (TTL) to ensure efficient access to secrets while minimizing the number of requests made to Vault.
+Vault client for fetching secrets from HashiCorp Vault, supporting both token-based and AppRole authentication methods,
+with caching of secrets to reduce load on Vault and improve performance. This module provides a VaultSecretProvider
+class that can be used to retrieve secrets from Vault based on a specified key, with support for both KV version 1 and
+version 2 secret engines. The client handles authentication, secret retrieval, error handling, and caching of secrets
+with a configurable time-to-live (TTL) to ensure efficient access to secrets while minimizing the number of requests
+made to Vault.
 
 Copyright (c) 2026 Stefan Kumarasinghe
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
+License. You may obtain a copy of the License at
+http://www.apache.org/licenses/LICENSE-2.0
 """
-
 
 from __future__ import annotations
 
@@ -29,6 +33,7 @@ class _VaultInvalidPathFallback(Exception):
 class _VaultErrorFallback(Exception):
     pass
 
+
 hvac: ModuleType | None
 
 try:
@@ -37,9 +42,21 @@ try:
     forbidden_exc = getattr(hvac_exceptions, "Forbidden", _VaultForbiddenFallback)
     invalid_path_exc = getattr(hvac_exceptions, "InvalidPath", _VaultInvalidPathFallback)
     vault_error_exc = getattr(hvac_exceptions, "VaultError", _VaultErrorFallback)
-    Forbidden = forbidden_exc if isinstance(forbidden_exc, type) and issubclass(forbidden_exc, Exception) else _VaultForbiddenFallback
-    InvalidPath = invalid_path_exc if isinstance(invalid_path_exc, type) and issubclass(invalid_path_exc, Exception) else _VaultInvalidPathFallback
-    VaultError = vault_error_exc if isinstance(vault_error_exc, type) and issubclass(vault_error_exc, Exception) else _VaultErrorFallback
+    Forbidden = (
+        forbidden_exc
+        if isinstance(forbidden_exc, type) and issubclass(forbidden_exc, Exception)
+        else _VaultForbiddenFallback
+    )
+    InvalidPath = (
+        invalid_path_exc
+        if isinstance(invalid_path_exc, type) and issubclass(invalid_path_exc, Exception)
+        else _VaultInvalidPathFallback
+    )
+    VaultError = (
+        vault_error_exc
+        if isinstance(vault_error_exc, type) and issubclass(vault_error_exc, Exception)
+        else _VaultErrorFallback
+    )
 except ImportError:
     hvac = None
     Forbidden = _VaultForbiddenFallback
@@ -52,6 +69,7 @@ class VaultClientError(RuntimeError):
 
 
 SENTINEL = object()
+
 
 class VaultSecretProvider:
     def __init__(
@@ -98,9 +116,7 @@ class VaultSecretProvider:
         elif role_id and secret_id_fn:
             self._approle_login()
         else:
-            raise VaultClientError(
-                "Vault auth not configured (provide token or role_id + secret_id_fn)"
-            )
+            raise VaultClientError("Vault auth not configured (provide token or role_id + secret_id_fn)")
 
         if not self._client.is_authenticated():
             raise VaultClientError("Vault authentication failed")
@@ -127,7 +143,7 @@ class VaultSecretProvider:
             if not isinstance(entry, tuple) or len(entry) != 2:
                 self._cache.pop(key, None)
                 return SENTINEL
-            ts, value = entry 
+            ts, value = entry
             if time.monotonic() - ts > self._cache_ttl:
                 del self._cache[key]
                 return SENTINEL

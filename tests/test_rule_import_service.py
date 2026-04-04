@@ -1,9 +1,9 @@
 """
-Copyright (c) 2026 Stefan Kumarasinghe
+Copyright (c) 2026 Stefan Kumarasinghe.
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
+License. You may obtain a copy of the License at
+http://www.apache.org/licenses/LICENSE-2.0
 """
 
 import unittest
@@ -20,7 +20,7 @@ from services.alerting.rule_import_service import RuleImportError, parse_rules_y
 
 class RuleImportServiceTests(unittest.TestCase):
     def test_parse_groups_structure_and_defaults(self):
-        content = '''
+        content = """
         groups:
           - name: core
             rules:
@@ -31,31 +31,31 @@ class RuleImportServiceTests(unittest.TestCase):
                   severity: critical
                 annotations:
                   description: p95 too high
-        '''
+        """
         rules = parse_rules_yaml(content)
         self.assertEqual(len(rules), 1)
         rule = rules[0]
-        self.assertEqual(rule.name, 'HighLatency')
-        self.assertEqual(rule.group, 'core')
-        self.assertEqual(rule.severity, 'critical')
+        self.assertEqual(rule.name, "HighLatency")
+        self.assertEqual(rule.group, "core")
+        self.assertEqual(rule.severity, "critical")
 
     def test_parse_spec_groups_structure(self):
-        content = '''
+        content = """
         spec:
           groups:
             - name: app
               rules:
                 - alert: ErrorRateHigh
                   expr: rate(http_requests_total{status=~"5.."}[5m]) > 0
-        '''
+        """
         rules = parse_rules_yaml(content)
         self.assertEqual(len(rules), 1)
-        self.assertEqual(rules[0].group, 'app')
+        self.assertEqual(rules[0].group, "app")
 
     def test_invalid_yaml_raises_rule_import_error(self):
         with self.assertRaises(RuleImportError):
-            parse_rules_yaml('groups: [')
+            parse_rules_yaml("groups: [")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

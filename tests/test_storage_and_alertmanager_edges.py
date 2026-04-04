@@ -1,9 +1,9 @@
 """
-Copyright (c) 2026 Stefan Kumarasinghe
+Copyright (c) 2026 Stefan Kumarasinghe.
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
+License. You may obtain a copy of the License at
+http://www.apache.org/licenses/LICENSE-2.0
 """
 
 from __future__ import annotations
@@ -268,11 +268,21 @@ async def test_alertmanager_service_helpers_and_delete_silence(monkeypatch):
     with pytest.raises(ValueError):
         svc.parse_filter_labels("[]")
 
-    current_user = TokenData(user_id="u1", username="user", tenant_id="tenant", org_id="org", role=Role.ADMIN, permissions=["p"], group_ids=["g1"])
+    current_user = TokenData(
+        user_id="u1",
+        username="user",
+        tenant_id="tenant",
+        org_id="org",
+        role=Role.ADMIN,
+        permissions=["p"],
+        group_ids=["g1"],
+    )
     assert svc.user_scope(current_user) == ("tenant", "u1", ["g1"])
 
     captured = []
-    monkeypatch.setattr(alert_mod, "enforce_public_endpoint_security", lambda *args, **kwargs: captured.append((args, kwargs)))
+    monkeypatch.setattr(
+        alert_mod, "enforce_public_endpoint_security", lambda *args, **kwargs: captured.append((args, kwargs))
+    )
     monkeypatch.setattr(config, "RATE_LIMIT_PUBLIC_PER_MINUTE", 10)
     monkeypatch.setattr(config, "WEBHOOK_IP_ALLOWLIST", ["127.0.0.1"])
 
@@ -298,17 +308,23 @@ async def test_alertmanager_service_helpers_and_delete_silence(monkeypatch):
 
     monkeypatch.setattr("services.alertmanager_service.normalize_visibility_ops", lambda value: value or "private")
     monkeypatch.setattr("services.alertmanager_service.encode_silence_comment_ops", lambda *args: json.dumps(args))
-    monkeypatch.setattr("services.alertmanager_service.decode_silence_comment_ops", lambda comment: {"comment": comment})
+    monkeypatch.setattr(
+        "services.alertmanager_service.decode_silence_comment_ops", lambda comment: {"comment": comment}
+    )
     monkeypatch.setattr("services.alertmanager_service.apply_silence_metadata_ops", lambda *_args: "silence")
     monkeypatch.setattr("services.alertmanager_service.silence_accessible_ops", lambda *_args: True)
     monkeypatch.setattr("services.alertmanager_service.silence_owned_by_ops", lambda *_args: True)
     monkeypatch.setattr("services.alertmanager_service.resolve_rule_org_id_ops", lambda *_args: "org-2")
     monkeypatch.setattr("services.alertmanager_service.yaml_quote", lambda value: f'"{value}"')
     monkeypatch.setattr("services.alertmanager_service.group_enabled_rules", lambda rules: {"default": rules})
-    monkeypatch.setattr("services.alertmanager_service.build_ruler_group_yaml", lambda group_name, rules: f"{group_name}:{len(rules)}")
-    monkeypatch.setattr("services.alertmanager_service.extract_mimir_group_names", lambda namespace_yaml: [namespace_yaml])
+    monkeypatch.setattr(
+        "services.alertmanager_service.build_ruler_group_yaml", lambda group_name, rules: f"{group_name}:{len(rules)}"
+    )
+    monkeypatch.setattr(
+        "services.alertmanager_service.extract_mimir_group_names", lambda namespace_yaml: [namespace_yaml]
+    )
     assert svc.normalize_visibility(None) == "private"
-    assert svc.encode_silence_comment("comment", "group", ["g1"]) 
+    assert svc.encode_silence_comment("comment", "group", ["g1"])
     assert svc.decode_silence_comment("c") == {"comment": "c"}
     assert svc.apply_silence_metadata("silence") == "silence"
     assert svc.silence_accessible("silence", current_user) is True
@@ -326,7 +342,9 @@ async def test_alertmanager_service_helpers_and_delete_silence(monkeypatch):
     monkeypatch.setattr("services.alertmanager_service.list_metric_names_ops", lambda *_args: async_value(["metric"]))
     monkeypatch.setattr("services.alertmanager_service.list_label_names_ops", lambda *_args: async_value(["label-a"]))
     monkeypatch.setattr("services.alertmanager_service.list_label_values_ops", lambda *_args: async_value(["value-a"]))
-    monkeypatch.setattr("services.alertmanager_service.evaluate_promql_ops", lambda *_args: async_value({"valid": True}))
+    monkeypatch.setattr(
+        "services.alertmanager_service.evaluate_promql_ops", lambda *_args: async_value({"valid": True})
+    )
     monkeypatch.setattr("services.alertmanager_service.sync_mimir_rules_for_org_ops", lambda *_args: async_value(None))
     monkeypatch.setattr("services.alertmanager_service.get_alerts_ops", lambda *_args: async_value(["alert"]))
     monkeypatch.setattr("services.alertmanager_service.get_alert_groups_ops", lambda *_args: async_value(["group"]))
@@ -334,8 +352,13 @@ async def test_alertmanager_service_helpers_and_delete_silence(monkeypatch):
     monkeypatch.setattr("services.alertmanager_service.get_silences_ops", lambda *_args: async_value(["silence"]))
     monkeypatch.setattr("services.alertmanager_service.get_silence_ops", lambda *_args: async_value("silence"))
     monkeypatch.setattr("services.alertmanager_service.create_silence_ops", lambda *_args: async_value("new-silence"))
-    monkeypatch.setattr("services.alertmanager_service.update_silence_ops", lambda *_args: async_value("updated-silence"))
-    monkeypatch.setattr("services.alertmanager_service.prune_removed_member_group_silences_ops", lambda *_args, **_kwargs: async_value(2))
+    monkeypatch.setattr(
+        "services.alertmanager_service.update_silence_ops", lambda *_args: async_value("updated-silence")
+    )
+    monkeypatch.setattr(
+        "services.alertmanager_service.prune_removed_member_group_silences_ops",
+        lambda *_args, **_kwargs: async_value(2),
+    )
     monkeypatch.setattr("services.alertmanager_service.get_status_ops", lambda *_args: async_value("status"))
     monkeypatch.setattr("services.alertmanager_service.get_receivers_ops", lambda *_args: async_value(["receiver"]))
     assert await svc.notify_for_alerts("tenant", [], object(), object()) is None

@@ -3,9 +3,9 @@ Request size limiting middleware.
 
 Copyright (c) 2026 Stefan Kumarasinghe
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
+License. You may obtain a copy of the License at
+http://www.apache.org/licenses/LICENSE-2.0
 """
 
 from __future__ import annotations
@@ -17,12 +17,12 @@ from starlette.responses import PlainTextResponse
 
 logger = logging.getLogger(__name__)
 
-_request_size_rejections_total = 0
+_REQUEST_SIZE_REJECTIONS_TOTAL = 0
 
 
 def _inc_request_size_rejections() -> int:
-    total = _request_size_rejections_total + 1
-    globals()["_request_size_rejections_total"] = total
+    total = _REQUEST_SIZE_REJECTIONS_TOTAL + 1
+    globals()["_REQUEST_SIZE_REJECTIONS_TOTAL"] = total
     return total
 
 
@@ -42,10 +42,7 @@ class RequestSizeLimitMiddleware:
             await self.app(scope, receive, send)
             return
 
-        headers = {
-            k.decode("latin-1").lower(): v.decode("latin-1")
-            for k, v in scope.get("headers", [])
-        }
+        headers = {k.decode("latin-1").lower(): v.decode("latin-1") for k, v in scope.get("headers", [])}
         content_length = headers.get("content-length")
         if content_length:
             try:

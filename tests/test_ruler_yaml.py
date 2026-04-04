@@ -1,9 +1,9 @@
 """
-Copyright (c) 2026 Stefan Kumarasinghe
+Copyright (c) 2026 Stefan Kumarasinghe.
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
+License. You may obtain a copy of the License at
+http://www.apache.org/licenses/LICENSE-2.0
 """
 
 import unittest
@@ -43,23 +43,25 @@ class RulerYamlTests(unittest.TestCase):
         self.assertEqual(yaml_quote('a"b\\c'), '"a\\"b\\\\c"')
 
     def test_group_enabled_rules_filters_disabled(self):
-        grouped = group_enabled_rules([
-            self._rule('rule-1', enabled=True, group='g1'),
-            self._rule('rule-2', enabled=False, group='g1'),
-            self._rule('rule-3', enabled=True, group='g2'),
-        ])
-        self.assertEqual(set(grouped.keys()), {'g1', 'g2'})
-        self.assertEqual(len(grouped['g1']), 1)
-        self.assertEqual(grouped['g1'][0].name, 'rule-1')
+        grouped = group_enabled_rules(
+            [
+                self._rule("rule-1", enabled=True, group="g1"),
+                self._rule("rule-2", enabled=False, group="g1"),
+                self._rule("rule-3", enabled=True, group="g2"),
+            ]
+        )
+        self.assertEqual(set(grouped.keys()), {"g1", "g2"})
+        self.assertEqual(len(grouped["g1"]), 1)
+        self.assertEqual(grouped["g1"][0].name, "rule-1")
 
     def test_build_and_extract_group_yaml(self):
-        yaml_text = build_ruler_group_yaml('infra', [self._rule('z-rule'), self._rule('a-rule')])
+        yaml_text = build_ruler_group_yaml("infra", [self._rule("z-rule"), self._rule("a-rule")])
         self.assertIn('name: "infra"', yaml_text)
         self.assertIn('alert: "a-rule"', yaml_text)
         self.assertIn('alert: "z-rule"', yaml_text)
 
         namespace = 'groups:\n  - name: "infra"\n  - name: "app"\n'
-        self.assertEqual(extract_mimir_group_names(namespace), ['infra', 'app'])
+        self.assertEqual(extract_mimir_group_names(namespace), ["infra", "app"])
 
     def test_build_yaml_without_labels_or_annotations_and_extract_unquoted(self):
         rule = AlertRule.model_validate(
@@ -82,5 +84,5 @@ class RulerYamlTests(unittest.TestCase):
         self.assertEqual(extract_mimir_group_names(namespace), ["infra"])
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

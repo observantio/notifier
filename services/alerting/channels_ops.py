@@ -1,11 +1,12 @@
 """
-Channel operations for alerting, including processing incoming alerts from Alertmanager, determining notification channels, and sending notifications based on alert status and configuration.
+Channel operations for alerting, including processing incoming alerts from Alertmanager, determining notification
+channels, and sending notifications based on alert status and configuration.
 
 Copyright (c) 2026 Stefan Kumarasinghe
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
+License. You may obtain a copy of the License at
+http://www.apache.org/licenses/LICENSE-2.0
 """
 
 from __future__ import annotations
@@ -66,12 +67,7 @@ async def notify_for_alerts(
             logger.debug("Alert without alertname label, skipping")
             continue
 
-        org_id = (
-            labels.get("org_id")
-            or labels.get("orgId")
-            or labels.get("tenant")
-            or labels.get("product")
-        )
+        org_id = labels.get("org_id") or labels.get("orgId") or labels.get("tenant") or labels.get("product")
         channels = storage_service.get_notification_channels_for_rule_name(
             tenant_id,
             alertname,
@@ -84,7 +80,8 @@ async def notify_for_alerts(
         )
         if not channels:
             logger.info(
-                "No deliverable notification channels for rule=%s org=%s rule_id=%s visibility=%s configured_channel_ids=%s",
+                "No deliverable notification channels for rule=%s org=%s "
+                "rule_id=%s visibility=%s configured_channel_ids=%s",
                 alertname,
                 org_id or "",
                 getattr(matched_rule, "id", None) if matched_rule else None,
@@ -146,7 +143,8 @@ async def notify_for_alerts(
         alert_model = Alert(
             labels=labels,
             annotations=annotations,
-            startsAt=_optional_string(incoming_alert.get("startsAt") or incoming_alert.get("starts_at")) or datetime.now(timezone.utc).isoformat(),
+            startsAt=_optional_string(incoming_alert.get("startsAt") or incoming_alert.get("starts_at"))
+            or datetime.now(timezone.utc).isoformat(),
             endsAt=_optional_string(incoming_alert.get("endsAt") or incoming_alert.get("ends_at")),
             generatorURL=_optional_string(incoming_alert.get("generatorURL")),
             status=status_obj,
@@ -157,6 +155,7 @@ async def notify_for_alerts(
         for channel in channels:
             sent = await notification_service.send_notification(channel, alert_model, action)
             logger.info("Sent notification to channel %s ok=%s", channel.name, sent)
+
 
 async def get_status(service: AlertManagerService) -> AlertManagerStatus | None:
     try:

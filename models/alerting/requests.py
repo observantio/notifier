@@ -3,9 +3,9 @@ Request models for alerting-related API endpoints.
 
 Copyright (c) 2026 Stefan Kumarasinghe
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
+License. You may obtain a copy of the License at
+http://www.apache.org/licenses/LICENSE-2.0
 """
 
 from __future__ import annotations
@@ -17,11 +17,15 @@ from custom_types.json import JSONDict
 
 class AlertWebhookRequest(BaseModel):
     model_config = ConfigDict(extra="allow")
-    alerts: List[JSONDict] = Field(default_factory=list, examples=[[{"labels": {"alertname": "HighCpuUsage", "severity": "critical"}}]])
+    alerts: List[JSONDict] = Field(
+        default_factory=list, examples=[[{"labels": {"alertname": "HighCpuUsage", "severity": "critical"}}]]
+    )
 
 
 class RuleImportRequest(BaseModel):
-    yamlContent: Optional[str] = Field(None, examples=['groups:\n  - name: watchdog-default\n    rules:\n      - alert: HighCpuUsage'])
+    yamlContent: Optional[str] = Field(
+        None, examples=["groups:\n  - name: watchdog-default\n    rules:\n      - alert: HighCpuUsage"]
+    )
     defaults: JSONDict = Field(default_factory=dict, examples=[{"labels": {"team": "platform"}}])
     dryRun: bool = Field(False, examples=[True])
 

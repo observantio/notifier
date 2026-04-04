@@ -1,9 +1,9 @@
 """
-Copyright (c) 2026 Stefan Kumarasinghe
+Copyright (c) 2026 Stefan Kumarasinghe.
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
+License. You may obtain a copy of the License at
+http://www.apache.org/licenses/LICENSE-2.0
 """
 
 from __future__ import annotations
@@ -166,21 +166,21 @@ def test_database_module_paths(monkeypatch):
         gen.throw(RuntimeError("fail"))
 
     assert db_mod.connection_test() is True
-    db_mod._engine = _FakeEngine(_FakeConn(execute_error=SQLAlchemyError("db")))
+    db_mod._ENGINE = _FakeEngine(_FakeConn(execute_error=SQLAlchemyError("db")))
     assert db_mod.connection_test() is False
 
     db_mod.dispose_database()
-    assert db_mod._engine is None
+    assert db_mod._ENGINE is None
 
     # Cover guard paths where one side of initialization is missing.
-    db_mod._engine = object()
-    db_mod._session_local = None
+    db_mod._ENGINE = object()
+    db_mod._SESSION_LOCAL = None
     with pytest.raises(RuntimeError):
         with db_mod.get_db_session():
             pass
 
-    db_mod._engine = object()
-    db_mod._session_local = None
+    db_mod._ENGINE = object()
+    db_mod._SESSION_LOCAL = None
     with pytest.raises(RuntimeError):
         next(db_mod.get_db())
 
@@ -197,7 +197,7 @@ def test_database_module_paths(monkeypatch):
 
     meta = _Meta()
     monkeypatch.setattr(db_mod.Base, "metadata", meta)
-    db_mod._engine = engine
+    db_mod._ENGINE = engine
     db_mod.init_db()
     assert meta.called == 1
 
@@ -244,7 +244,9 @@ def test_in_memory_and_hybrid_rate_limiters(monkeypatch):
     assert hybrid.hit("k", limit=1, window_seconds=10).backend == "redis"
 
     events = []
-    monkeypatch.setattr("middleware.rate_limit.hybrid.record_fallback_event", lambda mode, reason: events.append((mode, reason)))
+    monkeypatch.setattr(
+        "middleware.rate_limit.hybrid.record_fallback_event", lambda mode, reason: events.append((mode, reason))
+    )
 
     class _BrokenRedis:
         def hit(self, *_args, **_kwargs):
@@ -313,7 +315,10 @@ def test_redis_fixed_window_and_sanitize(monkeypatch):
     assert _sanitize_redis_url("redis://user:pass@localhost:6379/0") == "redis://localhost:6379/0"
     assert _sanitize_redis_url("bad://") == "bad:"
 
-    monkeypatch.setattr("middleware.rate_limit.redis_fixed_window.import_module", lambda _name: (_ for _ in ()).throw(ImportError("no redis")))
+    monkeypatch.setattr(
+        "middleware.rate_limit.redis_fixed_window.import_module",
+        lambda _name: (_ for _ in ()).throw(ImportError("no redis")),
+    )
     with pytest.raises(RuntimeError):
         RedisFixedWindowRateLimiter("redis://localhost:6379/0")
 
@@ -356,7 +361,9 @@ def test_redis_fixed_window_and_sanitize(monkeypatch):
     hit = limiter.hit("k", limit=2, window_seconds=30)
     assert hit.allowed is True and hit.remaining == 0
 
-    monkeypatch.setattr("middleware.rate_limit.redis_fixed_window.import_module", lambda _name: _RedisModule(_Client(ping_value=False)))
+    monkeypatch.setattr(
+        "middleware.rate_limit.redis_fixed_window.import_module", lambda _name: _RedisModule(_Client(ping_value=False))
+    )
     with pytest.raises(RuntimeError):
         RedisFixedWindowRateLimiter("redis://localhost:6379/0")
 
@@ -372,7 +379,13 @@ def test_dependencies_helpers_and_allowlist_paths(monkeypatch):
     with pytest.raises(HTTPException):
         dependencies._compare_service_token(_request())
 
-    monkeypatch.setattr(config, "get_secret", lambda key: "expected" if key in {"NOTIFIER_EXPECTED_SERVICE_TOKEN", "GATEWAY_INTERNAL_SERVICE_TOKEN"} else None)
+    monkeypatch.setattr(
+        config,
+        "get_secret",
+        lambda key: (
+            "expected" if key in {"NOTIFIER_EXPECTED_SERVICE_TOKEN", "GATEWAY_INTERNAL_SERVICE_TOKEN"} else None
+        ),
+    )
     with pytest.raises(HTTPException):
         dependencies._compare_service_token(_request())
 
@@ -422,12 +435,18 @@ def test_dependencies_helpers_and_allowlist_paths(monkeypatch):
     monkeypatch.setattr(dependencies, "client_ip", lambda request: request.client.host if request.client else "unknown")
 
     with pytest.raises(HTTPException):
-        dependencies.enforce_public_endpoint_security(_request(), scope="public", limit=10, window_seconds=60, allowlist="203.0.113.0/24,bad-cidr/")
+        dependencies.enforce_public_endpoint_security(
+            _request(), scope="public", limit=10, window_seconds=60, allowlist="203.0.113.0/24,bad-cidr/"
+        )
 
     with pytest.raises(HTTPException):
-        dependencies.enforce_public_endpoint_security(_request("198.51.100.1"), scope="public", limit=10, window_seconds=60, allowlist="203.0.113.0/24")
+        dependencies.enforce_public_endpoint_security(
+            _request("198.51.100.1"), scope="public", limit=10, window_seconds=60, allowlist="203.0.113.0/24"
+        )
 
-    dependencies.enforce_public_endpoint_security(_request("203.0.113.10"), scope="public", limit=10, window_seconds=60, allowlist="203.0.113.0/24")
+    dependencies.enforce_public_endpoint_security(
+        _request("203.0.113.10"), scope="public", limit=10, window_seconds=60, allowlist="203.0.113.0/24"
+    )
 
     monkeypatch.setattr(config, "ALLOWLIST_FAIL_OPEN", True)
     dependencies._enforce_ip_allowlist(_request(), "", scope="public")
@@ -460,12 +479,22 @@ def test_dependencies_rate_limit_and_allowlist_remaining_edges(monkeypatch):
     assert exc.value.status_code == 401
 
     assert dependencies.apply_scoped_rate_limit(_user(), "scope") is None
-    assert dependencies.require_permission(Permission.READ_ALERTS)(_user(is_superuser=True, permissions=[])).is_superuser is True
+    assert (
+        dependencies.require_permission(Permission.READ_ALERTS)(_user(is_superuser=True, permissions=[])).is_superuser
+        is True
+    )
     assert dependencies._enforce_ip_allowlist(_request(), None, scope="public") is None
 
 
 def test_rate_limit_build_and_helper_remaining_edges(monkeypatch):
-    monkeypatch.setattr(rate_mod.os, "getenv", lambda key, default=None: {"RATE_LIMIT_BACKEND": "auto", "RATE_LIMIT_REDIS_URL": "redis://localhost:6379/0"}.get(key, default))
+    monkeypatch.setattr(
+        rate_mod.os,
+        "getenv",
+        lambda key, default=None: {
+            "RATE_LIMIT_BACKEND": "auto",
+            "RATE_LIMIT_REDIS_URL": "redis://localhost:6379/0",
+        }.get(key, default),
+    )
     monkeypatch.setattr(rate_mod, "RedisFixedWindowRateLimiter", lambda *_args, **_kwargs: SimpleNamespace())
     limiter = rate_mod._build_rate_limiter()
     assert getattr(limiter, "_redis_limiter", None) is not None
@@ -483,7 +512,11 @@ def test_rate_limit_build_and_helper_remaining_edges(monkeypatch):
     assert client_ip(_request(ip="203.0.113.10")) == "not-an-ip"
 
     monkeypatch.setattr(rate_mod.config, "IS_PRODUCTION", True)
-    monkeypatch.setattr(rate_mod, "RedisFixedWindowRateLimiter", lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("redis down")))
+    monkeypatch.setattr(
+        rate_mod,
+        "RedisFixedWindowRateLimiter",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("redis down")),
+    )
     limiter = rate_mod._build_rate_limiter()
     assert getattr(limiter, "_redis_limiter", None) is None
 
@@ -491,7 +524,9 @@ def test_rate_limit_build_and_helper_remaining_edges(monkeypatch):
     limiter = rate_mod._build_rate_limiter()
     assert getattr(limiter, "_redis_limiter", None) is None
 
-    monkeypatch.setattr("middleware.rate_limit.ip._valid_ip", lambda value: None if value in {"bad", "also-bad"} else value)
+    monkeypatch.setattr(
+        "middleware.rate_limit.ip._valid_ip", lambda value: None if value in {"bad", "also-bad"} else value
+    )
     req = _request(
         ip="203.0.113.10",
         headers=[(b"x-forwarded-for", b"bad"), (b"x-real-ip", b"also-bad")],
@@ -506,7 +541,9 @@ async def test_request_size_limit_non_http_and_retry_httpstatus_exhaustion(monke
     async def app(scope, receive, send):
         calls.append(scope.get("type", ""))
 
-    middleware = __import__("middleware.request_size_limit", fromlist=["RequestSizeLimitMiddleware"]).RequestSizeLimitMiddleware(app, max_bytes=5)
+    middleware = __import__(
+        "middleware.request_size_limit", fromlist=["RequestSizeLimitMiddleware"]
+    ).RequestSizeLimitMiddleware(app, max_bytes=5)
 
     async def receive():
         return {"type": "http.request", "body": b"", "more_body": False}
@@ -560,7 +597,13 @@ def test_verify_context_token_and_get_current_user(monkeypatch):
     with pytest.raises(HTTPException):
         dependencies._verify_context_token("bad-token")
 
-    monkeypatch.setattr(config, "get_secret", lambda key: "expected" if key in {"NOTIFIER_EXPECTED_SERVICE_TOKEN", "GATEWAY_INTERNAL_SERVICE_TOKEN"} else None)
+    monkeypatch.setattr(
+        config,
+        "get_secret",
+        lambda key: (
+            "expected" if key in {"NOTIFIER_EXPECTED_SERVICE_TOKEN", "GATEWAY_INTERNAL_SERVICE_TOKEN"} else None
+        ),
+    )
     monkeypatch.setattr(dependencies, "_verify_context_token", lambda _token: _user(group_ids=["g1", "g1", "", "g2"]))
     request = _request(headers=[(b"x-service-token", b"expected"), (b"authorization", b"Bearer ctx")])
     user = dependencies.get_current_user(request, None)

@@ -1,11 +1,12 @@
 """
-Silences operations for managing Alertmanager silences, including fetching, creating, updating, and deleting silences, as well as applying metadata and access control based on user permissions.
+Silences operations for managing Alertmanager silences, including fetching, creating, updating, and deleting silences,
+as well as applying metadata and access control based on user permissions.
 
 Copyright (c) 2026 Stefan Kumarasinghe
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
+License. You may obtain a copy of the License at
+http://www.apache.org/licenses/LICENSE-2.0
 """
 
 from __future__ import annotations
@@ -38,6 +39,7 @@ def _visibility_value(value: object) -> Visibility:
     except ValueError:
         return Visibility.TENANT
 
+
 def apply_silence_metadata(service: AlertManagerService, silence: Silence) -> Silence:
     data = service.decode_silence_comment(silence.comment)
     comment = data.get("comment")
@@ -45,7 +47,9 @@ def apply_silence_metadata(service: AlertManagerService, silence: Silence) -> Si
     shared_group_ids = data.get("shared_group_ids")
     silence.comment = str(comment or "")
     silence.visibility = _visibility_value(visibility)
-    silence.shared_group_ids = [str(group_id) for group_id in shared_group_ids] if isinstance(shared_group_ids, list) else []
+    silence.shared_group_ids = (
+        [str(group_id) for group_id in shared_group_ids] if isinstance(shared_group_ids, list) else []
+    )
     return silence
 
 
@@ -82,9 +86,7 @@ async def prune_removed_member_group_silences(
         return 0
 
     removed_identifiers = {
-        str(v or "").strip()
-        for v in (removed_user_ids or []) + (removed_usernames or [])
-        if str(v or "").strip()
+        str(v or "").strip() for v in (removed_user_ids or []) + (removed_usernames or []) if str(v or "").strip()
     }
     removed_identifiers_lower = {v.lower() for v in removed_identifiers}
     if not removed_identifiers:

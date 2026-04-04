@@ -121,8 +121,9 @@ disable = [
 ]
 
 [tool.pylint.format]
-max-line-length = 900
-max-module-lines = 2000
+max-line-length = 120
+max-module-lines = 800
+
 
 [tool.pylint.design]
 max-args = 6
@@ -135,11 +136,12 @@ max-statements = 250
 min-public-methods = 0
 
 [tool.pylint.basic]
-const-naming-style = "any"
-class-const-naming-style = "any"
-variable-naming-style = "any"
-argument-naming-style = "any"
-attr-naming-style = "any"
+variable-naming-style = "snake_case"
+argument-naming-style = "snake_case"
+attr-naming-style = "snake_case"
+
+const-naming-style = "UPPER_CASE"
+class-const-naming-style = "UPPER_CASE"
 
 [tool.pylint.similarities]
 min-similarity-lines = 8

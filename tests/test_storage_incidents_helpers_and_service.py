@@ -1,9 +1,9 @@
 """
-Copyright (c) 2026 Stefan Kumarasinghe
+Copyright (c) 2026 Stefan Kumarasinghe.
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
+License. You may obtain a copy of the License at
+http://www.apache.org/licenses/LICENSE-2.0
 """
 
 from __future__ import annotations
@@ -101,9 +101,9 @@ class _FakeQuery:
         return self
 
     def all(self):
-        items = self._items[self._offset:]
+        items = self._items[self._offset :]
         if self._limit is not None:
-            items = items[:self._limit]
+            items = items[: self._limit]
         return list(items)
 
     def first(self):
@@ -144,10 +144,19 @@ def test_incident_storage_helper_functions(monkeypatch):
     assert incidents_mod._shared_group_ids(object()) == []
 
     assert incidents_mod.incident_scope_hint_from_labels({"org_id": "org-1"}) == "org-1"
-    assert incidents_mod.incident_key_from_labels({"alertname": "CPUHigh", "product": "api"}) == "rule:CPUHigh|scope:api"
+    assert (
+        incidents_mod.incident_key_from_labels({"alertname": "CPUHigh", "product": "api"}) == "rule:CPUHigh|scope:api"
+    )
     assert incidents_mod.incident_key_from_labels({}) is None
 
-    row = _incident_row("inc-1", annotations={incidents_mod.INCIDENT_META_KEY: json.dumps({incidents_mod.INCIDENT_META_KEY_IDENTITY: "rule:CPUHigh|scope:*"})})
+    row = _incident_row(
+        "inc-1",
+        annotations={
+            incidents_mod.INCIDENT_META_KEY: json.dumps(
+                {incidents_mod.INCIDENT_META_KEY_IDENTITY: "rule:CPUHigh|scope:*"}
+            )
+        },
+    )
     assert incidents_mod.incident_key_from_db_row(row) == "rule:CPUHigh|scope:*"
     assert incidents_mod.incident_activity_token_from_row(row).startswith("k:")
 
@@ -155,19 +164,27 @@ def test_incident_storage_helper_functions(monkeypatch):
     assert incidents_mod.incident_key_from_db_row(row_no_key) is None
     assert incidents_mod.incident_activity_token_from_row(row_no_key).startswith("fp:")
 
-    row_fallback = _incident_row("inc-3", annotations={incidents_mod.INCIDENT_META_KEY: "{}"}, labels={"alertname": "DiskFull"})
+    row_fallback = _incident_row(
+        "inc-3", annotations={incidents_mod.INCIDENT_META_KEY: "{}"}, labels={"alertname": "DiskFull"}
+    )
     assert incidents_mod.incident_key_from_db_row(row_fallback) == "rule:DiskFull|scope:*"
     assert incidents_mod._extract_metric_state({"mem_state": "critical"}) == "critical"
     assert incidents_mod._parse_metric_states("high,high, low ") == ["high", "low"]
-    assert incidents_mod._merge_metric_states({incidents_mod.METRIC_STATES_ANNOTATION_KEY: "high"}, "low", "high") == "high,low"
+    assert (
+        incidents_mod._merge_metric_states({incidents_mod.METRIC_STATES_ANNOTATION_KEY: "high"}, "low", "high")
+        == "high,low"
+    )
     assert incidents_mod._is_alert_suppressed({"status": {"state": "suppressed"}}) is True
-    assert incidents_mod._incident_access_allowed(
-        visibility="group",
-        creator_id="owner",
-        user_id="user",
-        shared_group_ids=["g1"],
-        user_group_ids=["g1"],
-    ) is True
+    assert (
+        incidents_mod._incident_access_allowed(
+            visibility="group",
+            creator_id="owner",
+            user_id="user",
+            shared_group_ids=["g1"],
+            user_group_ids=["g1"],
+        )
+        is True
+    )
 
     called = []
 
@@ -181,7 +198,11 @@ def test_incident_storage_helper_functions(monkeypatch):
 def test_resolve_incident_jira_credentials(monkeypatch):
     monkeypatch.setattr(incidents_mod, "load_tenant_jira_integrations", lambda tenant_id: [{"id": "jira-1"}])
     monkeypatch.setattr(incidents_mod, "integration_is_usable", lambda item: True)
-    monkeypatch.setattr(incidents_mod, "jira_integration_credentials", lambda item: {"base_url": "https://jira.example.com", "token": "x"})
+    monkeypatch.setattr(
+        incidents_mod,
+        "jira_integration_credentials",
+        lambda item: {"base_url": "https://jira.example.com", "token": "x"},
+    )
     assert incidents_mod._resolve_incident_jira_credentials("tenant-a", "jira-1") == {
         "base_url": "https://jira.example.com",
         "token": "x",
@@ -190,7 +211,11 @@ def test_resolve_incident_jira_credentials(monkeypatch):
     monkeypatch.setattr(incidents_mod, "integration_is_usable", lambda item: False)
     assert incidents_mod._resolve_incident_jira_credentials("tenant-a", "jira-1") is None
 
-    monkeypatch.setattr(incidents_mod, "get_effective_jira_credentials", lambda tenant_id: {"base_url": "https://jira.example.com", "token": "y"})
+    monkeypatch.setattr(
+        incidents_mod,
+        "get_effective_jira_credentials",
+        lambda tenant_id: {"base_url": "https://jira.example.com", "token": "y"},
+    )
     assert incidents_mod._resolve_incident_jira_credentials("tenant-a", None) == {
         "base_url": "https://jira.example.com",
         "token": "y",
@@ -209,13 +234,21 @@ def test_resolve_rule_by_alertname_and_jira_side_effect_error_paths(monkeypatch)
         def query(self, *_args, **_kwargs):
             return _BrokenQuery()
 
-    monkeypatch.setattr(incidents_mod, "AlertRuleDB", SimpleNamespace(tenant_id="tenant_id", name="name", org_id=SimpleNamespace(is_=lambda *_: None, desc=lambda: None)))
+    monkeypatch.setattr(
+        incidents_mod,
+        "AlertRuleDB",
+        SimpleNamespace(
+            tenant_id="tenant_id", name="name", org_id=SimpleNamespace(is_=lambda *_: None, desc=lambda: None)
+        ),
+    )
     assert incidents_mod._resolve_rule_by_alertname(_BrokenDB(), "tenant-a", {"alertname": "CPUHigh"}) is None
     assert incidents_mod._resolve_rule_by_alertname(_BrokenDB(), "tenant-a", {}) is None
 
     from services.jira_service import JiraError
 
-    monkeypatch.setattr(incidents_mod, "_resolve_incident_jira_credentials", lambda *_args: {"base_url": "https://jira"})
+    monkeypatch.setattr(
+        incidents_mod, "_resolve_incident_jira_credentials", lambda *_args: {"base_url": "https://jira"}
+    )
 
     def _raise_jira(coro):
         coro.close()
@@ -224,7 +257,11 @@ def test_resolve_rule_by_alertname_and_jira_side_effect_error_paths(monkeypatch)
     monkeypatch.setattr(incidents_mod, "_run_async", _raise_jira)
     warnings = []
     monkeypatch.setattr(incidents_mod.logger, "warning", lambda msg, *args: warnings.append(msg % args))
-    incident = SimpleNamespace(annotations={incidents_mod.INCIDENT_META_KEY: json.dumps({"jira_ticket_key": "OPS-1", "jira_integration_id": "jira-1"})})
+    incident = SimpleNamespace(
+        annotations={
+            incidents_mod.INCIDENT_META_KEY: json.dumps({"jira_ticket_key": "OPS-1", "jira_integration_id": "jira-1"})
+        }
+    )
     incidents_mod._move_reopened_incident_jira_ticket_to_todo("tenant-a", incident)
     incidents_mod._sync_reopened_incident_note_to_jira(
         "tenant-a",
@@ -252,7 +289,9 @@ def test_sync_incidents_from_alerts_dedupe_reopen_and_resolve_missing(monkeypatc
         labels={"alertname": "CPUHigh", "state": "critical"},
         annotations={},
     )
-    canonical.annotations[incidents_mod.INCIDENT_META_KEY] = json.dumps({"incident_key": "rule:CPUHigh|scope:org-a", "jira_ticket_key": "OPS-1"})
+    canonical.annotations[incidents_mod.INCIDENT_META_KEY] = json.dumps(
+        {"incident_key": "rule:CPUHigh|scope:org-a", "jira_ticket_key": "OPS-1"}
+    )
     duplicate = _incident_row(
         "inc-dup",
         status="open",
@@ -354,8 +393,24 @@ def test_incident_service_summary_list_get_update_and_filter(monkeypatch):
         _incident_row("resolved-hidden", status="resolved", hide_when_resolved=True),
     ]
     rules = [
-        SimpleNamespace(tenant_id="tenant-a", name="CPUHigh", visibility="public", created_by="owner", shared_groups=[], org_id=None, enabled=True),
-        SimpleNamespace(tenant_id="tenant-a", name="DiskFull", visibility="group", created_by="owner", shared_groups=[SimpleNamespace(id="g1")], org_id="org-1", enabled=True),
+        SimpleNamespace(
+            tenant_id="tenant-a",
+            name="CPUHigh",
+            visibility="public",
+            created_by="owner",
+            shared_groups=[],
+            org_id=None,
+            enabled=True,
+        ),
+        SimpleNamespace(
+            tenant_id="tenant-a",
+            name="DiskFull",
+            visibility="group",
+            created_by="owner",
+            shared_groups=[SimpleNamespace(id="g1")],
+            org_id="org-1",
+            enabled=True,
+        ),
     ]
     db = _FakeDB(rows, rules)
 
@@ -364,12 +419,20 @@ def test_incident_service_summary_list_get_update_and_filter(monkeypatch):
     monkeypatch.setattr(
         incidents_mod,
         "incident_to_pydantic",
-        lambda incident: SimpleNamespace(id=incident.id, status=incident.status, assignee=incident.assignee, annotations=incident.annotations, notes=incident.notes),
+        lambda incident: SimpleNamespace(
+            id=incident.id,
+            status=incident.status,
+            assignee=incident.assignee,
+            annotations=incident.annotations,
+            notes=incident.notes,
+        ),
     )
     monkeypatch.setattr(
         incidents_mod,
         "has_access",
-        lambda visibility, creator_id, user_id, shared_group_ids, user_group_ids, require_write=False: visibility != "private" or creator_id == user_id,
+        lambda visibility, creator_id, user_id, shared_group_ids, user_group_ids, require_write=False: visibility
+        != "private"
+        or creator_id == user_id,
     )
 
     summary = service.get_incident_summary("tenant-a", "user-1", ["g1"])
@@ -492,7 +555,13 @@ def test_incident_service_unlink_and_update_edge_paths(monkeypatch):
     monkeypatch.setattr(
         incidents_mod,
         "incident_to_pydantic",
-        lambda incident: SimpleNamespace(id=incident.id, status=incident.status, assignee=incident.assignee, annotations=incident.annotations, notes=incident.notes),
+        lambda incident: SimpleNamespace(
+            id=incident.id,
+            status=incident.status,
+            assignee=incident.assignee,
+            annotations=incident.annotations,
+            notes=incident.notes,
+        ),
     )
 
     payload = AlertIncidentUpdateRequest.model_validate(
@@ -554,7 +623,10 @@ def test_incident_list_and_filter_additional_edges(monkeypatch):
     denied_db = _FakeDB([denied_row])
     monkeypatch.setattr(incidents_mod, "get_db_session", lambda: _db_session(denied_db))
     monkeypatch.setattr(incidents_mod, "_incident_access_allowed", lambda **_kwargs: False)
-    assert service.get_incident_for_user("inc-denied", "tenant-a", user_id="u1", group_ids=["g1"], require_write=True) is None
+    assert (
+        service.get_incident_for_user("inc-denied", "tenant-a", user_id="u1", group_ids=["g1"], require_write=True)
+        is None
+    )
 
     # filter_alerts_for_user empty alerts and no candidates
     empty_db = _FakeDB([], [])
@@ -690,7 +762,9 @@ def test_incident_get_update_filter_remaining_branches(monkeypatch):
     assert service.get_incident_for_user("inc-1", "tenant-a", user_id="", group_ids=["g1"]) is not None
     assert access_called["value"] is False
 
-    resolved_row = _incident_row("inc-resolved", status="resolved", visibility="public", created_by="u1", annotations={})
+    resolved_row = _incident_row(
+        "inc-resolved", status="resolved", visibility="public", created_by="u1", annotations={}
+    )
     resolved_row.notes = [{"author": "u1", "text": "existing", "createdAt": datetime.now(timezone.utc).isoformat()}]
     db = _FakeDB([resolved_row])
     monkeypatch.setattr(incidents_mod, "get_db_session", lambda: _db_session(db))

@@ -1,9 +1,9 @@
 """
-Copyright (c) 2026 Stefan Kumarasinghe
+Copyright (c) 2026 Stefan Kumarasinghe.
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
+License. You may obtain a copy of the License at
+http://www.apache.org/licenses/LICENSE-2.0
 """
 
 from __future__ import annotations
@@ -265,25 +265,31 @@ async def test_jira_service_uncovered_paths(monkeypatch):
         return []
 
     svc.list_transitions = no_transitions
-    assert await svc._transition_issue_by_target(
-        "OPS-1",
-        credentials=creds,
-        target_names={"done"},
-        transition_names={"done"},
-        status_category_key="done",
-    ) is False
+    assert (
+        await svc._transition_issue_by_target(
+            "OPS-1",
+            credentials=creds,
+            target_names={"done"},
+            transition_names={"done"},
+            status_category_key="done",
+        )
+        is False
+    )
 
     async def no_id_transition(issue_key, credentials=None):
         return [{"name": "Done", "to": {"name": "Done"}}]
 
     svc.list_transitions = no_id_transition
-    assert await svc._transition_issue_by_target(
-        "OPS-1",
-        credentials=creds,
-        target_names={"done"},
-        transition_names={"done"},
-        status_category_key="done",
-    ) is False
+    assert (
+        await svc._transition_issue_by_target(
+            "OPS-1",
+            credentials=creds,
+            target_names={"done"},
+            transition_names={"done"},
+            status_category_key="done",
+        )
+        is False
+    )
 
 
 def test_integration_security_uncovered_paths(monkeypatch):
@@ -411,11 +417,31 @@ def test_integration_security_uncovered_paths(monkeypatch):
     monkeypatch.setattr(sec_mod, "jira_integration_credentials", _raise_http_exception)
     assert sec_mod.integration_is_usable({"enabled": True}) is False
 
-    monkeypatch.setattr(sec_mod, "jira_integration_credentials", lambda _item: {"auth_mode": "api_token", "base_url": "https://jira", "email": "user", "api_token": "tok", "bearer": None})
+    monkeypatch.setattr(
+        sec_mod,
+        "jira_integration_credentials",
+        lambda _item: {
+            "auth_mode": "api_token",
+            "base_url": "https://jira",
+            "email": "user",
+            "api_token": "tok",
+            "bearer": None,
+        },
+    )
     monkeypatch.setattr(sec_mod, "is_safe_http_url", lambda _url: False)
     assert sec_mod.integration_is_usable({"enabled": True}) is False
 
-    monkeypatch.setattr(sec_mod, "jira_integration_credentials", lambda _item: {"auth_mode": "bearer", "base_url": "https://jira", "email": None, "api_token": None, "bearer": "tok"})
+    monkeypatch.setattr(
+        sec_mod,
+        "jira_integration_credentials",
+        lambda _item: {
+            "auth_mode": "bearer",
+            "base_url": "https://jira",
+            "email": None,
+            "api_token": None,
+            "bearer": "tok",
+        },
+    )
     monkeypatch.setattr(sec_mod, "is_safe_http_url", lambda _url: True)
     assert sec_mod.integration_is_usable({"enabled": True}) is True
 
@@ -670,9 +696,27 @@ def test_revocation_uncovered_paths_with_fake_db():
                 SimpleNamespace(created_by="u1", shared_groups=[SimpleNamespace(id="g2")], visibility="group"),
             ]
             self.incident_rows = [
-                SimpleNamespace(annotations={rev_mod.INCIDENT_META_KEY: json.dumps({"created_by": "other", "visibility": "group", "shared_group_ids": ["g1"]})}),
-                SimpleNamespace(annotations={rev_mod.INCIDENT_META_KEY: json.dumps({"created_by": "u1", "visibility": "private", "shared_group_ids": ["g1"]})}),
-                SimpleNamespace(annotations={rev_mod.INCIDENT_META_KEY: json.dumps({"created_by": "u1", "visibility": "group", "shared_group_ids": ["g2"]})}),
+                SimpleNamespace(
+                    annotations={
+                        rev_mod.INCIDENT_META_KEY: json.dumps(
+                            {"created_by": "other", "visibility": "group", "shared_group_ids": ["g1"]}
+                        )
+                    }
+                ),
+                SimpleNamespace(
+                    annotations={
+                        rev_mod.INCIDENT_META_KEY: json.dumps(
+                            {"created_by": "u1", "visibility": "private", "shared_group_ids": ["g1"]}
+                        )
+                    }
+                ),
+                SimpleNamespace(
+                    annotations={
+                        rev_mod.INCIDENT_META_KEY: json.dumps(
+                            {"created_by": "u1", "visibility": "group", "shared_group_ids": ["g2"]}
+                        )
+                    }
+                ),
             ]
             self.tenant = SimpleNamespace(
                 settings={

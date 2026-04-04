@@ -1,11 +1,12 @@
 """
-Service for managing notifications, providing functions to send notifications through various channels such as email, Slack, and Microsoft Teams.
+Service for managing notifications, providing functions to send notifications through various channels such as email,
+Slack, and Microsoft Teams.
 
 Copyright (c) 2026 Stefan Kumarasinghe
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
+License. You may obtain a copy of the License at
+http://www.apache.org/licenses/LICENSE-2.0
 """
 
 import logging
@@ -26,6 +27,7 @@ from services.notification import transport as notification_transport
 from services.notification import validators as notification_validators
 
 logger = logging.getLogger(__name__)
+
 
 class NotificationService:
 
@@ -76,9 +78,9 @@ class NotificationService:
         if channel.type == ChannelType.EMAIL:
             return await self._send_email(channel, alert, action)
         senders = {
-            ChannelType.SLACK:     self._send_slack,
-            ChannelType.TEAMS:     self._send_teams,
-            ChannelType.WEBHOOK:   self._send_webhook,
+            ChannelType.SLACK: self._send_slack,
+            ChannelType.TEAMS: self._send_teams,
+            ChannelType.WEBHOOK: self._send_webhook,
             ChannelType.PAGERDUTY: self._send_pagerduty,
         }
         sender = senders.get(channel.type)
@@ -95,7 +97,12 @@ class NotificationService:
         incident_severity: str,
         actor: str,
     ) -> bool:
-        enabled = str(config.get_secret("INCIDENT_ASSIGNMENT_EMAIL_ENABLED") or "false").strip().lower() in {"1", "true", "yes", "on"}
+        enabled = str(config.get_secret("INCIDENT_ASSIGNMENT_EMAIL_ENABLED") or "false").strip().lower() in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }
         if not enabled:
             return False
         smtp_host = (config.get_secret("INCIDENT_ASSIGNMENT_SMTP_HOST") or "").strip()
@@ -156,11 +163,19 @@ class NotificationService:
         smtp_from = str(cfg.get("smtp_from") or cfg.get("smtpFrom") or cfg.get("from") or config.DEFAULT_ADMIN_EMAIL)
 
         if provider == "sendgrid":
-            api_key = str(cfg.get("sendgrid_api_key") or cfg.get("sendgridApiKey") or cfg.get("api_key") or cfg.get("apiKey") or "")
+            api_key = str(
+                cfg.get("sendgrid_api_key")
+                or cfg.get("sendgridApiKey")
+                or cfg.get("api_key")
+                or cfg.get("apiKey")
+                or ""
+            )
             if not api_key:
                 logger.error("SendGrid API key not configured for email channel %s", channel.name)
                 return False
-            sent = await notification_email.send_via_sendgrid(self._client, api_key, subject, body, recipients, smtp_from)
+            sent = await notification_email.send_via_sendgrid(
+                self._client, api_key, subject, body, recipients, smtp_from
+            )
             if sent:
                 logger.info("Email notification sent via SendGrid (channel=%s)", channel.name)
             else:
@@ -168,7 +183,9 @@ class NotificationService:
             return sent
 
         if provider == "resend":
-            api_key = str(cfg.get("resend_api_key") or cfg.get("resendApiKey") or cfg.get("api_key") or cfg.get("apiKey") or "")
+            api_key = str(
+                cfg.get("resend_api_key") or cfg.get("resendApiKey") or cfg.get("api_key") or cfg.get("apiKey") or ""
+            )
             if not api_key:
                 logger.error("Resend API key not configured for email channel %s", channel.name)
                 return False
@@ -187,9 +204,14 @@ class NotificationService:
         smtp_port = int(str(cfg.get("smtp_port") or cfg.get("smtpPort") or 0))
         smtp_user = str(cfg.get("smtp_username") or cfg.get("smtpUsername") or cfg.get("username") or "") or None
         smtp_pass = str(cfg.get("smtp_password") or cfg.get("smtpPassword") or cfg.get("password") or "") or None
-        smtp_api_key = str(cfg.get("smtp_api_key") or cfg.get("smtpApiKey") or cfg.get("api_key") or cfg.get("apiKey") or "") or None
+        smtp_api_key = (
+            str(cfg.get("smtp_api_key") or cfg.get("smtpApiKey") or cfg.get("api_key") or cfg.get("apiKey") or "")
+            or None
+        )
         smtp_auth_type = str(cfg.get("smtp_auth_type") or cfg.get("smtpAuthType") or "password").strip().lower()
-        use_starttls = self._as_bool(cfg.get("smtp_starttls") or cfg.get("smtpStartTLS") or cfg.get("starttls") or False)
+        use_starttls = self._as_bool(
+            cfg.get("smtp_starttls") or cfg.get("smtpStartTLS") or cfg.get("starttls") or False
+        )
         use_ssl = self._as_bool(cfg.get("smtp_use_ssl") or cfg.get("smtpUseSSL") or False)
 
         if not smtp_host:
@@ -212,7 +234,9 @@ class NotificationService:
 
         msg = notification_email.build_smtp_message(subject, body, smtp_from, recipients)
         logger.info("Sending email to %s via %s:%s (channel=%s)", recipients, smtp_host, smtp_port, channel.name)
-        sent = await notification_email.send_via_smtp(msg, smtp_host, smtp_port, smtp_user, smtp_pass, use_starttls, use_ssl)
+        sent = await notification_email.send_via_smtp(
+            msg, smtp_host, smtp_port, smtp_user, smtp_pass, use_starttls, use_ssl
+        )
         if sent:
             logger.info("Email notification sent (channel=%s)", channel.name)
         else:

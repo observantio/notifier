@@ -1,9 +1,9 @@
 """
-Copyright (c) 2026 Stefan Kumarasinghe
+Copyright (c) 2026 Stefan Kumarasinghe.
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
+License. You may obtain a copy of the License at
+http://www.apache.org/licenses/LICENSE-2.0
 """
 
 from __future__ import annotations
@@ -90,22 +90,30 @@ def test_dependencies_token_and_permission_edges(monkeypatch):
 
     monkeypatch.setattr(config, "get_secret", lambda _key: "secret")
     monkeypatch.setattr(config, "NOTIFIER_CONTEXT_ALGORITHM", "HS256")
-    monkeypatch.setattr(jwt, "decode", lambda *_args, **_kwargs: {"iat": "x", "exp": "y", "jti": "j", "user_id": "u", "tenant_id": "t"})
+    monkeypatch.setattr(
+        jwt, "decode", lambda *_args, **_kwargs: {"iat": "x", "exp": "y", "jti": "j", "user_id": "u", "tenant_id": "t"}
+    )
     with pytest.raises(HTTPException) as exc:
         dependencies._verify_context_token("t")
     assert exc.value.status_code == 401
 
-    monkeypatch.setattr(jwt, "decode", lambda *_args, **_kwargs: {"iat": 20, "exp": 10, "jti": "j", "user_id": "u", "tenant_id": "t"})
+    monkeypatch.setattr(
+        jwt, "decode", lambda *_args, **_kwargs: {"iat": 20, "exp": 10, "jti": "j", "user_id": "u", "tenant_id": "t"}
+    )
     with pytest.raises(HTTPException) as exc:
         dependencies._verify_context_token("t")
     assert exc.value.status_code == 401
 
-    monkeypatch.setattr(jwt, "decode", lambda *_args, **_kwargs: {"iat": 10, "exp": 20, "jti": "", "user_id": "u", "tenant_id": "t"})
+    monkeypatch.setattr(
+        jwt, "decode", lambda *_args, **_kwargs: {"iat": 10, "exp": 20, "jti": "", "user_id": "u", "tenant_id": "t"}
+    )
     with pytest.raises(HTTPException) as exc:
         dependencies._verify_context_token("t")
     assert exc.value.status_code == 401
 
-    monkeypatch.setattr(jwt, "decode", lambda *_args, **_kwargs: {"iat": 10, "exp": 20, "jti": "j", "user_id": "", "tenant_id": ""})
+    monkeypatch.setattr(
+        jwt, "decode", lambda *_args, **_kwargs: {"iat": 10, "exp": 20, "jti": "j", "user_id": "", "tenant_id": ""}
+    )
     with pytest.raises(HTTPException) as exc:
         dependencies._verify_context_token("t")
     assert exc.value.status_code == 401
@@ -131,7 +139,9 @@ def test_dependencies_token_and_permission_edges(monkeypatch):
     assert any_checker(_claims(is_superuser=True, permissions=[]))
 
     observed = []
-    monkeypatch.setattr(dependencies, "apply_scoped_rate_limit", lambda user, scope: observed.append((user.user_id, scope)))
+    monkeypatch.setattr(
+        dependencies, "apply_scoped_rate_limit", lambda user, scope: observed.append((user.user_id, scope))
+    )
     scoped = dependencies.require_permission_with_scope("read:alerts", "scope-a")
     assert scoped(_claims()).user_id == "u1"
     any_scoped = dependencies.require_any_permission_with_scope(["read:alerts"], "scope-b")
@@ -174,17 +184,33 @@ def test_rate_limit_builder_and_enforcement_edges(monkeypatch):
     monkeypatch.setattr(rate_limit_mod.config, "RATE_LIMIT_STALE_AFTER_SECONDS", 60)
     monkeypatch.setattr(rate_limit_mod.config, "RATE_LIMIT_MAX_STATES", 10000)
 
-    monkeypatch.setattr(rate_limit_mod.os, "getenv", lambda key, default=None: {"RATE_LIMIT_BACKEND": "memory", "RATE_LIMIT_REDIS_URL": ""}.get(key, default))
+    monkeypatch.setattr(
+        rate_limit_mod.os,
+        "getenv",
+        lambda key, default=None: {"RATE_LIMIT_BACKEND": "memory", "RATE_LIMIT_REDIS_URL": ""}.get(key, default),
+    )
     limiter = rate_limit_mod._build_rate_limiter()
     assert limiter is not None
 
     monkeypatch.setattr(rate_limit_mod.config, "IS_PRODUCTION", True)
-    monkeypatch.setattr(rate_limit_mod.os, "getenv", lambda key, default=None: {"RATE_LIMIT_BACKEND": "redis", "RATE_LIMIT_REDIS_URL": ""}.get(key, default))
+    monkeypatch.setattr(
+        rate_limit_mod.os,
+        "getenv",
+        lambda key, default=None: {"RATE_LIMIT_BACKEND": "redis", "RATE_LIMIT_REDIS_URL": ""}.get(key, default),
+    )
     limiter = rate_limit_mod._build_rate_limiter()
     assert limiter is not None
 
-    monkeypatch.setattr(rate_limit_mod.os, "getenv", lambda key, default=None: {"RATE_LIMIT_BACKEND": "auto", "RATE_LIMIT_REDIS_URL": "redis://x"}.get(key, default))
-    monkeypatch.setattr(rate_limit_mod, "RedisFixedWindowRateLimiter", lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("redis down")))
+    monkeypatch.setattr(
+        rate_limit_mod.os,
+        "getenv",
+        lambda key, default=None: {"RATE_LIMIT_BACKEND": "auto", "RATE_LIMIT_REDIS_URL": "redis://x"}.get(key, default),
+    )
+    monkeypatch.setattr(
+        rate_limit_mod,
+        "RedisFixedWindowRateLimiter",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("redis down")),
+    )
     limiter = rate_limit_mod._build_rate_limiter()
     assert limiter is not None
 
@@ -204,7 +230,9 @@ def test_rate_limit_builder_and_enforcement_edges(monkeypatch):
 
     monkeypatch.setattr(rate_limit_mod, "enforce_rate_limit", _enforce_rate_limit)
     monkeypatch.setattr(rate_limit_mod, "client_ip", lambda _req: "unknown")
-    rate_limit_mod.enforce_ip_rate_limit(_request(headers=[(b"user-agent", b"ua")]), scope="api", limit=1, window_seconds=60)
+    rate_limit_mod.enforce_ip_rate_limit(
+        _request(headers=[(b"user-agent", b"ua")]), scope="api", limit=1, window_seconds=60
+    )
     assert captured["key"].startswith("ip:unknown-")
 
 
@@ -300,10 +328,10 @@ def test_hybrid_and_database_edges(monkeypatch):
     monkeypatch.setattr(db_mod, "create_engine", lambda *_args, **_kwargs: _Engine())
     db_mod.ensure_database_exists("postgresql://user:pass@host:5432/dbname")
 
-    old = db_mod._session_local
-    db_mod._session_local = None
+    old = db_mod._SESSION_LOCAL
+    db_mod._SESSION_LOCAL = None
     try:
         with pytest.raises(RuntimeError):
             db_mod._require_session_factory()
     finally:
-        db_mod._session_local = old
+        db_mod._SESSION_LOCAL = old

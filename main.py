@@ -3,9 +3,9 @@ Entrypoint for the Notifier service.
 
 Copyright (c) 2026 Stefan Kumarasinghe
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
+License. You may obtain a copy of the License at
+http://www.apache.org/licenses/LICENSE-2.0
 """
 
 from __future__ import annotations
@@ -31,7 +31,10 @@ from middleware.openapi import (
     openapi_tags,
 )
 from middleware.request_size_limit import RequestSizeLimitMiddleware
-from routers.observability.alerts import router as alertmanager_alerts_router, webhook_router as alertmanager_webhook_router
+from routers.observability.alerts import (
+    router as alertmanager_alerts_router,
+    webhook_router as alertmanager_webhook_router,
+)
 from routers.observability.incidents import router as alertmanager_incidents_router
 from routers.observability.jira import router as alertmanager_jira_router
 
@@ -102,7 +105,9 @@ async def require_internal_service_token(
     }:
         return await call_next(request)
 
-    expected = config.get_secret("NOTIFIER_EXPECTED_SERVICE_TOKEN") or config.get_secret("GATEWAY_INTERNAL_SERVICE_TOKEN")
+    expected = config.get_secret("NOTIFIER_EXPECTED_SERVICE_TOKEN") or config.get_secret(
+        "GATEWAY_INTERNAL_SERVICE_TOKEN"
+    )
     if not expected:
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

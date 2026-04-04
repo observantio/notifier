@@ -79,7 +79,9 @@ def test_helper_functions_cover_fallback_and_explicit_server_paths() -> None:
         port=4323,
         explicit_url="https://example.internal/notifier/",
     )
-    assert explicit_servers == [{"url": "https://example.internal/notifier", "description": "Configured runtime endpoint"}]
+    assert explicit_servers == [
+        {"url": "https://example.internal/notifier", "description": "Configured runtime endpoint"}
+    ]
 
     merged = openapi_middleware.merge_responses(
         {401: {"description": "Unauthorized"}},

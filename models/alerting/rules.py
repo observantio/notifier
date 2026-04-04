@@ -3,9 +3,9 @@ Module defines Pydantic models for alerting-related data structures used in the 
 
 Copyright (c) 2026 Stefan Kumarasinghe
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
+License. You may obtain a copy of the License at
+http://www.apache.org/licenses/LICENSE-2.0
 """
 
 from typing import Dict, List, Optional
@@ -40,40 +40,87 @@ class RuleSeverity(str, Enum):
 
 class AlertRule(BaseModel):
     id: Optional[str] = Field(None, description=DESC_UNIQUE_IDENTIFIER, examples=["rule-123"])
-    created_by: Optional[str] = Field(None, alias="createdBy", description="User ID who created the rule", examples=["user-42"])
-    org_id: Optional[str] = Field(None, alias="orgId", description="Organization ID / API key scoped to this rule", examples=["org-abc"])
+    created_by: Optional[str] = Field(
+        None, alias="createdBy", description="User ID who created the rule", examples=["user-42"]
+    )
+    org_id: Optional[str] = Field(
+        None, alias="orgId", description="Organization ID / API key scoped to this rule", examples=["org-abc"]
+    )
     name: str = Field(..., description=DESC_RULE_NAME, examples=["HighCpuUsage"])
-    expr: str = Field(..., alias="expression", description=DESC_RULE_EXPRESSION, examples=['sum(rate(node_cpu_seconds_total{mode!="idle"}[5m])) > 0.95'])
+    expr: str = Field(
+        ...,
+        alias="expression",
+        description=DESC_RULE_EXPRESSION,
+        examples=['sum(rate(node_cpu_seconds_total{mode!="idle"}[5m])) > 0.95'],
+    )
     severity: RuleSeverity = Field(..., description=DESC_RULE_SEVERITY, examples=["critical"])
-    description: Optional[str] = Field(None, description=DESC_RULE_DESCRIPTION, examples=["CPU usage is critically high"])
+    description: Optional[str] = Field(
+        None, description=DESC_RULE_DESCRIPTION, examples=["CPU usage is critically high"]
+    )
     enabled: bool = Field(True, description=DESC_RULE_ENABLED, examples=[True])
     labels: Dict[str, str] = Field(default_factory=dict, description=DESC_RULE_LABELS, examples=[{"service": "api"}])
-    annotations: Dict[str, str] = Field(default_factory=dict, description=DESC_RULE_ANNOTATIONS, examples=[{"summary": "API CPU alert"}])
+    annotations: Dict[str, str] = Field(
+        default_factory=dict, description=DESC_RULE_ANNOTATIONS, examples=[{"summary": "API CPU alert"}]
+    )
     duration: Optional[str] = Field(None, alias="for", description=DESC_RULE_FOR_DURATION, examples=["5m"])
     group: str = Field(..., alias="groupName", description=DESC_RULE_GROUP_NAME, examples=["watchdog-default"])
-    group_interval: Optional[str] = Field(None, alias="groupInterval", description=DESC_RULE_GROUP_INTERVAL, examples=["1m"])
-    notification_channels: List[str] = Field(default_factory=list, alias="notificationChannels", description="Notification channel IDs for this rule", examples=[["channel-1"]])
+    group_interval: Optional[str] = Field(
+        None, alias="groupInterval", description=DESC_RULE_GROUP_INTERVAL, examples=["1m"]
+    )
+    notification_channels: List[str] = Field(
+        default_factory=list,
+        alias="notificationChannels",
+        description="Notification channel IDs for this rule",
+        examples=[["channel-1"]],
+    )
     visibility: Visibility = Field(Visibility.PRIVATE, description=DESC_VISIBILITY_SCOPE, examples=["private"])
-    shared_group_ids: List[str] = Field(default_factory=list, alias="sharedGroupIds", description=DESC_GROUP_IDS_RULE_SHARED_WITH, examples=[["group-ops"]])
-    is_hidden: bool = Field(False, alias="isHidden", description="Whether this rule is hidden for the current user", examples=[False])
+    shared_group_ids: List[str] = Field(
+        default_factory=list,
+        alias="sharedGroupIds",
+        description=DESC_GROUP_IDS_RULE_SHARED_WITH,
+        examples=[["group-ops"]],
+    )
+    is_hidden: bool = Field(
+        False, alias="isHidden", description="Whether this rule is hidden for the current user", examples=[False]
+    )
     model_config = ConfigDict(use_enum_values=True, populate_by_name=True)
 
 
 class AlertRuleCreate(BaseModel):
-    org_id: Optional[str] = Field(None, alias="orgId", description="Optional org_id (API key) to scope this rule to", examples=["org-abc"])
+    org_id: Optional[str] = Field(
+        None, alias="orgId", description="Optional org_id (API key) to scope this rule to", examples=["org-abc"]
+    )
     name: str = Field(..., min_length=1, max_length=100, description=DESC_RULE_NAME, examples=["HighCpuUsage"])
-    expr: str = Field(..., alias="expression", description=DESC_RULE_EXPRESSION, examples=['sum(rate(node_cpu_seconds_total{mode!="idle"}[5m])) > 0.95'])
+    expr: str = Field(
+        ...,
+        alias="expression",
+        description=DESC_RULE_EXPRESSION,
+        examples=['sum(rate(node_cpu_seconds_total{mode!="idle"}[5m])) > 0.95'],
+    )
     severity: RuleSeverity = Field(..., description=DESC_RULE_SEVERITY, examples=["critical"])
-    description: Optional[str] = Field(None, description=DESC_RULE_DESCRIPTION, examples=["CPU usage is critically high"])
+    description: Optional[str] = Field(
+        None, description=DESC_RULE_DESCRIPTION, examples=["CPU usage is critically high"]
+    )
     enabled: StrictBool = Field(True, description=DESC_RULE_ENABLED, examples=[True])
     labels: Dict[str, str] = Field(default_factory=dict, description=DESC_RULE_LABELS, examples=[{"service": "api"}])
-    annotations: Dict[str, str] = Field(default_factory=dict, description=DESC_RULE_ANNOTATIONS, examples=[{"summary": "API CPU alert"}])
+    annotations: Dict[str, str] = Field(
+        default_factory=dict, description=DESC_RULE_ANNOTATIONS, examples=[{"summary": "API CPU alert"}]
+    )
     duration: Optional[str] = Field(None, alias="for", description=DESC_RULE_FOR_DURATION, examples=["5m"])
     group: str = Field(..., alias="groupName", description=DESC_RULE_GROUP_NAME, examples=["watchdog-default"])
-    group_interval: Optional[str] = Field(None, alias="groupInterval", description=DESC_RULE_GROUP_INTERVAL, examples=["1m"])
-    notification_channels: List[str] = Field(default_factory=list, alias="notificationChannels", description="Notification channel IDs for this rule", examples=[["channel-1"]])
+    group_interval: Optional[str] = Field(
+        None, alias="groupInterval", description=DESC_RULE_GROUP_INTERVAL, examples=["1m"]
+    )
+    notification_channels: List[str] = Field(
+        default_factory=list,
+        alias="notificationChannels",
+        description="Notification channel IDs for this rule",
+        examples=[["channel-1"]],
+    )
     visibility: Visibility = Field(Visibility.PRIVATE, description=DESC_VISIBILITY_SCOPE, examples=["private"])
-    shared_group_ids: List[str] = Field(default_factory=list, alias="sharedGroupIds", description=DESC_GROUP_IDS_SHARE_WITH, examples=[["group-ops"]])
+    shared_group_ids: List[str] = Field(
+        default_factory=list, alias="sharedGroupIds", description=DESC_GROUP_IDS_SHARE_WITH, examples=[["group-ops"]]
+    )
     model_config = ConfigDict(use_enum_values=True, populate_by_name=True, extra="forbid")
 
 

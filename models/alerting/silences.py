@@ -3,9 +3,9 @@ Module defines Pydantic models for alerting-related data structures used in the 
 
 Copyright (c) 2026 Stefan Kumarasinghe
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
+License. You may obtain a copy of the License at
+http://www.apache.org/licenses/LICENSE-2.0
 """
 
 from typing import Dict, List, Optional
@@ -45,32 +45,74 @@ class Matcher(BaseModel):
 
 class Silence(BaseModel):
     id: Optional[str] = Field(None, description=DESC_UNIQUE_IDENTIFIER_SILENCE, examples=["silence-123"])
-    matchers: List[Matcher] = Field(..., description=DESC_MATCHERS_DEFINE_SILENCE, examples=[[{"name": "alertname", "value": "HighCpuUsage", "isRegex": False, "isEqual": True}]])
-    starts_at: str = Field(..., alias="startsAt", description=DESC_TIME_SILENCE_STARTS, examples=["2026-04-03T12:00:00Z"])
+    matchers: List[Matcher] = Field(
+        ...,
+        description=DESC_MATCHERS_DEFINE_SILENCE,
+        examples=[[{"name": "alertname", "value": "HighCpuUsage", "isRegex": False, "isEqual": True}]],
+    )
+    starts_at: str = Field(
+        ..., alias="startsAt", description=DESC_TIME_SILENCE_STARTS, examples=["2026-04-03T12:00:00Z"]
+    )
     ends_at: str = Field(..., alias="endsAt", description=DESC_TIME_SILENCE_ENDS, examples=["2026-04-03T13:00:00Z"])
     created_by: str = Field(..., alias="createdBy", description=DESC_USER_CREATED_SILENCE, examples=["user-42"])
-    comment: str = Field(..., description=DESC_COMMENT_EXPLAINING_SILENCE, examples=["Suppress noisy deploy alert while maintenance is in progress"])
-    status: Optional[Dict[str, str]] = Field(None, description=DESC_CURRENT_STATUS_SILENCE, examples=[{"state": "active"}])
+    comment: str = Field(
+        ...,
+        description=DESC_COMMENT_EXPLAINING_SILENCE,
+        examples=["Suppress noisy deploy alert while maintenance is in progress"],
+    )
+    status: Optional[Dict[str, str]] = Field(
+        None, description=DESC_CURRENT_STATUS_SILENCE, examples=[{"state": "active"}]
+    )
     visibility: Optional[Visibility] = Field(None, description=DESC_VISIBILITY_SCOPE, examples=["private"])
-    shared_group_ids: List[str] = Field(default_factory=list, alias="sharedGroupIds", description=DESC_GROUP_IDS_SILENCE_SHARED_WITH, examples=[["group-ops"]])
-    is_hidden: bool = Field(False, alias="isHidden", description="Whether this silence is hidden for the current user", examples=[False])
+    shared_group_ids: List[str] = Field(
+        default_factory=list,
+        alias="sharedGroupIds",
+        description=DESC_GROUP_IDS_SILENCE_SHARED_WITH,
+        examples=[["group-ops"]],
+    )
+    is_hidden: bool = Field(
+        False, alias="isHidden", description="Whether this silence is hidden for the current user", examples=[False]
+    )
     model_config = ConfigDict(populate_by_name=True, use_enum_values=True)
 
 
 class SilenceCreate(BaseModel):
-    matchers: List[Matcher] = Field(..., description=DESC_MATCHERS_DEFINE_SILENCE, examples=[[{"name": "alertname", "value": "HighCpuUsage", "isRegex": False, "isEqual": True}]])
-    starts_at: str = Field(..., alias="startsAt", description=DESC_TIME_SILENCE_STARTS, examples=["2026-04-03T12:00:00Z"])
+    matchers: List[Matcher] = Field(
+        ...,
+        description=DESC_MATCHERS_DEFINE_SILENCE,
+        examples=[[{"name": "alertname", "value": "HighCpuUsage", "isRegex": False, "isEqual": True}]],
+    )
+    starts_at: str = Field(
+        ..., alias="startsAt", description=DESC_TIME_SILENCE_STARTS, examples=["2026-04-03T12:00:00Z"]
+    )
     ends_at: str = Field(..., alias="endsAt", description=DESC_TIME_SILENCE_ENDS, examples=["2026-04-03T13:00:00Z"])
     created_by: str = Field(..., alias="createdBy", description=DESC_USER_CREATED_SILENCE, examples=["user-42"])
-    comment: str = Field(..., description=DESC_COMMENT_EXPLAINING_SILENCE, examples=["Suppress noisy deploy alert while maintenance is in progress"])
+    comment: str = Field(
+        ...,
+        description=DESC_COMMENT_EXPLAINING_SILENCE,
+        examples=["Suppress noisy deploy alert while maintenance is in progress"],
+    )
     model_config = ConfigDict(populate_by_name=True, extra="forbid")
 
 
 class SilenceCreateRequest(BaseModel):
-    matchers: List[Matcher] = Field(..., min_length=1, description=DESC_MATCHERS_DEFINE_SILENCE, examples=[[{"name": "alertname", "value": "HighCpuUsage", "isRegex": False, "isEqual": True}]])
-    starts_at: str = Field(..., alias="startsAt", description=DESC_TIME_SILENCE_STARTS, examples=["2026-04-03T12:00:00Z"])
+    matchers: List[Matcher] = Field(
+        ...,
+        min_length=1,
+        description=DESC_MATCHERS_DEFINE_SILENCE,
+        examples=[[{"name": "alertname", "value": "HighCpuUsage", "isRegex": False, "isEqual": True}]],
+    )
+    starts_at: str = Field(
+        ..., alias="startsAt", description=DESC_TIME_SILENCE_STARTS, examples=["2026-04-03T12:00:00Z"]
+    )
     ends_at: str = Field(..., alias="endsAt", description=DESC_TIME_SILENCE_ENDS, examples=["2026-04-03T13:00:00Z"])
-    comment: str = Field(..., description=DESC_COMMENT_EXPLAINING_SILENCE, examples=["Suppress noisy deploy alert while maintenance is in progress"])
+    comment: str = Field(
+        ...,
+        description=DESC_COMMENT_EXPLAINING_SILENCE,
+        examples=["Suppress noisy deploy alert while maintenance is in progress"],
+    )
     visibility: Visibility = Field(Visibility.PRIVATE, description=DESC_VISIBILITY_SCOPE, examples=["private"])
-    shared_group_ids: List[str] = Field(default_factory=list, alias="sharedGroupIds", description=DESC_GROUP_IDS_SHARE_WITH, examples=[["group-ops"]])
+    shared_group_ids: List[str] = Field(
+        default_factory=list, alias="sharedGroupIds", description=DESC_GROUP_IDS_SHARE_WITH, examples=[["group-ops"]]
+    )
     model_config = ConfigDict(populate_by_name=True, use_enum_values=True, extra="forbid")

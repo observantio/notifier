@@ -1,9 +1,9 @@
 """
-Copyright (c) 2026 Stefan Kumarasinghe
+Copyright (c) 2026 Stefan Kumarasinghe.
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
+License. You may obtain a copy of the License at
+http://www.apache.org/licenses/LICENSE-2.0
 """
 
 from __future__ import annotations
@@ -80,7 +80,18 @@ async def test_alerts_ops_cover_success_and_failure_branches(monkeypatch):
         await alerts_ops.list_metric_names(service, "org-1")
 
     async def fake_alert_get(*_args, **_kwargs):
-        return FakeResponse(payload=[{"labels": {"alertname": "CPUHigh"}, "annotations": {}, "status": {"state": "active"}, "startsAt": "2024-01-01T00:00:00Z", "endsAt": "2024-01-01T01:00:00Z", "generatorURL": "https://grafana"}])
+        return FakeResponse(
+            payload=[
+                {
+                    "labels": {"alertname": "CPUHigh"},
+                    "annotations": {},
+                    "status": {"state": "active"},
+                    "startsAt": "2024-01-01T00:00:00Z",
+                    "endsAt": "2024-01-01T01:00:00Z",
+                    "generatorURL": "https://grafana",
+                }
+            ]
+        )
 
     monkeypatch.setattr(service._client, "get", fake_alert_get, raising=False)
     alerts = await alerts_ops.get_alerts(service, {"service": "api"}, active=True, silenced=False, inhibited=False)
@@ -97,10 +108,22 @@ async def test_alerts_ops_cover_success_and_failure_branches(monkeypatch):
         return FakeResponse(status_code=200)
 
     monkeypatch.setattr(service._client, "post", fake_post, raising=False)
-    assert await alerts_ops.post_alerts(
-        service,
-        [Alert(labels={"alertname": "CPUHigh"}, annotations={}, status={"state": "active"}, startsAt="2024-01-01T00:00:00Z", endsAt="2024-01-01T01:00:00Z", generatorURL="https://grafana")],
-    ) is True
+    assert (
+        await alerts_ops.post_alerts(
+            service,
+            [
+                Alert(
+                    labels={"alertname": "CPUHigh"},
+                    annotations={},
+                    status={"state": "active"},
+                    startsAt="2024-01-01T00:00:00Z",
+                    endsAt="2024-01-01T01:00:00Z",
+                    generatorURL="https://grafana",
+                )
+            ],
+        )
+        is True
+    )
 
     async def raise_http_error(*_args, **_kwargs):
         raise httpx.RequestError("boom", request=httpx.Request("GET", "https://example.test"))
@@ -139,8 +162,12 @@ async def test_rules_ops_cover_org_resolution_and_sync(monkeypatch):
     assert rules_ops.resolve_rule_org_id(None, _current_user(org_id="user-org")) == "user-org"
 
     rules = [
-        AlertRule.model_validate({"name": "CPUHigh", "expression": "up == 0", "severity": "critical", "groupName": "infra"}),
-        AlertRule.model_validate({"name": "Latency", "expression": "latency > 1", "severity": "warning", "groupName": "apps"}),
+        AlertRule.model_validate(
+            {"name": "CPUHigh", "expression": "up == 0", "severity": "critical", "groupName": "infra"}
+        ),
+        AlertRule.model_validate(
+            {"name": "Latency", "expression": "latency > 1", "severity": "warning", "groupName": "apps"}
+        ),
     ]
 
     calls = []
@@ -197,9 +224,22 @@ async def test_transport_helpers_cover_transient_checks_and_send_paths(monkeypat
     req = httpx.Request("POST", "https://example.test")
     res_500 = httpx.Response(500, request=req)
     res_400 = httpx.Response(400, request=req)
-    assert transport_mod._is_transient_http(httpx.RequestError("boom", request=req), transport_mod.DEFAULT_RETRY_ON_STATUS) is True
-    assert transport_mod._is_transient_http(httpx.HTTPStatusError("bad", request=req, response=res_500), transport_mod.DEFAULT_RETRY_ON_STATUS) is True
-    assert transport_mod._is_transient_http(httpx.HTTPStatusError("bad", request=req, response=res_400), transport_mod.DEFAULT_RETRY_ON_STATUS) is False
+    assert (
+        transport_mod._is_transient_http(httpx.RequestError("boom", request=req), transport_mod.DEFAULT_RETRY_ON_STATUS)
+        is True
+    )
+    assert (
+        transport_mod._is_transient_http(
+            httpx.HTTPStatusError("bad", request=req, response=res_500), transport_mod.DEFAULT_RETRY_ON_STATUS
+        )
+        is True
+    )
+    assert (
+        transport_mod._is_transient_http(
+            httpx.HTTPStatusError("bad", request=req, response=res_400), transport_mod.DEFAULT_RETRY_ON_STATUS
+        )
+        is False
+    )
 
     class FakeSMTPError(transport_mod.aiosmtplib.errors.SMTPException):
         def __init__(self, code):
@@ -221,7 +261,9 @@ async def test_transport_helpers_cover_transient_checks_and_send_paths(monkeypat
             return self.response
 
     response = FakeResponse(status_code=200)
-    assert await transport_mod.post_with_retry(FakeClient(response), "https://example.test", json={"ok": True}) is response
+    assert (
+        await transport_mod.post_with_retry(FakeClient(response), "https://example.test", json={"ok": True}) is response
+    )
 
     with pytest.raises(httpx.HTTPStatusError):
         await transport_mod.post_with_retry(FakeClient(FakeResponse(status_code=500)), "https://example.test")
@@ -235,5 +277,7 @@ async def test_transport_helpers_cover_transient_checks_and_send_paths(monkeypat
     monkeypatch.setattr(transport_mod.aiosmtplib, "send", fake_send)
     message = EmailMessage()
     message["To"] = "user@example.com"
-    assert (await transport_mod.send_smtp_with_retry(message, "smtp.example.com", 587))["accepted"] == ["user@example.com"]
+    assert (await transport_mod.send_smtp_with_retry(message, "smtp.example.com", 587))["accepted"] == [
+        "user@example.com"
+    ]
     assert sent[0]["hostname"] == "smtp.example.com"

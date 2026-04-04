@@ -3,9 +3,9 @@ Normalization utilities for handling visibility settings on resources...
 
 Copyright (c) 2026 Stefan Kumarasinghe
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
+License. You may obtain a copy of the License at
+http://www.apache.org/licenses/LICENSE-2.0
 """
 
 from __future__ import annotations
@@ -13,6 +13,7 @@ from typing import Optional
 
 DEFAULT_ALLOWED: frozenset[str] = frozenset({"tenant", "group", "private"})
 STORAGE_ALLOWED: frozenset[str] = frozenset({"public", "private", "group"})
+
 
 def normalize_visibility(
     value: Optional[str],
@@ -35,6 +36,7 @@ def normalize_visibility(
     if normalized == "public":
         return public_alias
     return default_value
+
 
 def normalize_storage_visibility(value: Optional[str]) -> str:
     normalized = (value or "").strip().lower()

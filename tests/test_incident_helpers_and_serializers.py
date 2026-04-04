@@ -1,9 +1,9 @@
 """
-Copyright (c) 2026 Stefan Kumarasinghe
+Copyright (c) 2026 Stefan Kumarasinghe.
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
+License. You may obtain a copy of the License at
+http://www.apache.org/licenses/LICENSE-2.0
 """
 
 from __future__ import annotations
@@ -71,16 +71,25 @@ def test_incident_helper_formatting_and_author_rewrites():
     current_user = _user()
 
     assert helpers_mod.format_incident_description(incident, "  manual text  ") == "manual text"
-    assert helpers_mod.format_incident_description(_incident(annotations={"description": "Detail", "summary": "Summary"}), None) == "Detail -> Summary"
+    assert (
+        helpers_mod.format_incident_description(
+            _incident(annotations={"description": "Detail", "summary": "Summary"}), None
+        )
+        == "Detail -> Summary"
+    )
     assert helpers_mod.format_incident_description(_incident(annotations={}), None) == "CPUHigh"
     assert helpers_mod.map_severity_to_jira_priority("critical") == "High"
     assert helpers_mod.map_severity_to_jira_priority("warning") == "Medium"
     assert helpers_mod.map_severity_to_jira_priority("info") == "Low"
-    assert helpers_mod.format_note_for_jira_comment(" body ", "Alice", "2024-01-01T00:00:00Z").startswith("Alice · 2024-01-01 00:00:00 UTC")
+    assert helpers_mod.format_note_for_jira_comment(" body ", "Alice", "2024-01-01T00:00:00Z").startswith(
+        "Alice · 2024-01-01 00:00:00 UTC"
+    )
     assert helpers_mod.format_note_for_jira_comment("body", "Alice", "not-a-date") == "Alice · not-a-date\nbody"
     assert helpers_mod.resolve_note_author_display("", current_user) == "Unknown user"
     assert helpers_mod.resolve_note_author_display("u1", current_user) == "alice"
-    assert helpers_mod.resolve_note_author_display("550e8400-e29b-41d4-a716-446655440000", current_user) == "Unknown user"
+    assert (
+        helpers_mod.resolve_note_author_display("550e8400-e29b-41d4-a716-446655440000", current_user) == "Unknown user"
+    )
     assert helpers_mod.resolve_note_author_display("bob", current_user) == "bob"
     assert helpers_mod.rewrite_note_text_for_author("u1 updated status", "u1", "alice") == "alice updated status"
     assert helpers_mod.rewrite_note_text_for_author("u1 updated status", "u1", "Unknown user") == "u1 updated status"
@@ -131,7 +140,9 @@ async def test_incident_helper_jira_sync_paths(monkeypatch):
     monkeypatch.setattr(helpers_mod.jira_service, "transition_issue_to_in_progress", fake_transition_to_in_progress)
     monkeypatch.setattr(helpers_mod.jira_service, "transition_issue_to_done", fake_transition_to_done)
 
-    await helpers_mod.sync_note_to_jira_comment(incident, tenant_id="tenant", current_user=current_user, note_text="u1 investigating")
+    await helpers_mod.sync_note_to_jira_comment(
+        incident, tenant_id="tenant", current_user=current_user, note_text="u1 investigating"
+    )
     await helpers_mod.move_incident_ticket_to_todo(incident, tenant_id="tenant", current_user=current_user)
     await helpers_mod.move_incident_ticket_to_in_progress(incident, tenant_id="tenant", current_user=current_user)
     await helpers_mod.move_incident_ticket_to_done(incident, tenant_id="tenant", current_user=current_user)
@@ -143,7 +154,9 @@ async def test_incident_helper_jira_sync_paths(monkeypatch):
     assert calls[3][0] == "done"
 
     monkeypatch.setattr(helpers_mod, "resolve_incident_jira_credentials", lambda *_args: None)
-    await helpers_mod.sync_note_to_jira_comment(incident, tenant_id="tenant", current_user=current_user, note_text="skip")
+    await helpers_mod.sync_note_to_jira_comment(
+        incident, tenant_id="tenant", current_user=current_user, note_text="skip"
+    )
 
     async def raise_jira_error(*_args, **_kwargs):
         raise helpers_mod.JiraError("boom")
@@ -153,7 +166,9 @@ async def test_incident_helper_jira_sync_paths(monkeypatch):
     monkeypatch.setattr(helpers_mod.jira_service, "transition_issue_to_todo", raise_jira_error)
     monkeypatch.setattr(helpers_mod.jira_service, "transition_issue_to_in_progress", raise_jira_error)
     monkeypatch.setattr(helpers_mod.jira_service, "transition_issue_to_done", raise_jira_error)
-    await helpers_mod.sync_note_to_jira_comment(incident, tenant_id="tenant", current_user=current_user, note_text="still safe")
+    await helpers_mod.sync_note_to_jira_comment(
+        incident, tenant_id="tenant", current_user=current_user, note_text="still safe"
+    )
     await helpers_mod.move_incident_ticket_to_todo(incident, tenant_id="tenant", current_user=current_user)
     await helpers_mod.move_incident_ticket_to_in_progress(incident, tenant_id="tenant", current_user=current_user)
     await helpers_mod.move_incident_ticket_to_done(incident, tenant_id="tenant", current_user=current_user)
@@ -226,24 +241,27 @@ def test_storage_serializers_cover_rule_channel_and_incident_payloads():
     assert incident_model.shared_group_ids == ["g1"]
     assert incident_model.jira_ticket_key == "ABC-1"
     assert incident_model.annotations["WatchdogCorrelationId"] == "corr-1"
-    assert serializers_mod.incident_to_pydantic(
-        SimpleNamespace(
-            id="inc-2",
-            fingerprint="fp-2",
-            alert_name="DiskFull",
-            severity="warning",
-            status="open",
-            assignee=None,
-            notes=[],
-            labels={},
-            annotations={serializers_mod.INCIDENT_META_KEY: '{"visibility":"invalid"}'},
-            starts_at=None,
-            last_seen_at=now,
-            resolved_at=None,
-            created_at=now,
-            updated_at=now,
-        )
-    ).visibility == "public"
+    assert (
+        serializers_mod.incident_to_pydantic(
+            SimpleNamespace(
+                id="inc-2",
+                fingerprint="fp-2",
+                alert_name="DiskFull",
+                severity="warning",
+                status="open",
+                assignee=None,
+                notes=[],
+                labels={},
+                annotations={serializers_mod.INCIDENT_META_KEY: '{"visibility":"invalid"}'},
+                starts_at=None,
+                last_seen_at=now,
+                resolved_at=None,
+                created_at=now,
+                updated_at=now,
+            )
+        ).visibility
+        == "public"
+    )
 
 
 def test_storage_serializer_incident_status_enum_and_correlation_case_bridge():

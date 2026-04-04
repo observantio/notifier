@@ -1,9 +1,9 @@
 """
-Copyright (c) 2026 Stefan Kumarasinghe
+Copyright (c) 2026 Stefan Kumarasinghe.
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
+License. You may obtain a copy of the License at
+http://www.apache.org/licenses/LICENSE-2.0
 """
 
 try:
@@ -21,7 +21,7 @@ def test_validate_channel_config_email_checks():
     assert any("recipient" in e.lower() or "to'" in e for e in errs)
 
     errs = notification_validators.validate_channel_config("email", {"to": "a@b.com", "email_provider": "smtp"})
-    assert any("smtp_host" in e or "smtp host" in e.replace(' ', '_') for e in errs)
+    assert any("smtp_host" in e or "smtp host" in e.replace(" ", "_") for e in errs)
 
     errs = notification_validators.validate_channel_config("email", {"to": "a@b.com", "email_provider": "sendgrid"})
     assert any("sendgrid" in e.lower() for e in errs)

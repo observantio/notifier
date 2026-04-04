@@ -1,13 +1,13 @@
 """
-Incidents management service for handling alert incidents, including synchronization with incoming alerts, access control, and integration with Jira for issue tracking.
+Incidents management service for handling alert incidents, including synchronization with incoming alerts, access
+control, and integration with Jira for issue tracking.
 
 Copyright (c) 2026 Stefan Kumarasinghe
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
+License. You may obtain a copy of the License at
+http://www.apache.org/licenses/LICENSE-2.0
 """
-
 
 from __future__ import annotations
 
@@ -102,12 +102,7 @@ def incident_activity_token_from_row(incident: AlertIncidentDB) -> str:
 
 
 def _extract_metric_state(labels: Mapping[str, object]) -> str:
-    return str(
-        labels.get("state")
-        or labels.get("metric_state")
-        or labels.get("mem_state")
-        or ""
-    ).strip()
+    return str(labels.get("state") or labels.get("metric_state") or labels.get("mem_state") or "").strip()
 
 
 def _parse_metric_states(value: object) -> List[str]:
@@ -175,11 +170,7 @@ def _resolve_rule_by_alertname(db: Session, tenant_id: str, labels: Mapping[str,
         return None
 
     org_id_hint = str(
-        labels.get("org_id")
-        or labels.get("orgId")
-        or labels.get("tenant")
-        or labels.get("product")
-        or ""
+        labels.get("org_id") or labels.get("orgId") or labels.get("tenant") or labels.get("product") or ""
     ).strip()
 
     try:
@@ -274,11 +265,7 @@ class IncidentStorageService:
 
         updated_count = 0
         with get_db_session() as db:
-            incidents = (
-                db.query(AlertIncidentDB)
-                .filter(AlertIncidentDB.tenant_id == tenant_id)
-                .all()
-            )
+            incidents = db.query(AlertIncidentDB).filter(AlertIncidentDB.tenant_id == tenant_id).all()
             for incident in incidents:
                 annotations = incident.annotations if isinstance(incident.annotations, dict) else {}
                 meta = parse_meta(annotations)
@@ -311,11 +298,7 @@ class IncidentStorageService:
         by_visibility: dict[str, int] = {"public": 0, "private": 0, "group": 0}
 
         with get_db_session() as db:
-            incidents = (
-                db.query(AlertIncidentDB)
-                .filter(AlertIncidentDB.tenant_id == tenant_id)
-                .all()
-            )
+            incidents = db.query(AlertIncidentDB).filter(AlertIncidentDB.tenant_id == tenant_id).all()
 
             for incident in incidents:
                 meta = parse_meta(incident.annotations or {})
@@ -588,12 +571,7 @@ class IncidentStorageService:
             if status:
                 q = q.filter(AlertIncidentDB.status == status)
 
-            incidents = (
-                q.order_by(AlertIncidentDB.updated_at.desc())
-                .offset(capped_offset)
-                .limit(capped_limit)
-                .all()
-            )
+            incidents = q.order_by(AlertIncidentDB.updated_at.desc()).offset(capped_offset).limit(capped_limit).all()
 
             result: List[AlertIncident] = []
             for incident in incidents:
@@ -715,10 +693,7 @@ class IncidentStorageService:
                     incident.resolved_at = datetime.now(timezone.utc)
                     manual_manage_flag = False
                     if previous_status.lower() != "resolved":
-                        actor_name = (
-                            getattr(payload, "actor_username", None)
-                            or user_id
-                        )
+                        actor_name = getattr(payload, "actor_username", None) or user_id
                         resolved_note_text = f"{actor_name} marked this incident as resolved"
                 else:
                     incident.resolved_at = None
@@ -789,11 +764,7 @@ class IncidentStorageService:
                     continue
 
                 org_id_hint = str(
-                    labels.get("org_id")
-                    or labels.get("orgId")
-                    or labels.get("tenant")
-                    or labels.get("product")
-                    or ""
+                    labels.get("org_id") or labels.get("orgId") or labels.get("tenant") or labels.get("product") or ""
                 ).strip()
 
                 candidates = (

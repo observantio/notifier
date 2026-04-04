@@ -1,5 +1,8 @@
 """
-Utilities for checking if URLs are valid and properly formatted, including functions to validate URL formats, ensure that URLs have a scheme (defaulting to https:// if missing), and create configured HTTP clients for making requests to external services. This module provides common URL-related utilities that can be used across different parts of the application when working with URLs for external services, such as authentication providers or API endpoints.
+Utilities for checking if URLs are valid and properly formatted, including functions to validate URL formats, ensure
+that URLs have a scheme (defaulting to https:// if missing), and create configured HTTP clients for making requests
+to external services. This module provides common URL-related utilities that can be used across different parts of
+the application when working with URLs for external services, such as authentication providers or API endpoints.
 
 Copyright (c) 2026 Stefan Kumarasinghe
 
@@ -13,6 +16,7 @@ from urllib.parse import urlparse
 
 ALLOWED_SCHEMES = frozenset({"http", "https"})
 MAX_URL_LENGTH = 2048
+
 
 def is_safe_http_url(value: str | None) -> bool:
     if not value or not isinstance(value, str):

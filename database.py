@@ -1,11 +1,15 @@
 """
-Database initialization and session management using SQLAlchemy, providing functions to create the database engine, manage sessions, and perform connectivity checks. This module includes logic to handle database connection pooling, to provide context-managed sessions for use in route handlers and services, and to ensure proper cleanup of database resources on application shutdown. It also includes a function to initialize the database schema based on defined SQLAlchemy models.
+Database initialization and session management using SQLAlchemy, providing functions to create the database engine,
+manage sessions, and perform connectivity checks. This module includes logic to handle database connection pooling, to
+provide context-managed sessions for use in route handlers and services, and to ensure proper cleanup of database
+resources on application shutdown. It also includes a function to initialize the database schema based on defined
+SQLAlchemy models.
 
 Copyright (c) 2026 Stefan Kumarasinghe
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
+License. You may obtain a copy of the License at
+http://www.apache.org/licenses/LICENSE-2.0
 """
 
 import logging
@@ -22,8 +26,8 @@ from db_models import Base
 
 logger = logging.getLogger(__name__)
 
-_engine: Optional[Engine] = None
-_session_local: Optional[Callable[[], Session]] = None
+_ENGINE: Optional[Engine] = None
+_SESSION_LOCAL: Optional[Callable[[], Session]] = None
 
 
 def ensure_database_exists(database_url: str) -> None:
@@ -53,7 +57,7 @@ def init_database(
     echo: bool = False,
     pool_size: Optional[int] = None,
 ) -> None:
-    if _engine is not None and _session_local is not None:
+    if _ENGINE is not None and _SESSION_LOCAL is not None:
         logger.debug("Database already initialized; skipping re-init.")
         return
 
@@ -67,13 +71,13 @@ def init_database(
         echo=echo,
     )
 
-    globals()["_engine"] = engine
-    globals()["_session_local"] = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
+    globals()["_ENGINE"] = engine
+    globals()["_SESSION_LOCAL"] = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
     return
 
 
 def _require_session_factory() -> Callable[[], Session]:
-    session_local = _session_local
+    session_local = _SESSION_LOCAL
     if not callable(session_local):
         raise RuntimeError("Database not initialized. Call init_database() first.")
     return session_local
@@ -81,7 +85,7 @@ def _require_session_factory() -> Callable[[], Session]:
 
 @contextmanager
 def get_db_session() -> Iterator[Session]:
-    if _engine is None or _session_local is None:
+    if _ENGINE is None or _SESSION_LOCAL is None:
         raise RuntimeError("Database not initialized. Call init_database() first.")
     session: Session = _require_session_factory()()
     try:
@@ -95,7 +99,7 @@ def get_db_session() -> Iterator[Session]:
 
 
 def get_db() -> Generator[Session, None, None]:
-    if _engine is None or _session_local is None:
+    if _ENGINE is None or _SESSION_LOCAL is None:
         raise RuntimeError("Database not initialized. Call init_database() first.")
     session: Session = _require_session_factory()()
     try:
@@ -109,10 +113,10 @@ def get_db() -> Generator[Session, None, None]:
 
 
 def connection_test() -> bool:
-    if _engine is None:
+    if _ENGINE is None:
         return False
     try:
-        with _engine.connect() as conn:
+        with _ENGINE.connect() as conn:
             conn.execute(text("SELECT 1"))
         return True
     except SQLAlchemyError as exc:
@@ -121,18 +125,18 @@ def connection_test() -> bool:
 
 
 def dispose_database() -> None:
-    globals()["_session_local"] = None
-    if _engine is not None:
+    globals()["_SESSION_LOCAL"] = None
+    if _ENGINE is not None:
         try:
-            _engine.dispose()
+            _ENGINE.dispose()
         finally:
-            globals()["_engine"] = None
+            globals()["_ENGINE"] = None
 
 
 def init_db() -> None:
-    if _engine is None or not hasattr(_engine, "connect"):
+    if _ENGINE is None or not hasattr(_ENGINE, "connect"):
         raise RuntimeError("Database not initialized. Call init_database() first.")
 
     logger.info("Initializing database tables...")
-    Base.metadata.create_all(bind=_engine)
+    Base.metadata.create_all(bind=_ENGINE)
     logger.info("Database tables created successfully.")

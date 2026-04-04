@@ -1,11 +1,12 @@
 """
-Channel management endpoints for AlertManager integration, allowing users to create, update, delete, and test notification channels.
+Channel management endpoints for AlertManager integration, allowing users to create, update, delete, and test
+notification channels.
 
 Copyright (c) 2026 Stefan Kumarasinghe
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
+License. You may obtain a copy of the License at
+http://www.apache.org/licenses/LICENSE-2.0
 """
 
 from datetime import datetime, timezone
@@ -83,7 +84,9 @@ async def get_channel(
     current_user: TokenData = Depends(require_permission_with_scope(Permission.READ_CHANNELS, "alertmanager")),
 ) -> NotificationChannel:
     tenant_id, user_id, group_ids = alertmanager_service.user_scope(current_user)
-    channel = await run_in_threadpool(storage_service.get_notification_channel, channel_id, tenant_id, user_id, group_ids)
+    channel = await run_in_threadpool(
+        storage_service.get_notification_channel, channel_id, tenant_id, user_id, group_ids
+    )
     if not channel:
         raise HTTPException(status_code=404, detail=f"Notification channel {channel_id} not found")
     hidden_ids = set(await run_in_threadpool(storage_service.get_hidden_channel_ids, tenant_id, user_id))
@@ -105,7 +108,9 @@ async def hide_channel(
     current_user: TokenData = Depends(require_permission_with_scope(Permission.READ_CHANNELS, "alertmanager")),
 ) -> JSONDict:
     tenant_id, user_id, group_ids = alertmanager_service.user_scope(current_user)
-    channel = await run_in_threadpool(storage_service.get_notification_channel, channel_id, tenant_id, user_id, group_ids)
+    channel = await run_in_threadpool(
+        storage_service.get_notification_channel, channel_id, tenant_id, user_id, group_ids
+    )
     if not channel:
         raise HTTPException(status_code=404, detail=f"Notification channel {channel_id} not found")
     if str(getattr(channel, "created_by", "") or "") == user_id:
@@ -113,7 +118,9 @@ async def hide_channel(
     if str(getattr(channel, "visibility", "private") or "private") == "private":
         raise HTTPException(status_code=403, detail="Only shared notification channels can be hidden")
 
-    ok = await run_in_threadpool(storage_service.toggle_channel_hidden, tenant_id, user_id, channel_id, bool(payload.hidden))
+    ok = await run_in_threadpool(
+        storage_service.toggle_channel_hidden, tenant_id, user_id, channel_id, bool(payload.hidden)
+    )
     if not ok:
         raise HTTPException(status_code=500, detail="Failed to update channel visibility")
     return {"status": "success", "hidden": bool(payload.hidden)}
@@ -156,7 +163,9 @@ async def update_channel(
 ) -> NotificationChannel:
     tenant_id, user_id, group_ids = alertmanager_service.user_scope(current_user)
     validate_channel(channel, notification_service)
-    updated_channel = await run_in_threadpool(storage_service.update_notification_channel, channel_id, channel, tenant_id, user_id, group_ids)
+    updated_channel = await run_in_threadpool(
+        storage_service.update_notification_channel, channel_id, channel, tenant_id, user_id, group_ids
+    )
     if not updated_channel:
         raise HTTPException(status_code=404, detail=f"Notification channel {channel_id} not found or access denied")
     return updated_channel
@@ -198,7 +207,9 @@ async def test_channel(
     if not await run_in_threadpool(storage_service.is_notification_channel_owner, channel_id, tenant_id, user_id):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only channel owner can test this channel")
 
-    channel = await run_in_threadpool(storage_service.get_notification_channel, channel_id, tenant_id, user_id, group_ids)
+    channel = await run_in_threadpool(
+        storage_service.get_notification_channel, channel_id, tenant_id, user_id, group_ids
+    )
     if not channel:
         raise HTTPException(status_code=404, detail=f"Notification channel {channel_id} not found")
     if not bool(getattr(channel, "enabled", False)):
@@ -207,18 +218,22 @@ async def test_channel(
             detail="Channel is disabled. Enable it before sending a test notification.",
         )
 
-    test_alert = Alert.model_validate({
-        "labels": {"alertname": "InvokableTestAlert", "severity": "INFO"},
-        "annotations": {
-            "summary": "You have invoked a test alert",
-            "description": "This is a test notification from Watchdog. Please ignore this alert if you didn't expect it.",
-        },
-        "startsAt": datetime.now(timezone.utc).isoformat(),
-        "endsAt": None,
-        "generatorURL": None,
-        "status": {"state": "active", "silencedBy": [], "inhibitedBy": []},
-        "fingerprint": "test",
-    })
+    test_alert = Alert.model_validate(
+        {
+            "labels": {"alertname": "InvokableTestAlert", "severity": "INFO"},
+            "annotations": {
+                "summary": "You have invoked a test alert",
+                "description": (
+                    "This is a test notification from Watchdog. " "Please ignore this alert if you didn't expect it."
+                ),
+            },
+            "startsAt": datetime.now(timezone.utc).isoformat(),
+            "endsAt": None,
+            "generatorURL": None,
+            "status": {"state": "active", "silencedBy": [], "inhibitedBy": []},
+            "fingerprint": "test",
+        }
+    )
 
     if await notification_service.send_notification(channel, test_alert, "test"):
         return {"status": "success", "message": f"Test notification sent to {channel.name}"}
@@ -229,5 +244,8 @@ async def test_channel(
         )
     raise HTTPException(
         status_code=status.HTTP_400_BAD_REQUEST,
-        detail=f"Failed to send test notification for {channel.type} channel. Verify configuration and destination availability.",
+        detail=(
+            f"Failed to send test notification for {channel.type} channel. "
+            "Verify configuration and destination availability."
+        ),
     )

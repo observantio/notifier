@@ -1,11 +1,12 @@
 """
-Incident management API endpoints for querying and updating alert incidents, including status updates, assignee changes, and integration with AlertManager for active alert checks.
+Incident management API endpoints for querying and updating alert incidents, including status updates, assignee changes,
+and integration with AlertManager for active alert checks.
 
 Copyright (c) 2026 Stefan Kumarasinghe
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
+License. You may obtain a copy of the License at
+http://www.apache.org/licenses/LICENSE-2.0
 """
 
 import logging
@@ -41,11 +42,14 @@ alertmanager_service = AlertManagerService()
 storage_service = DatabaseStorageService()
 notification_service = NotificationService()
 
+
 @router.get(
     "/incidents",
     response_model=List[AlertIncident],
     summary="List Incidents",
-    description="Lists alert incidents visible to the current user with optional status, visibility, and group filters.",
+    description=(
+        "Lists alert incidents visible to the current user with optional status, visibility, " "and group filters."
+    ),
     response_description="The incidents visible to the current caller.",
     responses=BAD_REQUEST_ERRORS,
 )
@@ -138,9 +142,7 @@ async def update_incident(
                     detail="Cannot mark resolved: underlying alert is still active",
                 )
 
-    enriched_payload = payload.model_copy(
-        update={"actorUsername": current_user.username or current_user.user_id}
-    )
+    enriched_payload = payload.model_copy(update={"actorUsername": current_user.username or current_user.user_id})
 
     updated = await run_in_threadpool(
         storage_service.update_incident,

@@ -131,7 +131,9 @@ async def update_jira_integration(
 
     current: JSONDict = integrations[index]
     if str(current.get("createdBy") or "") != current_user.user_id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only integration owner can update this integration")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Only integration owner can update this integration"
+        )
 
     fields = payload.model_fields_set
     if "name" in fields:
@@ -141,7 +143,9 @@ async def update_jira_integration(
     if "visibility" in fields:
         current["visibility"] = normalize_visibility(payload.visibility, "private")
     if "sharedGroupIds" in fields:
-        current["sharedGroupIds"] = [str(group_id).strip() for group_id in (payload.sharedGroupIds or []) if str(group_id).strip()]
+        current["sharedGroupIds"] = [
+            str(group_id).strip() for group_id in (payload.sharedGroupIds or []) if str(group_id).strip()
+        ]
 
     if current.get("visibility") != "group":
         current["sharedGroupIds"] = []
@@ -176,8 +180,14 @@ async def update_jira_integration(
         base_url=str(base_url_raw) if base_url_raw is not None else None,
         auth_mode=next_auth_mode,
         email=str(email_raw) if email_raw is not None else None,
-        api_token=decrypt_tenant_secret(str(api_token_raw) if api_token_raw is not None else None) if api_token_raw else None,
-        bearer_token=decrypt_tenant_secret(str(bearer_token_raw) if bearer_token_raw is not None else None) if bearer_token_raw else None,
+        api_token=(
+            decrypt_tenant_secret(str(api_token_raw) if api_token_raw is not None else None) if api_token_raw else None
+        ),
+        bearer_token=(
+            decrypt_tenant_secret(str(bearer_token_raw) if bearer_token_raw is not None else None)
+            if bearer_token_raw
+            else None
+        ),
     )
     current["authMode"] = next_auth_mode
     current["supportsSso"] = next_auth_mode == "sso"
@@ -204,7 +214,9 @@ async def delete_jira_integration(
     if index is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Jira integration not found")
     if str(integrations[index].get("createdBy") or "") != current_user.user_id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only integration owner can delete this integration")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Only integration owner can delete this integration"
+        )
     integrations.pop(index)
     save_tenant_jira_integrations(current_user.tenant_id, integrations)
     unlinked = await run_in_threadpool(
@@ -246,5 +258,7 @@ async def hide_jira_integration(
         hidden,
     )
     if not ok:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to update Jira integration visibility")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to update Jira integration visibility"
+        )
     return {"status": "success", "hidden": hidden}

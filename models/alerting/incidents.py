@@ -3,9 +3,9 @@ Module defines Pydantic models for alerting-related data structures used in the 
 
 Copyright (c) 2026 Stefan Kumarasinghe
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
+License. You may obtain a copy of the License at
+http://www.apache.org/licenses/LICENSE-2.0
 """
 
 from datetime import datetime, timezone
@@ -19,6 +19,7 @@ def _to_rfc3339(value: datetime) -> str:
     if value.tzinfo is None or value.tzinfo.utcoffset(value) is None:
         value = value.replace(tzinfo=timezone.utc)
     return value.isoformat().replace("+00:00", "Z")
+
 
 class IncidentStatus(str, Enum):
     OPEN = "open"
@@ -56,7 +57,9 @@ class AlertIncident(BaseModel):
     visibility: IncidentVisibility = Field(IncidentVisibility.PUBLIC, examples=["public"])
     shared_group_ids: List[str] = Field(default_factory=list, alias="sharedGroupIds", examples=[["group-ops"]])
     jira_ticket_key: Optional[str] = Field(None, alias="jiraTicketKey", examples=["OPS-321"])
-    jira_ticket_url: Optional[str] = Field(None, alias="jiraTicketUrl", examples=["https://jira.example.internal/browse/OPS-321"])
+    jira_ticket_url: Optional[str] = Field(
+        None, alias="jiraTicketUrl", examples=["https://jira.example.internal/browse/OPS-321"]
+    )
     jira_integration_id: Optional[str] = Field(None, alias="jiraIntegrationId", examples=["jira-int-01"])
     starts_at: Optional[datetime] = Field(None, alias="startsAt", examples=["2026-04-03T11:55:00Z"])
     last_seen_at: datetime = Field(..., alias="lastSeenAt", examples=["2026-04-03T12:05:00Z"])
@@ -83,7 +86,9 @@ class AlertIncidentUpdateRequest(BaseModel):
     visibility: Optional[IncidentVisibility] = Field(None, examples=["group"])
     shared_group_ids: Optional[List[str]] = Field(default=None, alias="sharedGroupIds", examples=[["group-ops"]])
     jira_ticket_key: Optional[str] = Field(None, alias="jiraTicketKey", examples=["OPS-321"])
-    jira_ticket_url: Optional[str] = Field(None, alias="jiraTicketUrl", examples=["https://jira.example.internal/browse/OPS-321"])
+    jira_ticket_url: Optional[str] = Field(
+        None, alias="jiraTicketUrl", examples=["https://jira.example.internal/browse/OPS-321"]
+    )
     jira_integration_id: Optional[str] = Field(None, alias="jiraIntegrationId", examples=["jira-int-01"])
     hide_when_resolved: Optional[bool] = Field(None, alias="hideWhenResolved", examples=[True])
 

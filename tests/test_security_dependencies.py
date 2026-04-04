@@ -1,9 +1,9 @@
 """
-Copyright (c) 2026 Stefan Kumarasinghe
+Copyright (c) 2026 Stefan Kumarasinghe.
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
+License. You may obtain a copy of the License at
+http://www.apache.org/licenses/LICENSE-2.0
 """
 
 from datetime import datetime, timedelta, timezone
@@ -225,9 +225,7 @@ def test_get_current_user_rejects_invalid_context_with_valid_service_token(monke
     monkeypatch.setattr(
         dependencies,
         "_verify_context_token",
-        lambda _token: (_ for _ in ()).throw(
-            HTTPException(status_code=401, detail="Invalid context token")
-        ),
+        lambda _token: (_ for _ in ()).throw(HTTPException(status_code=401, detail="Invalid context token")),
     )
     # shadow context no longer used; ignore
 

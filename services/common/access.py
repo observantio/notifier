@@ -3,9 +3,9 @@ Access control utilities for checking user permissions and resolving group membe
 
 Copyright (c) 2026 Stefan Kumarasinghe
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
+License. You may obtain a copy of the License at
+http://www.apache.org/licenses/LICENSE-2.0
 """
 
 import logging
@@ -79,7 +79,9 @@ def assign_shared_groups(
     if group_ids is None:
         raise ValueError("group_ids is required when visibility is 'group'")
     db_obj.shared_groups = _resolve_groups(
-        db, tenant_id, group_ids,
+        db,
+        tenant_id,
+        group_ids,
         actor_group_ids=actor_group_ids,
     )
 

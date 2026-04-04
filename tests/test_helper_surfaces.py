@@ -1,9 +1,9 @@
 """
-Copyright (c) 2026 Stefan Kumarasinghe
+Copyright (c) 2026 Stefan Kumarasinghe.
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
+License. You may obtain a copy of the License at
+http://www.apache.org/licenses/LICENSE-2.0
 """
 
 from __future__ import annotations
@@ -137,13 +137,13 @@ def test_ensure_tenant_exists_and_rate_limit_observability(monkeypatch):
 
     calls = []
     monkeypatch.setattr(rate_observability.logger, "warning", lambda message, *args: calls.append((message, args)))
-    monkeypatch.setattr(rate_observability, "_rate_limit_fallback_total", 0)
+    monkeypatch.setattr(rate_observability, "_RATE_LIMIT_FALLBACK_TOTAL", 0)
     monkeypatch.setattr(rate_observability, "_rate_limit_fallback_by_mode", {"memory": 0, "deny": 0, "allow": 0})
 
     rate_observability.record_fallback_event("memory", "redis-down")
     rate_observability.record_fallback_event("custom", "manual")
 
-    assert rate_observability._rate_limit_fallback_total == 2
+    assert rate_observability._RATE_LIMIT_FALLBACK_TOTAL == 2
     assert rate_observability._rate_limit_fallback_by_mode == {
         "memory": 1,
         "deny": 0,

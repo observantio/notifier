@@ -1,12 +1,12 @@
 """
-Incident helper functions for Notifier service - formatting descriptions, mapping severities, syncing notes to Jira, etc.
+Incident helper functions for Notifier service - formatting descriptions, mapping severities, syncing notes to Jira,
+etc.
 Copyright (c) 2026 Stefan Kumarasinghe
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
 """
-
 
 from __future__ import annotations
 
@@ -131,9 +131,7 @@ async def sync_note_to_jira_comment(
         return
     try:
         author_label = str(
-            getattr(current_user, "full_name", None)
-            or getattr(current_user, "username", None)
-            or current_user.user_id
+            getattr(current_user, "full_name", None) or getattr(current_user, "username", None) or current_user.user_id
         ).strip()
         normalized_text = rewrite_note_text_for_actor(text, current_user.user_id, author_label)
         formatted = format_note_for_jira_comment(normalized_text, author_label)

@@ -1,11 +1,12 @@
 """
-Rule operations for synchronizing alert rules with Mimir, including resolving organization IDs, listing existing rules, and upserting new rules based on the desired configuration.
+Rule operations for synchronizing alert rules with Mimir, including resolving organization IDs, listing existing rules,
+and upserting new rules based on the desired configuration.
 
 Copyright (c) 2026 Stefan Kumarasinghe
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
+License. You may obtain a copy of the License at
+http://www.apache.org/licenses/LICENSE-2.0
 """
 
 from __future__ import annotations
@@ -28,11 +29,17 @@ logger = logging.getLogger(__name__)
 def resolve_rule_org_id(rule_org_id: Optional[str], current_user: TokenData) -> str:
     return rule_org_id or getattr(current_user, "org_id", None) or config.DEFAULT_ORG_ID
 
+
 async def sync_mimir_rules_for_org(service: AlertManagerService, org_id: str, rules: List[AlertRule]) -> None:
     desired_groups = service._group_enabled_rules(rules)
     base_url = config.MIMIR_URL.rstrip("/")
-    namespace = quote(service.MIMIR_RULES_NAMESPACE, safe="")
-    namespace_url = f"{base_url}{service.MIMIR_RULER_CONFIG_BASEPATH}/{namespace}"
+    namespace = quote(getattr(service, "mimir_rules_namespace", getattr(service, "MIMIR_RULES_NAMESPACE")), safe="")
+    ruler_basepath = getattr(
+        service,
+        "mimir_ruler_config_basepath",
+        getattr(service, "MIMIR_RULER_CONFIG_BASEPATH"),
+    )
+    namespace_url = f"{base_url}{ruler_basepath}/{namespace}"
     org_header = {"X-Scope-OrgID": org_id}
 
     existing_group_names: List[str] = []

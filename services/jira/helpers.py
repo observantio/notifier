@@ -1,16 +1,17 @@
 """
-Jira integration helper functions for resolving credentials, checking integration usability, and fetching Jira projects and issue types via integrations.
+Jira integration helper functions for resolving credentials, checking integration usability, and fetching Jira projects
+and issue types via integrations.
 
 Copyright (c) 2026 Stefan Kumarasinghe
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
+License. You may obtain a copy of the License at
+http://www.apache.org/licenses/LICENSE-2.0
 """
 
 from urllib.parse import urlparse
 
-from fastapi import  HTTPException, status
+from fastapi import HTTPException, status
 from models.access.auth_models import TokenData
 from custom_types.json import JSONDict
 from models.alerting.incidents import AlertIncident
@@ -32,6 +33,7 @@ def _find_integration(tenant_id: str, integration_id: str) -> JSONDict | None:
         if str(item.get("id") or "").strip() == str(integration_id or "").strip():
             return item
     return None
+
 
 async def jira_projects_via_integration(tenant_id: str, integration_id: str, current_user: TokenData) -> JSONDict:
     integration: JSONDict | None
@@ -58,7 +60,9 @@ async def jira_projects_via_integration(tenant_id: str, integration_id: str, cur
     return {"enabled": True, "projects": projects}
 
 
-async def jira_issue_types_via_integration(tenant_id: str, integration_id: str, project_key: str, current_user: TokenData) -> JSONDict:
+async def jira_issue_types_via_integration(
+    tenant_id: str, integration_id: str, project_key: str, current_user: TokenData
+) -> JSONDict:
     integration: JSONDict | None
     try:
         integration = resolve_jira_integration(tenant_id, integration_id, current_user, require_write=False)

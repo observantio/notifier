@@ -1,9 +1,9 @@
 """
-Copyright (c) 2026 Stefan Kumarasinghe
+Copyright (c) 2026 Stefan Kumarasinghe.
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
+License. You may obtain a copy of the License at
+http://www.apache.org/licenses/LICENSE-2.0
 """
 
 from __future__ import annotations
@@ -90,12 +90,15 @@ def test_incident_tenant_isolation_matrix():
 
     incident_a_id = incidents_a[0].id
     assert service.get_incident_for_user(incident_a_id, tenant_b, user_b, []) is None
-    assert service.update_incident(
-        incident_a_id,
-        tenant_b,
-        user_b,
-        AlertIncidentUpdateRequest(note="cross-tenant attempt"),
-    ) is None
+    assert (
+        service.update_incident(
+            incident_a_id,
+            tenant_b,
+            user_b,
+            AlertIncidentUpdateRequest(note="cross-tenant attempt"),
+        )
+        is None
+    )
 
 
 @pytest.mark.skipif(
@@ -112,7 +115,7 @@ def test_rule_tenant_isolation_matrix():
     rule = service.create_alert_rule(
         AlertRuleCreate(
             name=_id("rule"),
-            expression='sum(rate(http_requests_total[5m])) > 0',
+            expression="sum(rate(http_requests_total[5m])) > 0",
             severity=RuleSeverity.WARNING,
             groupName="tenant-isolation",
             enabled=True,
@@ -130,7 +133,7 @@ def test_rule_tenant_isolation_matrix():
             rule.id,
             AlertRuleCreate(
                 name=_id("rule-updated"),
-                expression='up == 0',
+                expression="up == 0",
                 severity=RuleSeverity.CRITICAL,
                 groupName="tenant-isolation",
                 enabled=True,

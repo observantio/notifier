@@ -1,11 +1,12 @@
 """
-Integration security service for managing Jira integration configurations, including credential storage, access control, and synchronization of Jira comments to incident notes.
+Integration security service for managing Jira integration configurations, including credential storage, access control,
+and synchronization of Jira comments to incident notes.
 
 Copyright (c) 2026 Stefan Kumarasinghe
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
+License. You may obtain a copy of the License at
+http://www.apache.org/licenses/LICENSE-2.0
 """
 
 import logging
@@ -279,11 +280,7 @@ def get_effective_jira_credentials(tenant_id: str) -> Dict[str, Optional[str]]:
     email_str = email if isinstance(email, str) else None
     api_token_str = api_token if isinstance(api_token, str) else None
     bearer_str = bearer if isinstance(bearer, str) else None
-    if (
-        tenant_cfg.get("enabled")
-        and is_safe_http_url(base_url_str)
-        and (bearer_str or (email_str and api_token_str))
-    ):
+    if tenant_cfg.get("enabled") and is_safe_http_url(base_url_str) and (bearer_str or (email_str and api_token_str)):
         return {
             "base_url": base_url_str,
             "email": email_str,
@@ -312,15 +309,9 @@ def normalize_visibility(value: Optional[str], default_value: str = "private") -
 
 
 def is_jira_sso_available() -> bool:
-    auth_provider = str(
-        getattr(config, "AUTH_PROVIDER", None) or os.getenv("AUTH_PROVIDER", "")
-    ).strip().lower()
-    oidc_issuer = str(
-        getattr(config, "OIDC_ISSUER_URL", None) or os.getenv("OIDC_ISSUER_URL", "")
-    ).strip()
-    oidc_client_id = str(
-        getattr(config, "OIDC_CLIENT_ID", None) or os.getenv("OIDC_CLIENT_ID", "")
-    ).strip()
+    auth_provider = str(getattr(config, "AUTH_PROVIDER", None) or os.getenv("AUTH_PROVIDER", "")).strip().lower()
+    oidc_issuer = str(getattr(config, "OIDC_ISSUER_URL", None) or os.getenv("OIDC_ISSUER_URL", "")).strip()
+    oidc_client_id = str(getattr(config, "OIDC_CLIENT_ID", None) or os.getenv("OIDC_CLIENT_ID", "")).strip()
     return auth_provider in {"keycloak", "oidc"} and bool(oidc_issuer and oidc_client_id)
 
 
@@ -359,12 +350,20 @@ def validate_jira_credentials(
         )
     if auth_mode == "api_token":
         if not str(email or "").strip():
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Jira email is required for api_token auth mode")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Jira email is required for api_token auth mode"
+            )
         if not str(api_token or "").strip():
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Jira apiToken is required for api_token auth mode")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Jira apiToken is required for api_token auth mode"
+            )
     elif auth_mode in {"bearer", "sso"}:
         if not str(bearer_token or "").strip():
-            detail = "Jira SSO mode requires a bearerToken" if auth_mode == "sso" else "Jira bearerToken is required for bearer auth mode"
+            detail = (
+                "Jira SSO mode requires a bearerToken"
+                if auth_mode == "sso"
+                else "Jira bearerToken is required for bearer auth mode"
+            )
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=detail)
 
 
@@ -403,7 +402,9 @@ def validate_shared_group_ids_for_user(
         actor_groups = set(getattr(current_user, "group_ids", []) or [])
         unauthorized = sorted(gid for gid in normalized if gid not in actor_groups)
         if unauthorized:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=f"User not member of groups: {unauthorized}")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, detail=f"User not member of groups: {unauthorized}"
+            )
     return normalized
 
 
@@ -418,7 +419,9 @@ def jira_integration_has_access(item: Mapping[str, object], current_user: TokenD
     if visibility == "group":
         raw_shared_group_ids = item.get("sharedGroupIds")
         raw_user_groups = getattr(current_user, "group_ids", []) or []
-        shared_group_ids = set(_normalized_id_list(raw_shared_group_ids if isinstance(raw_shared_group_ids, list) else []))
+        shared_group_ids = set(
+            _normalized_id_list(raw_shared_group_ids if isinstance(raw_shared_group_ids, list) else [])
+        )
         user_groups = set(_normalized_id_list(raw_user_groups if isinstance(raw_user_groups, list) else []))
         return bool(set(shared_group_ids) & set(user_groups))
     return False

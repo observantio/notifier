@@ -1,9 +1,9 @@
 """
-Copyright (c) 2026 Stefan Kumarasinghe
+Copyright (c) 2026 Stefan Kumarasinghe.
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
+License. You may obtain a copy of the License at
+http://www.apache.org/licenses/LICENSE-2.0
 """
 
 from __future__ import annotations
@@ -167,7 +167,17 @@ def test_secret_storage_config_and_visibility_helpers(monkeypatch):
         sec_mod.encrypt_tenant_secret("secret")
     assert sec_mod.decrypt_tenant_secret(encrypted) is None
 
-    tenant = SimpleNamespace(settings={"jira": {"enabled": True, "base_url": "https://jira", "email": "a@b.c", "api_token": encrypted, "bearer": None}})
+    tenant = SimpleNamespace(
+        settings={
+            "jira": {
+                "enabled": True,
+                "base_url": "https://jira",
+                "email": "a@b.c",
+                "api_token": encrypted,
+                "bearer": None,
+            }
+        }
+    )
     db = FakeDB(tenant)
     monkeypatch.setattr(sec_mod, "get_db_session", lambda: FakeCtx(db))
     monkeypatch.setattr(sec_mod.config, "DATA_ENCRYPTION_KEY", key)
@@ -177,23 +187,49 @@ def test_secret_storage_config_and_visibility_helpers(monkeypatch):
     tenant = SimpleNamespace(settings={})
     db = FakeDB(tenant)
     monkeypatch.setattr(sec_mod, "get_db_session", lambda: FakeCtx(db))
-    result = sec_mod.save_tenant_jira_config("tenant-a", enabled=True, base_url="https://jira", email="a@b.c", api_token="secret", bearer=None)
+    result = sec_mod.save_tenant_jira_config(
+        "tenant-a", enabled=True, base_url="https://jira", email="a@b.c", api_token="secret", bearer=None
+    )
     assert result["hasApiToken"] is True
     assert db.flushed == 1
 
     db = FakeDB(None)
     monkeypatch.setattr(sec_mod, "get_db_session", lambda: FakeCtx(db))
     with pytest.raises(HTTPException):
-        sec_mod.save_tenant_jira_config("missing", enabled=False, base_url=None, email=None, api_token=None, bearer=None)
+        sec_mod.save_tenant_jira_config(
+            "missing", enabled=False, base_url=None, email=None, api_token=None, bearer=None
+        )
 
-    monkeypatch.setattr(sec_mod, "load_tenant_jira_config", lambda tenant_id: {"enabled": True, "base_url": "https://jira", "email": "a@b.c", "api_token": "tok", "bearer": None})
+    monkeypatch.setattr(
+        sec_mod,
+        "load_tenant_jira_config",
+        lambda tenant_id: {
+            "enabled": True,
+            "base_url": "https://jira",
+            "email": "a@b.c",
+            "api_token": "tok",
+            "bearer": None,
+        },
+    )
     creds = sec_mod.get_effective_jira_credentials("tenant-a")
     assert creds["base_url"] == "https://jira"
     assert sec_mod.jira_is_enabled_for_tenant("tenant-a") is True
-    assert sec_mod.allowed_channel_types() == [t.lower() for t in (sec_mod.config.ENABLED_NOTIFICATION_CHANNEL_TYPES or [])]
+    assert sec_mod.allowed_channel_types() == [
+        t.lower() for t in (sec_mod.config.ENABLED_NOTIFICATION_CHANNEL_TYPES or [])
+    ]
     assert sec_mod.normalize_visibility("public") == "tenant"
 
-    monkeypatch.setattr(sec_mod, "os", SimpleNamespace(getenv=lambda name, default=None: {"AUTH_PROVIDER": "oidc", "OIDC_ISSUER_URL": "https://issuer", "OIDC_CLIENT_ID": "client"}.get(name, default)))
+    monkeypatch.setattr(
+        sec_mod,
+        "os",
+        SimpleNamespace(
+            getenv=lambda name, default=None: {
+                "AUTH_PROVIDER": "oidc",
+                "OIDC_ISSUER_URL": "https://issuer",
+                "OIDC_CLIENT_ID": "client",
+            }.get(name, default)
+        ),
+    )
     monkeypatch.setattr(sec_mod.config, "AUTH_PROVIDER", "oidc", raising=False)
     monkeypatch.setattr(sec_mod.config, "OIDC_ISSUER_URL", "https://issuer", raising=False)
     monkeypatch.setattr(sec_mod.config, "OIDC_CLIENT_ID", "client", raising=False)
@@ -208,12 +244,20 @@ def test_secret_storage_config_and_visibility_helpers(monkeypatch):
 def test_integration_validation_access_and_masking(monkeypatch):
     monkeypatch.setattr(sec_mod, "is_safe_http_url", lambda url: bool(url and str(url).startswith("https://")))
     monkeypatch.setattr(sec_mod, "flag_modified", lambda *_args, **_kwargs: None)
-    sec_mod.validate_jira_credentials(base_url="https://jira", auth_mode="api_token", email="a@b.c", api_token="tok", bearer_token=None)
-    sec_mod.validate_jira_credentials(base_url="https://jira.local", auth_mode="bearer", email=None, api_token=None, bearer_token="bear")
+    sec_mod.validate_jira_credentials(
+        base_url="https://jira", auth_mode="api_token", email="a@b.c", api_token="tok", bearer_token=None
+    )
+    sec_mod.validate_jira_credentials(
+        base_url="https://jira.local", auth_mode="bearer", email=None, api_token=None, bearer_token="bear"
+    )
     with pytest.raises(HTTPException):
-        sec_mod.validate_jira_credentials(base_url="https://foo.atlassian.net", auth_mode="bearer", email=None, api_token=None, bearer_token="bear")
+        sec_mod.validate_jira_credentials(
+            base_url="https://foo.atlassian.net", auth_mode="bearer", email=None, api_token=None, bearer_token="bear"
+        )
     with pytest.raises(HTTPException):
-        sec_mod.validate_jira_credentials(base_url="https://jira", auth_mode="api_token", email=None, api_token="tok", bearer_token=None)
+        sec_mod.validate_jira_credentials(
+            base_url="https://jira", auth_mode="api_token", email=None, api_token="tok", bearer_token=None
+        )
 
     items = [{"id": "i1"}, "bad"]
     tenant = SimpleNamespace(settings={"jira_integrations": items})
@@ -238,8 +282,22 @@ def test_integration_validation_access_and_masking(monkeypatch):
     assert sec_mod.jira_integration_has_access({"createdBy": "u1"}, _user(), write=True) is True
     assert sec_mod.jira_integration_has_access({"createdBy": "u2", "visibility": "tenant"}, _user()) is True
 
-    masked_owner = sec_mod.mask_jira_integration({"id": "i1", "name": "Jira", "createdBy": "u1", "baseUrl": "https://jira", "email": "a@b.c", "apiToken": "enc", "authMode": "api_token", "sharedGroupIds": ["g1"]}, _user())
-    masked_other = sec_mod.mask_jira_integration({"id": "i1", "createdBy": "u2", "baseUrl": "https://jira", "email": "a@b.c"}, _user())
+    masked_owner = sec_mod.mask_jira_integration(
+        {
+            "id": "i1",
+            "name": "Jira",
+            "createdBy": "u1",
+            "baseUrl": "https://jira",
+            "email": "a@b.c",
+            "apiToken": "enc",
+            "authMode": "api_token",
+            "sharedGroupIds": ["g1"],
+        },
+        _user(),
+    )
+    masked_other = sec_mod.mask_jira_integration(
+        {"id": "i1", "createdBy": "u2", "baseUrl": "https://jira", "email": "a@b.c"}, _user()
+    )
     assert masked_owner["baseUrl"] == "https://jira"
     assert masked_other["baseUrl"] is None
 
@@ -250,10 +308,17 @@ def test_integration_validation_access_and_masking(monkeypatch):
 
     monkeypatch.setattr(sec_mod, "decrypt_tenant_secret", lambda value: "secret" if value else None)
     monkeypatch.setattr(sec_mod, "normalize_jira_auth_mode", lambda value: str(value or "api_token"))
-    creds = sec_mod.jira_integration_credentials({"authMode": "api_token", "baseUrl": "https://jira", "email": "a@b.c", "apiToken": "enc"})
+    creds = sec_mod.jira_integration_credentials(
+        {"authMode": "api_token", "baseUrl": "https://jira", "email": "a@b.c", "apiToken": "enc"}
+    )
     assert creds["api_token"] == "secret"
     monkeypatch.setattr(sec_mod, "is_safe_http_url", lambda url: bool(url and url.startswith("https://")))
-    assert sec_mod.integration_is_usable({"enabled": True, "authMode": "api_token", "baseUrl": "https://jira", "email": "a@b.c", "apiToken": "enc"}) is True
+    assert (
+        sec_mod.integration_is_usable(
+            {"enabled": True, "authMode": "api_token", "baseUrl": "https://jira", "email": "a@b.c", "apiToken": "enc"}
+        )
+        is True
+    )
     assert sec_mod.integration_is_usable({"enabled": False}) is False
 
 
@@ -269,7 +334,11 @@ class DummyResponse:
 
     def raise_for_status(self):
         if self.status_code >= 400:
-            raise httpx.HTTPStatusError("bad", request=httpx.Request("GET", "https://jira"), response=httpx.Response(self.status_code, request=httpx.Request("GET", "https://jira"), text=self.text))
+            raise httpx.HTTPStatusError(
+                "bad",
+                request=httpx.Request("GET", "https://jira"),
+                response=httpx.Response(self.status_code, request=httpx.Request("GET", "https://jira"), text=self.text),
+            )
 
 
 @pytest.mark.asyncio
@@ -283,7 +352,9 @@ async def test_jira_service_auth_headers_and_request_paths(monkeypatch):
     assert service._resolve_base_url({"baseUrl": "https://jira.local/"}) == "https://jira.local"
     assert service._auth_headers({"authMode": "bearer", "bearer": "abc"})["Authorization"] == "Bearer abc"
     assert service._auth_headers({"authMode": "sso", "bearer": "abc"})["Authorization"] == "Bearer abc"
-    assert service._auth_headers({"authMode": "api_token", "email": "a@b.c", "api_token": "tok"})["Authorization"].startswith("Basic ")
+    assert service._auth_headers({"authMode": "api_token", "email": "a@b.c", "api_token": "tok"})[
+        "Authorization"
+    ].startswith("Basic ")
     service.email = None
     service.api_token = None
     service.bearer = None
@@ -303,9 +374,17 @@ async def test_jira_service_auth_headers_and_request_paths(monkeypatch):
             return DummyResponse(payload={"key": "OPS-1"}, content=b"{}")
 
     service._client = Client()
-    assert await service._get("/rest/api/2/project", {"base_url": "https://jira", "authMode": "bearer", "bearer": "abc"}) == [{"key": "OPS", "name": "Ops"}]
-    assert (await service._post("/rest/api/2/issue", {"x": 1}, {"base_url": "https://jira", "authMode": "bearer", "bearer": "abc"})) == {"key": "OPS-1"}
-    created = await service.create_issue("OPS", "Summary", "Desc", credentials={"base_url": "https://jira", "authMode": "bearer", "bearer": "abc"})
+    assert await service._get(
+        "/rest/api/2/project", {"base_url": "https://jira", "authMode": "bearer", "bearer": "abc"}
+    ) == [{"key": "OPS", "name": "Ops"}]
+    assert (
+        await service._post(
+            "/rest/api/2/issue", {"x": 1}, {"base_url": "https://jira", "authMode": "bearer", "bearer": "abc"}
+        )
+    ) == {"key": "OPS-1"}
+    created = await service.create_issue(
+        "OPS", "Summary", "Desc", credentials={"base_url": "https://jira", "authMode": "bearer", "bearer": "abc"}
+    )
     assert created["key"] == "OPS-1"
 
 
@@ -321,7 +400,9 @@ async def test_jira_service_higher_level_helpers_and_errors(monkeypatch):
         if path == "/rest/api/2/project/OPS":
             return {"issueTypes": [{"name": "Task"}, {"name": "Bug"}, {"x": 1}]}
         if path.endswith("/transitions"):
-            return {"transitions": [{"id": "1", "name": "Done", "to": {"name": "Done", "statusCategory": {"key": "done"}}}]}
+            return {
+                "transitions": [{"id": "1", "name": "Done", "to": {"name": "Done", "statusCategory": {"key": "done"}}}]
+            }
         if path.endswith("/comment"):
             return {"comments": [{"id": 1, "author": {"displayName": "Alice"}, "body": "Hi", "created": "now"}]}
         return {}
@@ -333,7 +414,9 @@ async def test_jira_service_higher_level_helpers_and_errors(monkeypatch):
     service._post = fake_post
     assert await service.list_projects() == [{"key": "OPS", "name": "Ops"}]
     assert await service.list_issue_types("OPS") == ["Task", "Bug"]
-    assert await service.list_transitions("OPS-1") == [{"id": "1", "name": "Done", "to": {"name": "Done", "statusCategory": {"key": "done"}}}]
+    assert await service.list_transitions("OPS-1") == [
+        {"id": "1", "name": "Done", "to": {"name": "Done", "statusCategory": {"key": "done"}}}
+    ]
     assert await service.transition_issue("OPS-1", "1") == {"ok": True}
     assert await service.transition_issue_to_done("OPS-1") is True
     assert await service.transition_issue_to_todo("OPS-1") is False
@@ -353,6 +436,13 @@ async def test_jira_service_higher_level_helpers_and_errors(monkeypatch):
 
     service._client = ErrClient()
     with pytest.raises(JiraError):
-        await service._request("GET", "/rest/api/2/project", {"base_url": "https://jira", "authMode": "bearer", "bearer": "abc"})
+        await service._request(
+            "GET", "/rest/api/2/project", {"base_url": "https://jira", "authMode": "bearer", "bearer": "abc"}
+        )
     with pytest.raises(JiraError):
-        await service._request("POST", "/rest/api/2/project", {"base_url": "https://jira", "authMode": "bearer", "bearer": "abc"}, payload={})
+        await service._request(
+            "POST",
+            "/rest/api/2/project",
+            {"base_url": "https://jira", "authMode": "bearer", "bearer": "abc"},
+            payload={},
+        )

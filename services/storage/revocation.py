@@ -100,11 +100,7 @@ def prune_removed_member_group_shares(
             channel_row.visibility = "private"
         counts["channels"] += 1
 
-    incidents = (
-        db.query(AlertIncident)
-        .filter(AlertIncident.tenant_id == tenant_id)
-        .all()
-    )
+    incidents = db.query(AlertIncident).filter(AlertIncident.tenant_id == tenant_id).all()
     for incident in incidents:
         annotations = incident.annotations if isinstance(incident.annotations, dict) else {}
         meta = parse_meta(annotations)

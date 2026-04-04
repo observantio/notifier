@@ -1,11 +1,15 @@
 """
-Email provider utilities for sending notifications via different email services, including SendGrid, Resend, and SMTP. This module provides functions to build email messages, validate recipient email addresses, and send emails using the respective APIs or protocols while handling errors and implementing retry logic for transient failures. The utilities ensure that email sending operations are performed securely and efficiently, with proper logging and error handling to facilitate troubleshooting and monitoring of email delivery performance.
+Email provider utilities for sending notifications via different email services, including SendGrid, Resend, and SMTP.
+This module provides functions to build email messages, validate recipient email addresses, and send emails using the
+respective APIs or protocols while handling errors and implementing retry logic for transient failures. The utilities
+ensure that email sending operations are performed securely and efficiently, with proper logging and error handling to
+facilitate troubleshooting and monitoring of email delivery performance.
 
 Copyright (c) 2026 Stefan Kumarasinghe
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
+License. You may obtain a copy of the License at
+http://www.apache.org/licenses/LICENSE-2.0
 """
 
 import logging
@@ -20,14 +24,17 @@ from . import transport
 
 logger = logging.getLogger(__name__)
 
+
 def _is_valid_email(addr: str) -> bool:
     return "@" in parseaddr(addr)[1]
+
 
 def _sanitize_recipients(recipients: list[str]) -> list[str]:
     valid = [r.strip() for r in recipients if _is_valid_email(r)]
     if not valid:
         raise ValueError("No valid recipient email addresses provided")
     return valid
+
 
 def build_smtp_message(subject: str, body: str, smtp_from: str, recipients: list[str]) -> EmailMessage:
     recipients = _sanitize_recipients(recipients)
@@ -37,6 +44,7 @@ def build_smtp_message(subject: str, body: str, smtp_from: str, recipients: list
     msg["To"] = ", ".join(recipients)
     msg.set_content(body)
     return msg
+
 
 async def send_via_sendgrid(
     client: httpx.AsyncClient,
@@ -78,6 +86,7 @@ async def send_via_sendgrid(
 
     return False
 
+
 async def send_via_resend(
     client: httpx.AsyncClient,
     api_key: str,
@@ -117,6 +126,7 @@ async def send_via_resend(
         logger.error("Resend unexpected failure: %s", exc)
 
     return False
+
 
 async def send_via_smtp(
     message: EmailMessage,

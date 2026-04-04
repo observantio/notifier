@@ -3,11 +3,10 @@ Rules management service for handling alert rules, including CRUD operations, ac
 
 Copyright (c) 2026 Stefan Kumarasinghe
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
+License. You may obtain a copy of the License at
+http://www.apache.org/licenses/LICENSE-2.0
 """
-
 
 from __future__ import annotations
 
@@ -38,6 +37,7 @@ def _visibility_of(rule: AlertRuleDB) -> str:
 
 def _creator_of(rule: AlertRuleDB) -> str:
     return str(rule.created_by or "")
+
 
 class RuleStorageService:
     def get_alert_rule_by_name_for_delivery(
@@ -268,7 +268,9 @@ class RuleStorageService:
             )
             db.add(rule)
             db.flush()
-            logger.info("Created alert rule %s (%s) org_id=%s visibility=%s", rule.name, rule.id, rule.org_id, rule.visibility)
+            logger.info(
+                "Created alert rule %s (%s) org_id=%s visibility=%s", rule.name, rule.id, rule.org_id, rule.visibility
+            )
             return rule_to_pydantic(rule)
 
     def update_alert_rule(

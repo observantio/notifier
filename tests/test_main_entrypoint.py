@@ -1,9 +1,9 @@
 """
-Copyright (c) 2026 Stefan Kumarasinghe
+Copyright (c) 2026 Stefan Kumarasinghe.
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
+License. You may obtain a copy of the License at
+http://www.apache.org/licenses/LICENSE-2.0
 """
 
 from __future__ import annotations
@@ -61,7 +61,9 @@ def _load_main(monkeypatch, *, enable_docs: bool = False, secret_value: str | No
     monkeypatch.setattr(
         config_module.config,
         "get_secret",
-        lambda key: secret_value if key in {"NOTIFIER_EXPECTED_SERVICE_TOKEN", "GATEWAY_INTERNAL_SERVICE_TOKEN"} else None,
+        lambda key: (
+            secret_value if key in {"NOTIFIER_EXPECTED_SERVICE_TOKEN", "GATEWAY_INTERNAL_SERVICE_TOKEN"} else None
+        ),
     )
 
     return importlib.import_module("main")
@@ -76,7 +78,9 @@ async def test_require_internal_service_token_paths(monkeypatch):
 
     allowed = await main_module.require_internal_service_token(_request("/health"), call_next)
     docs = await main_module.require_internal_service_token(_request("/docs"), call_next)
-    webhook = await main_module.require_internal_service_token(_request("/internal/v1/alertmanager/alerts/webhook"), call_next)
+    webhook = await main_module.require_internal_service_token(
+        _request("/internal/v1/alertmanager/alerts/webhook"), call_next
+    )
     missing = await main_module.require_internal_service_token(_request("/secure"), call_next)
     bad = await main_module.require_internal_service_token(
         _request("/secure", headers=[(b"x-service-token", b"wrong")]),
@@ -126,7 +130,9 @@ async def test_health_and_ready_routes(monkeypatch):
 def test_main_dunder_main_runs_uvicorn(monkeypatch):
     _load_main(monkeypatch)
     captured = {}
-    monkeypatch.setitem(sys.modules, "uvicorn", types.SimpleNamespace(run=lambda app, **kwargs: captured.update({"app": app, **kwargs})))
+    monkeypatch.setitem(
+        sys.modules, "uvicorn", types.SimpleNamespace(run=lambda app, **kwargs: captured.update({"app": app, **kwargs}))
+    )
     runpy.run_module("main", run_name="__main__")
     assert captured["host"] == "127.0.0.1"
     assert captured["port"] == 4319

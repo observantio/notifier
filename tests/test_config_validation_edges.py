@@ -1,9 +1,9 @@
 """
-Copyright (c) 2026 Stefan Kumarasinghe
+Copyright (c) 2026 Stefan Kumarasinghe.
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
+License. You may obtain a copy of the License at
+http://www.apache.org/licenses/LICENSE-2.0
 """
 
 from __future__ import annotations
@@ -41,10 +41,14 @@ def _rsa_keypair_pem() -> tuple[str, str]:
         format=serialization.PrivateFormat.PKCS8,
         encryption_algorithm=serialization.NoEncryption(),
     ).decode("utf-8")
-    public_pem = private_key.public_key().public_bytes(
-        encoding=serialization.Encoding.PEM,
-        format=serialization.PublicFormat.SubjectPublicKeyInfo,
-    ).decode("utf-8")
+    public_pem = (
+        private_key.public_key()
+        .public_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PublicFormat.SubjectPublicKeyInfo,
+        )
+        .decode("utf-8")
+    )
     return private_pem, public_pem
 
 
@@ -55,10 +59,14 @@ def _ec_keypair_pem() -> tuple[str, str]:
         format=serialization.PrivateFormat.PKCS8,
         encryption_algorithm=serialization.NoEncryption(),
     ).decode("utf-8")
-    public_pem = private_key.public_key().public_bytes(
-        encoding=serialization.Encoding.PEM,
-        format=serialization.PublicFormat.SubjectPublicKeyInfo,
-    ).decode("utf-8")
+    public_pem = (
+        private_key.public_key()
+        .public_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PublicFormat.SubjectPublicKeyInfo,
+        )
+        .decode("utf-8")
+    )
     return private_pem, public_pem
 
 
@@ -234,10 +242,14 @@ def test_config_loads_vault_values_and_get_secret_falls_back(monkeypatch):
         assert module.config.get_secret("NOTIFIER_CONTEXT_VERIFY_KEY") == "vault-verify"
 
         module.config.MISSING_VALUE = None
-        module.config._secret_provider = types.SimpleNamespace(get=lambda key: "fallback-secret" if key == "MISSING_VALUE" else None)
+        module.config._secret_provider = types.SimpleNamespace(
+            get=lambda key: "fallback-secret" if key == "MISSING_VALUE" else None
+        )
         assert module.config.get_secret("MISSING_VALUE") == "fallback-secret"
 
-        module.config._secret_provider = types.SimpleNamespace(get=lambda key: (_ for _ in ()).throw(RuntimeError("boom")))
+        module.config._secret_provider = types.SimpleNamespace(
+            get=lambda key: (_ for _ in ()).throw(RuntimeError("boom"))
+        )
         assert module.config.get_secret("MISSING_VALUE") is None
 
     sys.modules.pop("services.secrets.vault_client", None)
@@ -278,14 +290,23 @@ def test_apply_security_defaults_rejects_unknown_auto_key_algorithm():
     [
         ({"DATABASE_URL": "postgresql://user:changeme123@localhost:5432/appdb"}, "Unsafe DATABASE_URL detected"),
         ({"JWT_ALGORITHM": "HS256"}, "Unsupported JWT_ALGORITHM"),
-        ({"JWT_PRIVATE_KEY": "", "JWT_PUBLIC_KEY": "", "JWT_AUTO_GENERATE_KEYS": "false"}, "JWT_PRIVATE_KEY and JWT_PUBLIC_KEY must be configured"),
-        ({"APP_ENV": "production", "JWT_AUTO_GENERATE_KEYS": "true"}, "JWT_AUTO_GENERATE_KEYS must be disabled in production"),
+        (
+            {"JWT_PRIVATE_KEY": "", "JWT_PUBLIC_KEY": "", "JWT_AUTO_GENERATE_KEYS": "false"},
+            "JWT_PRIVATE_KEY and JWT_PUBLIC_KEY must be configured",
+        ),
+        (
+            {"APP_ENV": "production", "JWT_AUTO_GENERATE_KEYS": "true"},
+            "JWT_AUTO_GENERATE_KEYS must be disabled in production",
+        ),
         ({"APP_ENV": "production", "DATA_ENCRYPTION_KEY": ""}, "DATA_ENCRYPTION_KEY must be configured in production"),
         ({"DATA_ENCRYPTION_KEY": "not-a-fernet-key"}, "DATA_ENCRYPTION_KEY must be a valid Fernet key"),
         ({"CORS_ORIGINS": "*", "CORS_ALLOW_CREDENTIALS": "true"}, "CORS_ORIGINS cannot contain '*'"),
         ({"NOTIFIER_CONTEXT_ALGORITHM": "HS384"}, "Unsupported NOTIFIER_CONTEXT_ALGORITHM"),
         ({"NOTIFIER_CONTEXT_REPLAY_TTL_SECONDS": "0"}, "NOTIFIER_CONTEXT_REPLAY_TTL_SECONDS must be greater than 0"),
-        ({"APP_ENV": "production", "INBOUND_WEBHOOK_TOKEN": "changeme"}, "INBOUND_WEBHOOK_TOKEN must be set to a strong non-placeholder secret in production"),
+        (
+            {"APP_ENV": "production", "INBOUND_WEBHOOK_TOKEN": "changeme"},
+            "INBOUND_WEBHOOK_TOKEN must be set to a strong non-placeholder secret in production",
+        ),
         ({"APP_ENV": "production", "ALLOWLIST_FAIL_OPEN": "true"}, "ALLOWLIST_FAIL_OPEN must be false in production"),
         ({"MAX_QUERY_LIMIT": "0"}, "MAX_QUERY_LIMIT must be greater than 0"),
         ({"DEFAULT_QUERY_LIMIT": "0"}, "DEFAULT_QUERY_LIMIT must be greater than 0"),

@@ -3,9 +3,9 @@ Module defines Pydantic models for notification channel-related data structures 
 
 Copyright (c) 2026 Stefan Kumarasinghe
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
+License. You may obtain a copy of the License at
+http://www.apache.org/licenses/LICENSE-2.0
 """
 
 from typing import List, Optional
@@ -39,11 +39,22 @@ class NotificationChannel(BaseModel):
     name: str = Field(..., description=DESC_CHANNEL_NAME, examples=["Primary Slack"])
     type: ChannelType = Field(..., description=DESC_CHANNEL_TYPE, examples=["slack"])
     enabled: bool = Field(True, description=DESC_CHANNEL_ENABLED, examples=[True])
-    config: JSONDict = Field(..., description=DESC_CHANNEL_SPECIFIC_CONFIG, examples=[{"webhookUrl": "https://hooks.slack.com/services/T000/B000/XXX"}])
+    config: JSONDict = Field(
+        ...,
+        description=DESC_CHANNEL_SPECIFIC_CONFIG,
+        examples=[{"webhookUrl": "https://hooks.slack.com/services/T000/B000/XXX"}],
+    )
     created_by: Optional[str] = Field(None, alias="createdBy", description="Owner user id", examples=["user-42"])
     visibility: Visibility = Field(Visibility.PRIVATE, description=DESC_VISIBILITY_SCOPE, examples=["private"])
-    shared_group_ids: List[str] = Field(default_factory=list, alias="sharedGroupIds", description=DESC_GROUP_IDS_CHANNEL_SHARED_WITH, examples=[["group-ops"]])
-    is_hidden: bool = Field(False, alias="isHidden", description="Whether this channel is hidden for the current user", examples=[False])
+    shared_group_ids: List[str] = Field(
+        default_factory=list,
+        alias="sharedGroupIds",
+        description=DESC_GROUP_IDS_CHANNEL_SHARED_WITH,
+        examples=[["group-ops"]],
+    )
+    is_hidden: bool = Field(
+        False, alias="isHidden", description="Whether this channel is hidden for the current user", examples=[False]
+    )
     model_config = ConfigDict(use_enum_values=True, populate_by_name=True)
 
 
@@ -51,7 +62,13 @@ class NotificationChannelCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=100, description=DESC_CHANNEL_NAME, examples=["Primary Slack"])
     type: ChannelType = Field(..., description=DESC_CHANNEL_TYPE, examples=["slack"])
     enabled: StrictBool = Field(True, description=DESC_CHANNEL_ENABLED, examples=[True])
-    config: JSONDict = Field(..., description=DESC_CHANNEL_SPECIFIC_CONFIG, examples=[{"webhookUrl": "https://hooks.slack.com/services/T000/B000/XXX"}])
+    config: JSONDict = Field(
+        ...,
+        description=DESC_CHANNEL_SPECIFIC_CONFIG,
+        examples=[{"webhookUrl": "https://hooks.slack.com/services/T000/B000/XXX"}],
+    )
     visibility: Visibility = Field(Visibility.PRIVATE, description=DESC_VISIBILITY_SCOPE, examples=["private"])
-    shared_group_ids: List[str] = Field(default_factory=list, alias="sharedGroupIds", description=DESC_GROUP_IDS_SHARE_WITH, examples=[["group-ops"]])
+    shared_group_ids: List[str] = Field(
+        default_factory=list, alias="sharedGroupIds", description=DESC_GROUP_IDS_SHARE_WITH, examples=[["group-ops"]]
+    )
     model_config = ConfigDict(use_enum_values=True, populate_by_name=True, extra="forbid")

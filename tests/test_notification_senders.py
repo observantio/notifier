@@ -1,9 +1,9 @@
 """
-Copyright (c) 2026 Stefan Kumarasinghe
+Copyright (c) 2026 Stefan Kumarasinghe.
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
+License. You may obtain a copy of the License at
+http://www.apache.org/licenses/LICENSE-2.0
 """
 
 try:
@@ -20,15 +20,21 @@ from models.alerting.alerts import Alert, AlertStatus
 
 
 def _make_alert():
-    return Alert(labels={"alertname": "A", "severity": "critical"}, annotations={}, startsAt="2023-01-01T00:00:00Z", status=AlertStatus(state="active"), fingerprint="fp")
+    return Alert(
+        labels={"alertname": "A", "severity": "critical"},
+        annotations={},
+        startsAt="2023-01-01T00:00:00Z",
+        status=AlertStatus(state="active"),
+        fingerprint="fp",
+    )
 
 
 def test_send_slack_calls_transport(monkeypatch):
     called = {}
 
     async def fake_post(client, url, json=None, headers=None, params=None):
-        called['url'] = url
-        called['json'] = json
+        called["url"] = url
+        called["json"] = json
         return httpx.Response(200)
 
     monkeypatch.setattr(transport, "post_with_retry", fake_post)
@@ -36,7 +42,7 @@ def test_send_slack_calls_transport(monkeypatch):
     channel = {"webhook_url": "https://hooks.slack.com/services/test"}
     res = asyncio.run(senders.send_slack(client, channel, _make_alert(), "firing"))
     assert res is True
-    assert called['url'] == channel['webhook_url']
+    assert called["url"] == channel["webhook_url"]
 
 
 def test_send_slack_invalid_url_returns_false():
