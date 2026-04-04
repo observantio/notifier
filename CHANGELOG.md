@@ -11,6 +11,9 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
+- Applied a clean pylint reformat/refactor pass across notifier with safe readability-oriented formatting updates.
+- Enforced strict naming consistency for config attributes, module-level state/constants, and related helper/test touchpoints to match pylint policy.
+- Removed permissive naming exceptions in lint config and aligned notifier code to strict naming rules without intended runtime behavior changes.
 - Updated notifier app wiring to install custom OpenAPI middleware at startup.
 - Tightened alerting request and router validation behavior to improve schema-conformance under contract testing.
 - Refined silences operations handling to better match documented response semantics.
