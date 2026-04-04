@@ -15,6 +15,12 @@ All notable changes to this project will be documented in this file.
 - Tightened alerting request and router validation behavior to improve schema-conformance under contract testing.
 - Refined silences operations handling to better match documented response semantics.
 - Resolved validation gaps identified by Schemathesis and fuzz-style tests; the provided verification scripts now run fully green (100%).
+- Updated alert-rule channel delivery compatibility used by both webhook-triggered notifications and `/rules/{rule_id}/test`:
+  - delivery still requires matching rule name (`labels.alertname`), enabled rule, enabled channel, and tenant/org resolution.
+  - `private` rules now deliver to shared channels (`tenant/public/group`) and to owner-matching `private` channels.
+  - `group` rules deliver to overlapping `group` channels and to `tenant/public` channels.
+  - `tenant/public` rules deliver to `tenant/public` channels.
+  - delivery to another user's `private` channel remains blocked.
 
 ## [v0.0.2] - 2026-03-30
 

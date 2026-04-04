@@ -41,3 +41,17 @@ def test_group_rule_dispatches_group_channel_with_overlap():
         shared_groups=[_group("g1")],
     )
     assert ChannelStorageService._rule_channel_compatible(rule, channel) is True
+
+
+def test_private_rule_dispatches_tenant_channel():
+    rule = SimpleNamespace(
+        visibility="private",
+        created_by="u1",
+        shared_groups=[],
+    )
+    channel = SimpleNamespace(
+        visibility="tenant",
+        created_by="u2",
+        shared_groups=[],
+    )
+    assert ChannelStorageService._rule_channel_compatible(rule, channel) is True

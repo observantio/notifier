@@ -262,6 +262,7 @@ def test_channel_helpers_and_storage_branches(monkeypatch):
     private_rule = _rule(visibility="private", created_by="owner")
     private_channel = _channel(visibility="private", created_by="owner")
     other_channel = _channel(id="chan-2", visibility="private", created_by="other")
+    tenant_channel = _channel(id="chan-tenant", visibility="tenant")
     group_rule = _rule(visibility="group", shared_groups=[SimpleNamespace(id="g1")])
     group_channel = _channel(visibility="group", shared_groups=[SimpleNamespace(id="g1")])
     public_channel = _channel(id="chan-3", visibility="public")
@@ -272,6 +273,7 @@ def test_channel_helpers_and_storage_branches(monkeypatch):
     assert channels_mod._config_dict(private_channel) == {"token": "enc"}
     assert svc._rule_channel_compatible(private_rule, private_channel) is True
     assert svc._rule_channel_compatible(private_rule, other_channel) is False
+    assert svc._rule_channel_compatible(private_rule, tenant_channel) is True
     assert svc._rule_channel_compatible(group_rule, group_channel) is True
     assert svc._rule_channel_compatible(group_rule, public_channel) is True
     assert svc._rule_channel_compatible(_rule(visibility="public"), public_channel) is True

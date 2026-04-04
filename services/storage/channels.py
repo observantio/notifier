@@ -59,10 +59,10 @@ class ChannelStorageService:
         channel_owner = str(getattr(channel, "created_by", "") or "").strip()
         rule_groups = {str(g.id) for g in (getattr(rule, "shared_groups", None) or []) if str(getattr(g, "id", "")).strip()}
         channel_groups = {str(g.id) for g in (getattr(channel, "shared_groups", None) or []) if str(getattr(g, "id", "")).strip()}
-
-        # Private rules can only trigger private owner-bound channels.
         if rule_visibility == "private":
-            return bool(channel_visibility == "private" and rule_owner and rule_owner == channel_owner)
+            if channel_visibility == "private":
+                return bool(rule_owner and rule_owner == channel_owner)
+            return True
 
         # Group rules can only trigger tenant/public channels or channels shared to overlapping groups.
         if rule_visibility == "group":
