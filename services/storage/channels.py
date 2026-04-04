@@ -78,8 +78,8 @@ class ChannelStorageService:
                 return bool(rule_groups & channel_groups)
             return False
 
-        # Tenant/public rules can trigger private channels and any group channel.
-        return channel_visibility in {"private", "group"}
+        # Tenant/public rules can trigger private, group, and public channels.
+        return channel_visibility in {"private", "group", "public"}
 
     def get_notification_channels(
         self,

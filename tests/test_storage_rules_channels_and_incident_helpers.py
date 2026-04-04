@@ -279,7 +279,7 @@ def test_channel_helpers_and_storage_branches(monkeypatch):
     assert svc._rule_channel_compatible(group_rule, other_group_channel) is False
     assert svc._rule_channel_compatible(group_rule, private_channel) is True
     assert svc._rule_channel_compatible(group_rule, public_channel) is False
-    assert svc._rule_channel_compatible(_rule(visibility="public"), public_channel) is False
+    assert svc._rule_channel_compatible(_rule(visibility="public"), public_channel) is True
     assert svc._rule_channel_compatible(_rule(visibility="public"), private_channel) is True
     assert svc._rule_channel_compatible(_rule(visibility="public"), group_channel) is True
 

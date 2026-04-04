@@ -19,7 +19,7 @@ All notable changes to this project will be documented in this file.
   - delivery still requires matching rule name (`labels.alertname`), enabled rule, enabled channel, and tenant/org resolution.
   - `private` rules deliver to owner-matching `private` channels only.
   - `group` rules deliver to `private` channels and overlapping `group` channels.
-  - `tenant/public` rules deliver to `private` channels and any `group` channel.
+  - `tenant/public` rules deliver to `private`, overlapping `group`, and `public` channels.
   - delivery to another user's `private` channel remains blocked.
 
 ## [v0.0.2] - 2026-03-30

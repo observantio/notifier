@@ -94,4 +94,4 @@ def test_public_rule_dispatches_private_group_and_public_channels():
     )
     assert ChannelStorageService._rule_channel_compatible(rule, private_channel) is True
     assert ChannelStorageService._rule_channel_compatible(rule, group_channel) is True
-    assert ChannelStorageService._rule_channel_compatible(rule, public_channel) is False
+    assert ChannelStorageService._rule_channel_compatible(rule, public_channel) is True
