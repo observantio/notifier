@@ -1,10 +1,31 @@
-# Notifier
+<div align="center">
 
-Notifier is the internal alerting and incident-management service in the Observantio stack. It sits behind the main control plane and owns the alerting domain that needs durable state and workflow logic: alert rules, silences, notification channels, incidents, Jira integrations, and inbound Alertmanager webhooks.
+# Observantio's Notifier
 
-In practice, Notifier is the service that turns alert traffic into something operators can work with. It keeps rule state in sync with Mimir, stores incident history, enforces tenant and group visibility, and handles side effects such as incident assignment emails and Jira synchronization.
+  <img src="assets/triangle.png" alt="Notifier triangle icon" width="150" />
 
-![Notifier](assets/watchdog.png)
+  <p>
+    <img src="https://img.shields.io/badge/Domain-Alerting%20%7C%20Incidents%20%7C%20Jira-b91c1c?style=flat-square" alt="Domain" />
+    <img src="https://img.shields.io/badge/Service-Notifier-c2410c?style=flat-square" alt="Service" />
+    <img src="https://img.shields.io/badge/Scope-Internal%20Alert%20Workflows-0f766e?style=flat-square" alt="Scope" />
+  </p>
+  <p>
+    <a href="https://github.com/observantio/watchdog/blob/main/README.md">
+      <img src="https://img.shields.io/badge/Control%20Plane-Watchdog-0f766e?style=flat-square&logo=github&logoColor=white" alt="Watchdog" />
+    </a>
+    <a href="https://github.com/observantio/watchdog/blob/main/USER%20GUIDE.md">
+      <img src="https://img.shields.io/badge/Operator%20Guide-Docs-16a34a?style=flat-square&logo=readthedocs&logoColor=white" alt="Docs" />
+    </a>
+  </p>
+</div>
+<div>
+  <p>
+    <strong>Internal alerting and incident workflow engine for multi-tenant observability teams</strong>
+  </p>
+  <p>
+    Notifier is the alerting domain service in the Observantio stack. It owns durable workflow state for alert rules, silences, channels, incidents, Jira synchronization, and inbound Alertmanager webhooks, turning raw alert traffic into actionable operator workflows.
+  </p>
+</div>
 
 ## What This Service Owns
 
