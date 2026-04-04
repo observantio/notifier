@@ -20,7 +20,7 @@ All notable changes to this project will be documented in this file.
   - `private` rules now deliver to shared channels (`tenant/public/group`) and to owner-matching `private` channels.
   - `group` rules deliver to overlapping `group` channels and to `tenant/public` channels.
   - `tenant/public` rules deliver to `tenant/public` channels.
-  - delivery to another user's `private` channel remains blocked.
+  - delivery to another user's `private` channel remains blocked. This is a design decision
 
 ## [v0.0.2] - 2026-03-30
 
