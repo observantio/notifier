@@ -265,6 +265,7 @@ def test_channel_helpers_and_storage_branches(monkeypatch):
     tenant_channel = _channel(id="chan-tenant", visibility="tenant")
     group_rule = _rule(visibility="group", shared_groups=[SimpleNamespace(id="g1")])
     group_channel = _channel(visibility="group", shared_groups=[SimpleNamespace(id="g1")])
+    other_group_channel = _channel(id="chan-4", visibility="group", shared_groups=[SimpleNamespace(id="g2")])
     public_channel = _channel(id="chan-3", visibility="public")
 
     assert channels_mod._shared_group_ids(group_channel) == ["g1"]
@@ -273,10 +274,14 @@ def test_channel_helpers_and_storage_branches(monkeypatch):
     assert channels_mod._config_dict(private_channel) == {"token": "enc"}
     assert svc._rule_channel_compatible(private_rule, private_channel) is True
     assert svc._rule_channel_compatible(private_rule, other_channel) is False
-    assert svc._rule_channel_compatible(private_rule, tenant_channel) is True
+    assert svc._rule_channel_compatible(private_rule, tenant_channel) is False
     assert svc._rule_channel_compatible(group_rule, group_channel) is True
-    assert svc._rule_channel_compatible(group_rule, public_channel) is True
-    assert svc._rule_channel_compatible(_rule(visibility="public"), public_channel) is True
+    assert svc._rule_channel_compatible(group_rule, other_group_channel) is False
+    assert svc._rule_channel_compatible(group_rule, private_channel) is True
+    assert svc._rule_channel_compatible(group_rule, public_channel) is False
+    assert svc._rule_channel_compatible(_rule(visibility="public"), public_channel) is False
+    assert svc._rule_channel_compatible(_rule(visibility="public"), private_channel) is True
+    assert svc._rule_channel_compatible(_rule(visibility="public"), group_channel) is True
 
     monkeypatch.setattr(channels_mod, "cap_pagination", lambda limit, offset: (limit or 50, offset))
     monkeypatch.setattr(channels_mod, "has_access", lambda visibility, *_args, **_kwargs: visibility != "group")
@@ -368,7 +373,6 @@ def test_channel_helpers_and_storage_branches(monkeypatch):
     assert delivered == [
         {"id": "chan-1", "config": {"token": "enc", "decrypted": True}},
         {"id": "chan-3", "config": {"token": "enc", "decrypted": True}},
-        {"id": "chan-4", "config": {"token": "enc", "decrypted": True}},
     ]
 
     no_rules_db = FakeDB([])

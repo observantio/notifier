@@ -57,21 +57,29 @@ class ChannelStorageService:
         channel_visibility = normalize_storage_visibility(getattr(channel, "visibility", None))
         rule_owner = str(getattr(rule, "created_by", "") or "").strip()
         channel_owner = str(getattr(channel, "created_by", "") or "").strip()
-        rule_groups = {str(g.id) for g in (getattr(rule, "shared_groups", None) or []) if str(getattr(g, "id", "")).strip()}
-        channel_groups = {str(g.id) for g in (getattr(channel, "shared_groups", None) or []) if str(getattr(g, "id", "")).strip()}
+        rule_groups = {
+            str(g.id)
+            for g in (getattr(rule, "shared_groups", None) or [])
+            if str(getattr(g, "id", "")).strip()
+        }
+        channel_groups = {
+            str(g.id)
+            for g in (getattr(channel, "shared_groups", None) or [])
+            if str(getattr(g, "id", "")).strip()
+        }
         if rule_visibility == "private":
-            if channel_visibility == "private":
-                return bool(rule_owner and rule_owner == channel_owner)
-            return True
+            return bool(channel_visibility == "private" and rule_owner and rule_owner == channel_owner)
 
-        # Group rules can only trigger tenant/public channels or channels shared to overlapping groups.
+        # Group rules can trigger private channels and group channels shared to overlapping groups.
         if rule_visibility == "group":
+            if channel_visibility == "private":
+                return True
             if channel_visibility == "group":
                 return bool(rule_groups & channel_groups)
-            return channel_visibility == "public"
+            return False
 
-        # Tenant/public rules can only trigger tenant/public channels.
-        return channel_visibility == "public"
+        # Tenant/public rules can trigger private channels and any group channel.
+        return channel_visibility in {"private", "group"}
 
     def get_notification_channels(
         self,

@@ -241,7 +241,7 @@ async def test_stateful_channel_rule_test_and_webhook_workflow(monkeypatch):
                 "type": "slack",
                 "enabled": True,
                 "config": {"webhook_url": "https://hooks.example.test"},
-                "visibility": "tenant",
+                "visibility": "private",
             }
         ),
         current_user,
