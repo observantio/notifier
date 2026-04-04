@@ -49,7 +49,7 @@ async def test_notification_service_support_helpers(monkeypatch):
 @pytest.mark.asyncio
 async def test_incident_assignment_email_paths(monkeypatch):
     svc = NotificationService()
-    monkeypatch.setattr(config, "DEFAULT_ADMIN_EMAIL", "admin@example.com")
+    monkeypatch.setattr(config, "default_admin_email", "admin@example.com")
 
     monkeypatch.setattr(notification_mod.config, "get_secret", lambda key: None)
     assert await svc.send_incident_assignment_email("u@example.com", "CPU", "open", "critical", "admin") is False

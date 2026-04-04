@@ -263,13 +263,13 @@ def test_in_memory_and_hybrid_rate_limiters(monkeypatch):
 
 
 def test_rate_limit_ip_and_enforcement(monkeypatch):
-    monkeypatch.setattr(config, "TRUST_PROXY_HEADERS", False)
+    monkeypatch.setattr(config, "trust_proxy_headers", False)
     assert _valid_ip("203.0.113.10") == "203.0.113.10"
     assert _valid_ip("not-an-ip") is None
     assert client_ip(_request("198.51.100.1")) == "198.51.100.1"
 
-    monkeypatch.setattr(config, "TRUST_PROXY_HEADERS", True)
-    monkeypatch.setattr(config, "TRUSTED_PROXY_CIDRS", ["198.51.100.0/24"])
+    monkeypatch.setattr(config, "trust_proxy_headers", True)
+    monkeypatch.setattr(config, "trusted_proxy_cidrs", ["198.51.100.0/24"])
     req = _request(
         "198.51.100.10",
         headers=[
@@ -392,7 +392,7 @@ def test_dependencies_helpers_and_allowlist_paths(monkeypatch):
     ok_req = _request(headers=[(b"x-service-token", b"expected")])
     dependencies._compare_service_token(ok_req)
 
-    monkeypatch.setattr(config, "NOTIFIER_CONTEXT_REPLAY_TTL_SECONDS", 1)
+    monkeypatch.setattr(config, "notifier_context_replay_ttl_seconds", 1)
     with dependencies._jti_lock:
         dependencies._jti_cache.clear()
     dependencies._assert_jti_not_replayed("j1")
@@ -424,14 +424,14 @@ def test_dependencies_helpers_and_allowlist_paths(monkeypatch):
     assert any_scoped(_user()).user_id == "u1"
     assert captured_scopes == ["alert-scope", "any-scope"]
 
-    monkeypatch.setattr(config, "REQUIRE_CLIENT_IP_FOR_PUBLIC_ENDPOINTS", True)
+    monkeypatch.setattr(config, "require_client_ip_for_public_endpoints", True)
     monkeypatch.setattr(dependencies, "client_ip", lambda _request: "unknown")
     with pytest.raises(HTTPException):
         dependencies.enforce_public_endpoint_security(_request(), scope="public", limit=10, window_seconds=60)
 
-    monkeypatch.setattr(config, "REQUIRE_CLIENT_IP_FOR_PUBLIC_ENDPOINTS", False)
+    monkeypatch.setattr(config, "require_client_ip_for_public_endpoints", False)
     monkeypatch.setattr(dependencies, "enforce_ip_rate_limit", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(config, "ALLOWLIST_FAIL_OPEN", False)
+    monkeypatch.setattr(config, "allowlist_fail_open", False)
     monkeypatch.setattr(dependencies, "client_ip", lambda request: request.client.host if request.client else "unknown")
 
     with pytest.raises(HTTPException):
@@ -448,7 +448,7 @@ def test_dependencies_helpers_and_allowlist_paths(monkeypatch):
         _request("203.0.113.10"), scope="public", limit=10, window_seconds=60, allowlist="203.0.113.0/24"
     )
 
-    monkeypatch.setattr(config, "ALLOWLIST_FAIL_OPEN", True)
+    monkeypatch.setattr(config, "allowlist_fail_open", True)
     dependencies._enforce_ip_allowlist(_request(), "", scope="public")
 
     parsed = dependencies._parse_allowlist_networks("203.0.113.10,2001:db8::1")
@@ -457,7 +457,7 @@ def test_dependencies_helpers_and_allowlist_paths(monkeypatch):
 
 def test_dependencies_rate_limit_and_allowlist_remaining_edges(monkeypatch):
     monkeypatch.setattr(config, "get_secret", lambda _key: "secret")
-    monkeypatch.setattr(config, "NOTIFIER_CONTEXT_ALGORITHM", "HS256")
+    monkeypatch.setattr(config, "notifier_context_algorithm", "HS256")
     monkeypatch.setattr(
         jwt,
         "decode",
@@ -503,15 +503,15 @@ def test_rate_limit_build_and_helper_remaining_edges(monkeypatch):
     result = hybrid.hit("k-edge", limit=5, window_seconds=60, fallback_mode="invalid-mode")
     assert result.allowed is True
 
-    monkeypatch.setattr(config, "TRUST_PROXY_HEADERS", True)
-    monkeypatch.setattr(config, "TRUSTED_PROXY_CIDRS", ["bad-cidr"])
+    monkeypatch.setattr(config, "trust_proxy_headers", True)
+    monkeypatch.setattr(config, "trusted_proxy_cidrs", ["bad-cidr"])
     assert client_ip(_request(ip="203.0.113.10")) == "203.0.113.10"
 
-    monkeypatch.setattr(config, "TRUSTED_PROXY_CIDRS", ["203.0.113.0/24"])
+    monkeypatch.setattr(config, "trusted_proxy_cidrs", ["203.0.113.0/24"])
     monkeypatch.setattr("middleware.rate_limit.ip._valid_ip", lambda _value: "not-an-ip")
     assert client_ip(_request(ip="203.0.113.10")) == "not-an-ip"
 
-    monkeypatch.setattr(rate_mod.config, "IS_PRODUCTION", True)
+    monkeypatch.setattr(rate_mod.config, "is_production", True)
     monkeypatch.setattr(
         rate_mod,
         "RedisFixedWindowRateLimiter",
@@ -520,7 +520,7 @@ def test_rate_limit_build_and_helper_remaining_edges(monkeypatch):
     limiter = rate_mod._build_rate_limiter()
     assert getattr(limiter, "_redis_limiter", None) is None
 
-    monkeypatch.setattr(rate_mod.config, "IS_PRODUCTION", False)
+    monkeypatch.setattr(rate_mod.config, "is_production", False)
     limiter = rate_mod._build_rate_limiter()
     assert getattr(limiter, "_redis_limiter", None) is None
 
@@ -567,11 +567,11 @@ async def test_request_size_limit_non_http_and_retry_httpstatus_exhaustion(monke
 
 def test_verify_context_token_and_get_current_user(monkeypatch):
     key = "x" * 32
-    monkeypatch.setattr(config, "NOTIFIER_CONTEXT_VERIFY_KEY", key)
-    monkeypatch.setattr(config, "NOTIFIER_CONTEXT_SIGNING_KEY", key)
-    monkeypatch.setattr(config, "NOTIFIER_CONTEXT_ALGORITHM", "HS256")
-    monkeypatch.setattr(config, "NOTIFIER_CONTEXT_AUDIENCE", "notifier")
-    monkeypatch.setattr(config, "NOTIFIER_CONTEXT_ISSUER", "watchdog-main")
+    monkeypatch.setattr(config, "notifier_context_verify_key", key)
+    monkeypatch.setattr(config, "notifier_context_signing_key", key)
+    monkeypatch.setattr(config, "notifier_context_algorithm", "HS256")
+    monkeypatch.setattr(config, "notifier_context_audience", "notifier")
+    monkeypatch.setattr(config, "notifier_context_issuer", "watchdog-main")
 
     now = datetime.now(timezone.utc)
     token = jwt.encode(

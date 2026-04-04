@@ -25,7 +25,7 @@ AsyncFunc = Callable[P, Awaitable[T]]
 
 
 def with_retry(
-    max_retries: int = config.MAX_RETRIES, backoff: float = config.RETRY_BACKOFF
+    max_retries: int = config.max_retries, backoff: float = config.retry_backoff
 ) -> Callable[[AsyncFunc[P, T]], AsyncFunc[P, T]]:
     def decorator(func: AsyncFunc[P, T]) -> AsyncFunc[P, T]:
         @wraps(func)
@@ -43,8 +43,8 @@ def with_retry(
 
                     last_exception = exc
                     if attempt < max_retries:
-                        wait_time = min(config.RETRY_MAX_BACKOFF, backoff * (2**attempt))
-                        jitter = wait_time * max(0.0, config.RETRY_JITTER)
+                        wait_time = min(config.retry_max_backoff, backoff * (2**attempt))
+                        jitter = wait_time * max(0.0, config.retry_jitter)
                         wait_time = max(0.0, wait_time + random.uniform(-jitter, jitter))
                         logger.warning(
                             "Attempt %d/%d failed for %s: %s. Retrying in %ss...",
@@ -65,8 +65,8 @@ def with_retry(
                 except (httpx.RequestError, asyncio.TimeoutError) as exc:
                     last_exception = exc
                     if attempt < max_retries:
-                        wait_time = min(config.RETRY_MAX_BACKOFF, backoff * (2**attempt))
-                        jitter = wait_time * max(0.0, config.RETRY_JITTER)
+                        wait_time = min(config.retry_max_backoff, backoff * (2**attempt))
+                        jitter = wait_time * max(0.0, config.retry_jitter)
                         wait_time = max(0.0, wait_time + random.uniform(-jitter, jitter))
                         logger.warning(
                             "Attempt %d/%d failed for %s: %s. Retrying in %ss...",
@@ -94,7 +94,7 @@ def with_retry(
     return decorator
 
 
-def with_timeout(timeout: float = config.DEFAULT_TIMEOUT) -> Callable[[AsyncFunc[P, T]], AsyncFunc[P, T]]:
+def with_timeout(timeout: float = config.default_timeout) -> Callable[[AsyncFunc[P, T]], AsyncFunc[P, T]]:
     def decorator(func: AsyncFunc[P, T]) -> AsyncFunc[P, T]:
         @wraps(func)
         async def wrapper(*args: P.args, **kwargs: P.kwargs) -> T:

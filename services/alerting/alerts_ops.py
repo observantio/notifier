@@ -28,7 +28,7 @@ QueryParamMapping = Mapping[str, QueryParamValue | Sequence[QueryParamValue]]
 
 async def list_metric_names(service: AlertManagerService, org_id: str) -> List[str]:
     response = await service._mimir_client.get(
-        f"{config.MIMIR_URL.rstrip('/')}/prometheus/api/v1/label/__name__/values",
+        f"{config.mimir_url.rstrip('/')}/prometheus/api/v1/label/__name__/values",
         headers={"X-Scope-OrgID": org_id},
     )
     response.raise_for_status()
@@ -45,7 +45,7 @@ async def list_metric_names(service: AlertManagerService, org_id: str) -> List[s
 
 async def list_label_names(service: AlertManagerService, org_id: str) -> List[str]:
     response = await service._mimir_client.get(
-        f"{config.MIMIR_URL.rstrip('/')}/prometheus/api/v1/labels",
+        f"{config.mimir_url.rstrip('/')}/prometheus/api/v1/labels",
         headers={"X-Scope-OrgID": org_id},
     )
     response.raise_for_status()
@@ -72,7 +72,7 @@ async def list_label_values(
         if metric:
             params["match[]"] = metric
     response = await service._mimir_client.get(
-        f"{config.MIMIR_URL.rstrip('/')}/prometheus/api/v1/label/{label}/values",
+        f"{config.mimir_url.rstrip('/')}/prometheus/api/v1/label/{label}/values",
         headers={"X-Scope-OrgID": org_id},
         params=params or None,
     )
@@ -95,7 +95,7 @@ async def evaluate_promql(
     sample_limit: int = 5,
 ) -> Dict[str, Any]:
     response = await service._mimir_client.get(
-        f"{config.MIMIR_URL.rstrip('/')}/prometheus/api/v1/query",
+        f"{config.mimir_url.rstrip('/')}/prometheus/api/v1/query",
         headers={"X-Scope-OrgID": org_id},
         params={"query": query},
     )

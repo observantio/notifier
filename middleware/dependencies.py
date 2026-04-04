@@ -219,7 +219,7 @@ def enforce_public_endpoint_security(
     fallback_mode: str | None = None,
 ) -> None:
     resolved_ip = client_ip(request)
-    if config.REQUIRE_CLIENT_IP_FOR_PUBLIC_ENDPOINTS and resolved_ip == "unknown":
+    if config.require_client_ip_for_public_endpoints and resolved_ip == "unknown":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=f"Access denied for {scope}: client IP resolution failed",
@@ -241,7 +241,7 @@ def _enforce_ip_allowlist(request: Request, allowlist: str | None, *, scope: str
         ) from exc
 
     if not networks:
-        if config.ALLOWLIST_FAIL_OPEN:
+        if config.allowlist_fail_open:
             return
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

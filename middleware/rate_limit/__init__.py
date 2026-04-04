@@ -33,9 +33,9 @@ def _build_rate_limiter() -> HybridRateLimiter:
     redis_url = (os.getenv("RATE_LIMIT_REDIS_URL", "") or "").strip()
 
     fallback = InMemoryRateLimiter(
-        gc_every=config.RATE_LIMIT_GC_EVERY,
-        stale_after_seconds=config.RATE_LIMIT_STALE_AFTER_SECONDS,
-        max_states=config.RATE_LIMIT_MAX_STATES,
+        gc_every=config.rate_limit_gc_every,
+        stale_after_seconds=config.rate_limit_stale_after_seconds,
+        max_states=config.rate_limit_max_states,
     )
 
     if backend in {"memory", "in-memory", "inmemory"}:
@@ -44,7 +44,7 @@ def _build_rate_limiter() -> HybridRateLimiter:
     if not redis_url:
         if backend == "redis":
             logger.warning("RATE_LIMIT_BACKEND=redis but RATE_LIMIT_REDIS_URL is not set; using in-memory limiter")
-        if config.IS_PRODUCTION:
+        if config.is_production:
             logger.warning("Using in-memory rate limiter in production. Configure Redis for multi-instance safety.")
         return HybridRateLimiter(None, fallback)
 
@@ -58,7 +58,7 @@ def _build_rate_limiter() -> HybridRateLimiter:
         return HybridRateLimiter(redis_limiter, fallback)
     except (ConnectionError, ImportError, OSError, RuntimeError, TimeoutError, ValueError) as exc:
         logger.warning("Failed to initialize Redis rate limiter, using in-memory fallback: %s", exc)
-        if config.IS_PRODUCTION:
+        if config.is_production:
             logger.warning("Redis rate limiting failed in production; rate limiting is process-local only")
         return HybridRateLimiter(None, fallback)
 
@@ -77,7 +77,7 @@ def enforce_rate_limit(
         key,
         limit=limit,
         window_seconds=window_seconds,
-        fallback_mode=fallback_mode or config.RATE_LIMIT_FALLBACK_MODE,
+        fallback_mode=fallback_mode or config.rate_limit_fallback_mode,
     )
     if result.allowed:
         return

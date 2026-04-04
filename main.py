@@ -39,7 +39,7 @@ from routers.observability.incidents import router as alertmanager_incidents_rou
 from routers.observability.jira import router as alertmanager_jira_router
 
 logging.basicConfig(
-    level=getattr(logging, config.LOG_LEVEL.upper()),
+    level=getattr(logging, config.log_level.upper()),
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 logger = logging.getLogger("notifier")
@@ -47,8 +47,8 @@ logger = logging.getLogger("notifier")
 # Expose this name for route logic and tests that monkeypatch main.connection_test.
 connection_test = database_module.connection_test
 
-database_module.ensure_database_exists(config.NOTIFIER_DATABASE_URL)
-database_module.init_database(config.NOTIFIER_DATABASE_URL, config.LOG_LEVEL == "debug")
+database_module.ensure_database_exists(config.notifier_database_url)
+database_module.init_database(config.notifier_database_url, config.log_level == "debug")
 database_module.init_db()
 
 APP_TITLE = "Notifier"
@@ -59,17 +59,17 @@ app = FastAPI(
     description=APP_DESCRIPTION,
     version="1.0.0",
     servers=openapi_servers(
-        host=config.HOST,
-        port=config.PORT,
-        tls_enabled=config.NOTIFIER_TLS_ENABLED,
+        host=config.host,
+        port=config.port,
+        tls_enabled=config.notifier_tls_enabled,
     ),
     contact=openapi_contact(service_name=APP_TITLE),
     license_info=openapi_license(),
     openapi_tags=openapi_tags(),
     generate_unique_id_function=lambda route: route.name,
-    docs_url="/docs" if config.ENABLE_API_DOCS else None,
-    redoc_url="/redoc" if config.ENABLE_API_DOCS else None,
-    openapi_url="/openapi.json" if config.ENABLE_API_DOCS else None,
+    docs_url="/docs" if config.enable_api_docs else None,
+    redoc_url="/redoc" if config.enable_api_docs else None,
+    openapi_url="/openapi.json" if config.enable_api_docs else None,
 )
 
 app.middleware("http")(security_headers_middleware)
@@ -78,11 +78,11 @@ app.add_exception_handler(HTTPException, http_exception_handler)
 app.add_exception_handler(StarletteHTTPException, http_exception_handler)
 app.add_exception_handler(Exception, general_exception_handler)
 
-app.add_middleware(RequestSizeLimitMiddleware, max_bytes=config.MAX_REQUEST_BYTES)
+app.add_middleware(RequestSizeLimitMiddleware, max_bytes=config.max_request_bytes)
 app.add_middleware(
     ConcurrencyLimitMiddleware,
-    max_concurrent=config.MAX_CONCURRENT_REQUESTS,
-    acquire_timeout=config.CONCURRENCY_ACQUIRE_TIMEOUT,
+    max_concurrent=config.max_concurrent_requests,
+    acquire_timeout=config.concurrency_acquire_timeout,
 )
 
 
@@ -92,7 +92,7 @@ async def require_internal_service_token(
     call_next: Callable[[Request], Awaitable[Response]],
 ) -> Response:
     allowed_paths = {"/health", "/ready"}
-    if config.ENABLE_API_DOCS:
+    if config.enable_api_docs:
         allowed_paths.update({"/docs", "/redoc", "/openapi.json"})
 
     if request.url.path in allowed_paths:
@@ -164,4 +164,4 @@ ready = readiness
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app, host=config.HOST, port=config.PORT, loop="uvloop", log_level=config.LOG_LEVEL)
+    uvicorn.run(app, host=config.host, port=config.port, loop="uvloop", log_level=config.log_level)

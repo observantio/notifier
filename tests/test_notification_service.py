@@ -70,7 +70,7 @@ def test_send_email_delegates_to_email_providers(monkeypatch):
     monkeypatch.setattr(notification_email, "send_via_smtp", fake_send_via_smtp)
 
     # ensure a default from address exists so service logic doesn't blow up
-    config.DEFAULT_ADMIN_EMAIL = "admin@example.com"
+    config.default_admin_email = "admin@example.com"
 
     svc = NotificationService()
     ch1 = NotificationChannel(
@@ -111,7 +111,7 @@ def test_format_helpers_delegate_to_payloads(monkeypatch):
     monkeypatch.setattr(notification_email, "send_via_smtp", fake_send_smtp)
 
     # provide a default from address for the service
-    config.DEFAULT_ADMIN_EMAIL = "admin@example.com"
+    config.default_admin_email = "admin@example.com"
 
     svc = NotificationService()
     ch = NotificationChannel(
@@ -140,7 +140,7 @@ def test_send_email_uses_build_smtp_message(monkeypatch):
     monkeypatch.setattr(notification_email, "send_via_smtp", fake_send_smtp)
 
     # ensure default from address available
-    config.DEFAULT_ADMIN_EMAIL = "admin@example.com"
+    config.default_admin_email = "admin@example.com"
 
     svc = NotificationService()
     ch = NotificationChannel(

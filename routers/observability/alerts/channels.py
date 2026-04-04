@@ -47,7 +47,7 @@ router = APIRouter(tags=["alertmanager-channels"])
 )
 async def list_channels(
     request: Request,
-    limit: int = Query(config.DEFAULT_QUERY_LIMIT, ge=1, le=config.MAX_QUERY_LIMIT),
+    limit: int = Query(config.default_query_limit, ge=1, le=config.max_query_limit),
     offset: int = Query(0, ge=0),
     show_hidden: str = Query("false", pattern="^(true|false)$"),
     current_user: TokenData = Depends(require_permission_with_scope(Permission.READ_CHANNELS, "alertmanager")),

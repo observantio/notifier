@@ -27,12 +27,12 @@ logger = logging.getLogger(__name__)
 
 
 def resolve_rule_org_id(rule_org_id: Optional[str], current_user: TokenData) -> str:
-    return rule_org_id or getattr(current_user, "org_id", None) or config.DEFAULT_ORG_ID
+    return rule_org_id or getattr(current_user, "org_id", None) or config.default_org_id
 
 
 async def sync_mimir_rules_for_org(service: AlertManagerService, org_id: str, rules: List[AlertRule]) -> None:
     desired_groups = service._group_enabled_rules(rules)
-    base_url = config.MIMIR_URL.rstrip("/")
+    base_url = config.mimir_url.rstrip("/")
     namespace = quote(getattr(service, "mimir_rules_namespace", getattr(service, "MIMIR_RULES_NAMESPACE")), safe="")
     ruler_basepath = getattr(
         service,

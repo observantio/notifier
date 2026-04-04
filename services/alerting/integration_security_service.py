@@ -66,23 +66,23 @@ def ensure_default_tenant(db: Session) -> str:
     db.execute(
         pg_insert(Tenant)
         .values(
-            id=config.DEFAULT_ADMIN_TENANT,
-            name=config.DEFAULT_ADMIN_TENANT,
-            display_name=config.DEFAULT_ADMIN_TENANT,
+            id=config.default_admin_tenant,
+            name=config.default_admin_tenant,
+            display_name=config.default_admin_tenant,
             is_active=True,
             settings={},
         )
         .on_conflict_do_nothing(index_elements=["id"])
     )
-    row = db.query(Tenant).filter_by(name=config.DEFAULT_ADMIN_TENANT).first()
-    return row.id if row else config.DEFAULT_ADMIN_TENANT
+    row = db.query(Tenant).filter_by(name=config.default_admin_tenant).first()
+    return row.id if row else config.default_admin_tenant
 
 
 def tenant_id_from_scope_header(scoped_header: Optional[str]) -> str:
-    candidate = (scoped_header.split("|")[0].strip() if scoped_header else "") or config.DEFAULT_ORG_ID
+    candidate = (scoped_header.split("|")[0].strip() if scoped_header else "") or config.default_org_id
 
     with get_db_session() as db:
-        if not candidate or candidate == config.DEFAULT_ORG_ID:
+        if not candidate or candidate == config.default_org_id:
             return ensure_default_tenant(db)
 
         tenant = db.query(Tenant).filter(Tenant.id == candidate).first()
@@ -175,13 +175,13 @@ def infer_tenant_id_from_alerts(
 def encrypt_tenant_secret(value: Optional[str]) -> Optional[str]:
     if not value:
         return None
-    if not config.DATA_ENCRYPTION_KEY:
+    if not config.data_encryption_key:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="DATA_ENCRYPTION_KEY is required to store Jira secrets",
         )
     try:
-        fernet = Fernet(config.DATA_ENCRYPTION_KEY)
+        fernet = Fernet(config.data_encryption_key)
         return f"enc:{fernet.encrypt(value.encode()).decode()}"
     except (TypeError, ValueError) as exc:
         logger.exception("Failed to encrypt Jira secret")
@@ -198,10 +198,10 @@ def decrypt_tenant_secret(value: Optional[str]) -> Optional[str]:
     if not text.startswith("enc:"):
         logger.warning("Encountered legacy plaintext Jira secret; migration is required")
         return text
-    if not config.DATA_ENCRYPTION_KEY:
+    if not config.data_encryption_key:
         return None
     try:
-        fernet = Fernet(config.DATA_ENCRYPTION_KEY)
+        fernet = Fernet(config.data_encryption_key)
         return fernet.decrypt(text[4:].encode()).decode()
     except (InvalidToken, TypeError, ValueError):
         return None
@@ -296,7 +296,7 @@ def jira_is_enabled_for_tenant(tenant_id: str) -> bool:
 
 
 def allowed_channel_types() -> List[str]:
-    return [t.lower() for t in (config.ENABLED_NOTIFICATION_CHANNEL_TYPES or [])]
+    return [t.lower() for t in (config.enabled_notification_channel_types or [])]
 
 
 def normalize_visibility(value: Optional[str], default_value: str = "private") -> str:

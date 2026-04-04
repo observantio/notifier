@@ -300,7 +300,7 @@ def test_integration_security_uncovered_paths(monkeypatch):
     monkeypatch.setattr(sec_mod, "get_db_session", lambda: _DBCtx(db))
     assert sec_mod.infer_tenant_id_from_alerts(None, [{"labels": "bad"}, {"labels": {"alertname": "CPU"}}]) == "base"
 
-    monkeypatch.setattr(sec_mod.config, "DATA_ENCRYPTION_KEY", "x")
+    monkeypatch.setattr(sec_mod.config, "data_encryption_key", "x")
 
     class _BadFernet:
         def __init__(self, _key):

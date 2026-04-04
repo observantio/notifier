@@ -166,15 +166,6 @@ class Config:
     )
     vault_secret_keys: tuple[str, ...] = VAULT_SECRET_KEYS
 
-    def __getattr__(self, name: str) -> object:
-        if name.isupper():
-            return object.__getattribute__(self, name.lower())
-        raise AttributeError(f"{type(self).__name__!s} has no attribute {name!r}")
-
-    def __setattr__(self, name: str, value: object) -> None:
-        target_name = name.lower() if name.isupper() else name
-        object.__setattr__(self, target_name, value)
-
     def __init__(self) -> None:
         self.app_env: str = _env_name()
         self.is_production: bool = _is_production_env()
@@ -330,11 +321,11 @@ class Config:
             except (OSError, RuntimeError, TypeError, ValueError):
                 val = None
             if val:
-                setattr(self, key, val)
+                setattr(self, key.lower(), val)
                 logger.info("Loaded secret %s from Vault", key)
 
     def get_secret(self, key: str) -> Optional[str]:
-        val = getattr(self, key, None)
+        val = getattr(self, key.lower(), None)
         if isinstance(val, str) and val:
             return val
         try:

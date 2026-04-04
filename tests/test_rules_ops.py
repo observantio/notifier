@@ -23,7 +23,7 @@ from services.alerting.rules_ops import resolve_rule_org_id
 class RulesOpsTests(unittest.TestCase):
     def test_resolve_rule_org_id_prefers_rule_org(self):
         # function now reads default from global config
-        config.DEFAULT_ORG_ID = "default"
+        config.default_org_id = "default"
         user = TokenData(
             user_id="u1",
             username="alice",
@@ -37,7 +37,7 @@ class RulesOpsTests(unittest.TestCase):
         self.assertEqual(resolve_rule_org_id("rule-org", user), "rule-org")
 
     def test_resolve_rule_org_id_fallbacks_to_user_then_default(self):
-        config.DEFAULT_ORG_ID = "default-org"
+        config.default_org_id = "default-org"
         user = TokenData(
             user_id="u1",
             username="alice",

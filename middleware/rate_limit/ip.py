@@ -31,9 +31,9 @@ def _valid_ip(value: str) -> Optional[str]:
 
 def client_ip(request: Request) -> str:
     def _trusted_proxy_peer() -> bool:
-        if not config.TRUST_PROXY_HEADERS:
+        if not config.trust_proxy_headers:
             return False
-        trusted_cidrs = getattr(config, "TRUSTED_PROXY_CIDRS", []) or []
+        trusted_cidrs = getattr(config, "trusted_proxy_cidrs", []) or []
         if not trusted_cidrs:
             return True
 

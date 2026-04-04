@@ -283,20 +283,20 @@ async def test_alertmanager_service_helpers_and_delete_silence(monkeypatch):
     monkeypatch.setattr(
         alert_mod, "enforce_public_endpoint_security", lambda *args, **kwargs: captured.append((args, kwargs))
     )
-    monkeypatch.setattr(config, "RATE_LIMIT_PUBLIC_PER_MINUTE", 10)
-    monkeypatch.setattr(config, "WEBHOOK_IP_ALLOWLIST", ["127.0.0.1"])
+    monkeypatch.setattr(config, "rate_limit_public_per_minute", 10)
+    monkeypatch.setattr(config, "webhook_ip_allowlist", ["127.0.0.1"])
 
-    monkeypatch.setattr(config, "INBOUND_WEBHOOK_TOKEN", None)
-    monkeypatch.setattr(config, "IS_PRODUCTION", False)
+    monkeypatch.setattr(config, "inbound_webhook_token", None)
+    monkeypatch.setattr(config, "is_production", False)
     svc.enforce_webhook_security(_request(), scope="alerts")
     assert captured
 
-    monkeypatch.setattr(config, "IS_PRODUCTION", True)
+    monkeypatch.setattr(config, "is_production", True)
     with pytest.raises(HTTPException) as exc:
         svc.enforce_webhook_security(_request(), scope="alerts")
     assert exc.value.status_code == 500
 
-    monkeypatch.setattr(config, "INBOUND_WEBHOOK_TOKEN", "secret")
+    monkeypatch.setattr(config, "inbound_webhook_token", "secret")
     svc.enforce_webhook_security(_request(headers=[(b"x-watchdog-webhook-token", b"secret")]), scope="alerts")
     svc.enforce_webhook_security(_request(headers=[(b"authorization", b"Bearer secret")]), scope="alerts")
     with pytest.raises(HTTPException) as exc:

@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 @lru_cache(maxsize=1)
 def _get_fernet() -> Fernet:
-    key = app_config.DATA_ENCRYPTION_KEY
+    key = app_config.data_encryption_key
     if not key:
         raise RuntimeError("DATA_ENCRYPTION_KEY is not configured")
     try:

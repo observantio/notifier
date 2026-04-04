@@ -128,7 +128,7 @@ class AlertRule(Base):
     created_by: Mapped[Optional[str]] = mapped_column(String, index=True)
     org_id: Mapped[Optional[str]] = mapped_column(String, index=True)
     name: Mapped[str] = mapped_column(String(200), nullable=False, index=True)
-    group: Mapped[str] = mapped_column(String(100), nullable=False, default=config.DEFAULT_RULE_GROUP)
+    group: Mapped[str] = mapped_column(String(100), nullable=False, default=config.default_rule_group)
     expr: Mapped[str] = mapped_column(Text, nullable=False)
     duration: Mapped[str] = mapped_column(String(20), nullable=False, default="5m")
     severity: Mapped[str] = mapped_column(String(20), nullable=False, default="warning", index=True)

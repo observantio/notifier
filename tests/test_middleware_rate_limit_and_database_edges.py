@@ -89,7 +89,7 @@ def test_dependencies_token_and_permission_edges(monkeypatch):
     assert exc.value.status_code == 500
 
     monkeypatch.setattr(config, "get_secret", lambda _key: "secret")
-    monkeypatch.setattr(config, "NOTIFIER_CONTEXT_ALGORITHM", "HS256")
+    monkeypatch.setattr(config, "notifier_context_algorithm", "HS256")
     monkeypatch.setattr(
         jwt, "decode", lambda *_args, **_kwargs: {"iat": "x", "exp": "y", "jti": "j", "user_id": "u", "tenant_id": "t"}
     )
@@ -151,14 +151,14 @@ def test_dependencies_token_and_permission_edges(monkeypatch):
 
 def test_dependencies_public_allowlist_edges(monkeypatch):
     monkeypatch.setattr(dependencies, "enforce_ip_rate_limit", lambda *args, **kwargs: None)
-    monkeypatch.setattr(config, "REQUIRE_CLIENT_IP_FOR_PUBLIC_ENDPOINTS", True)
+    monkeypatch.setattr(config, "require_client_ip_for_public_endpoints", True)
     monkeypatch.setattr(dependencies, "client_ip", lambda _req: "unknown")
     with pytest.raises(HTTPException) as exc:
         dependencies.enforce_public_endpoint_security(_request(), scope="public", limit=1, window_seconds=60)
     assert exc.value.status_code == 403
 
-    monkeypatch.setattr(config, "REQUIRE_CLIENT_IP_FOR_PUBLIC_ENDPOINTS", False)
-    monkeypatch.setattr(config, "ALLOWLIST_FAIL_OPEN", False)
+    monkeypatch.setattr(config, "require_client_ip_for_public_endpoints", False)
+    monkeypatch.setattr(config, "allowlist_fail_open", False)
     with pytest.raises(HTTPException) as exc:
         dependencies._enforce_ip_allowlist(_request(), "", scope="public")
     assert exc.value.status_code == 403
@@ -180,9 +180,9 @@ def test_dependencies_public_allowlist_edges(monkeypatch):
 
 
 def test_rate_limit_builder_and_enforcement_edges(monkeypatch):
-    monkeypatch.setattr(rate_limit_mod.config, "RATE_LIMIT_GC_EVERY", 100)
-    monkeypatch.setattr(rate_limit_mod.config, "RATE_LIMIT_STALE_AFTER_SECONDS", 60)
-    monkeypatch.setattr(rate_limit_mod.config, "RATE_LIMIT_MAX_STATES", 10000)
+    monkeypatch.setattr(rate_limit_mod.config, "rate_limit_gc_every", 100)
+    monkeypatch.setattr(rate_limit_mod.config, "rate_limit_stale_after_seconds", 60)
+    monkeypatch.setattr(rate_limit_mod.config, "rate_limit_max_states", 10000)
 
     monkeypatch.setattr(
         rate_limit_mod.os,
@@ -192,7 +192,7 @@ def test_rate_limit_builder_and_enforcement_edges(monkeypatch):
     limiter = rate_limit_mod._build_rate_limiter()
     assert limiter is not None
 
-    monkeypatch.setattr(rate_limit_mod.config, "IS_PRODUCTION", True)
+    monkeypatch.setattr(rate_limit_mod.config, "is_production", True)
     monkeypatch.setattr(
         rate_limit_mod.os,
         "getenv",
@@ -240,19 +240,19 @@ def test_rate_limit_ip_and_redis_edges(monkeypatch):
     assert ip_mod._valid_ip("") is None
     assert ip_mod._valid_ip("203.0.113.10") == "203.0.113.10"
 
-    monkeypatch.setattr(ip_mod.config, "TRUST_PROXY_HEADERS", True)
-    monkeypatch.setattr(ip_mod.config, "TRUSTED_PROXY_CIDRS", [])
+    monkeypatch.setattr(ip_mod.config, "trust_proxy_headers", True)
+    monkeypatch.setattr(ip_mod.config, "trusted_proxy_cidrs", [])
     req = _request(headers=[(b"x-forwarded-for", b"198.51.100.5, 10.0.0.1")])
     assert ip_mod.client_ip(req) == "198.51.100.5"
 
-    monkeypatch.setattr(ip_mod.config, "TRUSTED_PROXY_CIDRS", ["203.0.113.0/24", "bad-cidr"])
+    monkeypatch.setattr(ip_mod.config, "trusted_proxy_cidrs", ["203.0.113.0/24", "bad-cidr"])
     req = _request(ip="invalid-ip", headers=[(b"x-real-ip", b"198.51.100.9")])
     assert ip_mod.client_ip(req) == "unknown"
 
     req = _request(ip="203.0.113.10", headers=[(b"x-real-ip", b"198.51.100.9")])
     assert ip_mod.client_ip(req) == "198.51.100.9"
 
-    monkeypatch.setattr(ip_mod.config, "TRUST_PROXY_HEADERS", False)
+    monkeypatch.setattr(ip_mod.config, "trust_proxy_headers", False)
     assert ip_mod.client_ip(_request(ip="bad-ip")) == "unknown"
 
     assert redis_mod._sanitize_redis_url(object()) == "<redis-url>"

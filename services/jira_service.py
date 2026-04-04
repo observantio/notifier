@@ -51,7 +51,7 @@ class JiraService:
         self.email = (os.getenv("JIRA_EMAIL") or "").strip() or None
         self.api_token = (os.getenv("JIRA_API_TOKEN") or "").strip() or None
         self.bearer = (os.getenv("JIRA_BEARER_TOKEN") or "").strip() or None
-        self.timeout = float(timeout or config.DEFAULT_TIMEOUT)
+        self.timeout = float(timeout or config.default_timeout)
         self._client = create_async_client(self.timeout)
 
     def _resolve_base_url(self, credentials: Credentials = None) -> str:

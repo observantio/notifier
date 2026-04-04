@@ -50,14 +50,14 @@ def _load_main(monkeypatch, *, enable_docs: bool = False, secret_value: str | No
     monkeypatch.setattr(database_module, "init_db", lambda: None)
     monkeypatch.setattr(database_module, "connection_test", lambda: True)
 
-    monkeypatch.setattr(config_module.config, "ENABLE_API_DOCS", enable_docs)
-    monkeypatch.setattr(config_module.config, "MAX_REQUEST_BYTES", 1024)
-    monkeypatch.setattr(config_module.config, "MAX_CONCURRENT_REQUESTS", 2)
-    monkeypatch.setattr(config_module.config, "CONCURRENCY_ACQUIRE_TIMEOUT", 0.1)
-    monkeypatch.setattr(config_module.config, "NOTIFIER_DATABASE_URL", "sqlite://")
-    monkeypatch.setattr(config_module.config, "LOG_LEVEL", "info")
-    monkeypatch.setattr(config_module.config, "HOST", "127.0.0.1")
-    monkeypatch.setattr(config_module.config, "PORT", 4319)
+    monkeypatch.setattr(config_module.config, "enable_api_docs", enable_docs)
+    monkeypatch.setattr(config_module.config, "max_request_bytes", 1024)
+    monkeypatch.setattr(config_module.config, "max_concurrent_requests", 2)
+    monkeypatch.setattr(config_module.config, "concurrency_acquire_timeout", 0.1)
+    monkeypatch.setattr(config_module.config, "notifier_database_url", "sqlite://")
+    monkeypatch.setattr(config_module.config, "log_level", "info")
+    monkeypatch.setattr(config_module.config, "host", "127.0.0.1")
+    monkeypatch.setattr(config_module.config, "port", 4319)
     monkeypatch.setattr(
         config_module.config,
         "get_secret",

@@ -271,7 +271,7 @@ class ChannelStorageService:
                 .options(joinedload(AlertRuleDB.shared_groups))
                 .filter(AlertRuleDB.name == rule_name, AlertRuleDB.enabled.is_(True))
                 .filter(AlertRuleDB.tenant_id == tenant_id)
-                .limit(int(app_config.MAX_QUERY_LIMIT))
+                .limit(int(app_config.max_query_limit))
                 .all()
             )
             if not rules:
@@ -290,7 +290,7 @@ class ChannelStorageService:
                 db.query(NotificationChannelDB)
                 .options(joinedload(NotificationChannelDB.shared_groups))
                 .filter(NotificationChannelDB.tenant_id == tenant_id)
-                .limit(int(app_config.MAX_QUERY_LIMIT))
+                .limit(int(app_config.max_query_limit))
                 .all()
             )
             channel_by_id = {str(ch.id): ch for ch in tenant_channels}

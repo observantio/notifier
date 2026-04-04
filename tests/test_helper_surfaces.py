@@ -56,8 +56,8 @@ def test_meta_helpers_and_group_id_safety():
 
 
 def test_cap_pagination_url_and_visibility_edges(monkeypatch):
-    monkeypatch.setattr(pagination_helpers.app_config, "DEFAULT_QUERY_LIMIT", 25)
-    monkeypatch.setattr(pagination_helpers.app_config, "MAX_QUERY_LIMIT", 100)
+    monkeypatch.setattr(pagination_helpers.app_config, "default_query_limit", 25)
+    monkeypatch.setattr(pagination_helpers.app_config, "max_query_limit", 100)
 
     assert pagination_helpers.cap_pagination(None, -5) == (25, 0)
     assert pagination_helpers.cap_pagination(500, 4) == (100, 4)

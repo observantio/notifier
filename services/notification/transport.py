@@ -59,13 +59,13 @@ async def post_with_retry(
 
     @retry(
         retry=retry_if_exception(lambda exc: _is_transient_http(exc, retry_set)),
-        stop=stop_after_attempt(config.MAX_RETRIES),
-        wait=wait_exponential(multiplier=config.RETRY_BACKOFF),
+        stop=stop_after_attempt(config.max_retries),
+        wait=wait_exponential(multiplier=config.retry_backoff),
         reraise=True,
     )
     async def _attempt() -> httpx.Response:
         try:
-            resp = await client.post(url, json=json, headers=headers, params=params, timeout=config.DEFAULT_TIMEOUT)
+            resp = await client.post(url, json=json, headers=headers, params=params, timeout=config.default_timeout)
             resp.raise_for_status()
             return resp
         except Exception as exc:
@@ -77,8 +77,8 @@ async def post_with_retry(
 
 @retry(
     retry=retry_if_exception(_is_transient_smtp),
-    stop=stop_after_attempt(config.MAX_RETRIES),
-    wait=wait_exponential(multiplier=config.RETRY_BACKOFF),
+    stop=stop_after_attempt(config.max_retries),
+    wait=wait_exponential(multiplier=config.retry_backoff),
     reraise=True,
 )
 async def send_smtp_with_retry(
@@ -91,7 +91,7 @@ async def send_smtp_with_retry(
     use_tls: bool = False,
 ) -> object:
     try:
-        async with asyncio.timeout(config.DEFAULT_TIMEOUT):
+        async with asyncio.timeout(config.default_timeout):
             smtp_send = cast(Any, aiosmtplib.send)
             try:
                 return await smtp_send(

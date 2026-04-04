@@ -45,11 +45,11 @@ def _reset_replay_cache():
 
 def test_verify_context_token_rejects_missing_jti(monkeypatch):
     key = "test-context-key-with-min-32-bytes!!"
-    monkeypatch.setattr(config, "NOTIFIER_CONTEXT_VERIFY_KEY", key)
-    monkeypatch.setattr(config, "NOTIFIER_CONTEXT_SIGNING_KEY", key)
-    monkeypatch.setattr(config, "NOTIFIER_CONTEXT_ALGORITHM", "HS256")
-    monkeypatch.setattr(config, "NOTIFIER_CONTEXT_AUDIENCE", "notifier")
-    monkeypatch.setattr(config, "NOTIFIER_CONTEXT_ISSUER", "watchdog-main")
+    monkeypatch.setattr(config, "notifier_context_verify_key", key)
+    monkeypatch.setattr(config, "notifier_context_signing_key", key)
+    monkeypatch.setattr(config, "notifier_context_algorithm", "HS256")
+    monkeypatch.setattr(config, "notifier_context_audience", "notifier")
+    monkeypatch.setattr(config, "notifier_context_issuer", "watchdog-main")
 
     now = datetime.now(timezone.utc)
     token = jwt.encode(
@@ -75,12 +75,12 @@ def test_verify_context_token_rejects_missing_jti(monkeypatch):
 
 def test_verify_context_token_replay_detection(monkeypatch):
     key = "test-context-key-with-min-32-bytes!!"
-    monkeypatch.setattr(config, "NOTIFIER_CONTEXT_VERIFY_KEY", key)
-    monkeypatch.setattr(config, "NOTIFIER_CONTEXT_SIGNING_KEY", key)
-    monkeypatch.setattr(config, "NOTIFIER_CONTEXT_ALGORITHM", "HS256")
-    monkeypatch.setattr(config, "NOTIFIER_CONTEXT_AUDIENCE", "notifier")
+    monkeypatch.setattr(config, "notifier_context_verify_key", key)
+    monkeypatch.setattr(config, "notifier_context_signing_key", key)
+    monkeypatch.setattr(config, "notifier_context_algorithm", "HS256")
+    monkeypatch.setattr(config, "notifier_context_audience", "notifier")
     setattr(config, "NOTIFIER_CONTEXT_ISSUER", "watchdog-main")
-    monkeypatch.setattr(config, "NOTIFIER_CONTEXT_REPLAY_TTL_SECONDS", 120)
+    monkeypatch.setattr(config, "notifier_context_replay_ttl_seconds", 120)
 
     now = datetime.now(timezone.utc)
     payload = {
@@ -106,12 +106,12 @@ def test_verify_context_token_replay_detection(monkeypatch):
 
 def test_verify_context_token_schemathesis_jti_bypasses_replay(monkeypatch):
     key = "test-context-key-with-min-32-bytes!!"
-    monkeypatch.setattr(config, "NOTIFIER_CONTEXT_VERIFY_KEY", key)
-    monkeypatch.setattr(config, "NOTIFIER_CONTEXT_SIGNING_KEY", key)
-    monkeypatch.setattr(config, "NOTIFIER_CONTEXT_ALGORITHM", "HS256")
-    monkeypatch.setattr(config, "NOTIFIER_CONTEXT_AUDIENCE", "notifier")
+    monkeypatch.setattr(config, "notifier_context_verify_key", key)
+    monkeypatch.setattr(config, "notifier_context_signing_key", key)
+    monkeypatch.setattr(config, "notifier_context_algorithm", "HS256")
+    monkeypatch.setattr(config, "notifier_context_audience", "notifier")
     setattr(config, "NOTIFIER_CONTEXT_ISSUER", "watchdog-main")
-    monkeypatch.setattr(config, "NOTIFIER_CONTEXT_REPLAY_TTL_SECONDS", 120)
+    monkeypatch.setattr(config, "notifier_context_replay_ttl_seconds", 120)
 
     now = datetime.now(timezone.utc)
     payload = {
@@ -134,10 +134,10 @@ def test_verify_context_token_schemathesis_jti_bypasses_replay(monkeypatch):
 
 def test_verify_context_token_unknown_role_falls_back_to_user(monkeypatch):
     key = "test-context-key-with-min-32-bytes!!"
-    monkeypatch.setattr(config, "NOTIFIER_CONTEXT_VERIFY_KEY", key)
-    monkeypatch.setattr(config, "NOTIFIER_CONTEXT_SIGNING_KEY", key)
-    monkeypatch.setattr(config, "NOTIFIER_CONTEXT_ALGORITHM", "HS256")
-    monkeypatch.setattr(config, "NOTIFIER_CONTEXT_AUDIENCE", "notifier")
+    monkeypatch.setattr(config, "notifier_context_verify_key", key)
+    monkeypatch.setattr(config, "notifier_context_signing_key", key)
+    monkeypatch.setattr(config, "notifier_context_algorithm", "HS256")
+    monkeypatch.setattr(config, "notifier_context_audience", "notifier")
     setattr(config, "NOTIFIER_CONTEXT_ISSUER", "watchdog-main")
 
     now = datetime.now(timezone.utc)
@@ -167,8 +167,8 @@ def test_verify_context_token_unknown_role_falls_back_to_user(monkeypatch):
 
 def test_public_endpoint_security_enforces_allowlist(monkeypatch):
     monkeypatch.setattr(dependencies, "enforce_ip_rate_limit", lambda *args, **kwargs: None)
-    monkeypatch.setattr(config, "ALLOWLIST_FAIL_OPEN", False)
-    monkeypatch.setattr(config, "REQUIRE_CLIENT_IP_FOR_PUBLIC_ENDPOINTS", False)
+    monkeypatch.setattr(config, "allowlist_fail_open", False)
+    monkeypatch.setattr(config, "require_client_ip_for_public_endpoints", False)
 
     with pytest.raises(HTTPException) as exc:
         dependencies.enforce_public_endpoint_security(
@@ -183,8 +183,8 @@ def test_public_endpoint_security_enforces_allowlist(monkeypatch):
 
 def test_public_endpoint_security_allows_allowlisted_ip(monkeypatch):
     monkeypatch.setattr(dependencies, "enforce_ip_rate_limit", lambda *args, **kwargs: None)
-    monkeypatch.setattr(config, "ALLOWLIST_FAIL_OPEN", False)
-    monkeypatch.setattr(config, "REQUIRE_CLIENT_IP_FOR_PUBLIC_ENDPOINTS", False)
+    monkeypatch.setattr(config, "allowlist_fail_open", False)
+    monkeypatch.setattr(config, "require_client_ip_for_public_endpoints", False)
 
     dependencies.enforce_public_endpoint_security(
         _request("203.0.113.10"),

@@ -249,9 +249,9 @@ async def test_transport_helpers_cover_transient_checks_and_send_paths(monkeypat
     assert transport_mod._is_transient_smtp(FakeSMTPError(450)) is True
     assert transport_mod._is_transient_smtp(FakeSMTPError(550)) is False
 
-    monkeypatch.setattr(transport_mod.config, "MAX_RETRIES", 1)
-    monkeypatch.setattr(transport_mod.config, "RETRY_BACKOFF", 0)
-    monkeypatch.setattr(transport_mod.config, "DEFAULT_TIMEOUT", 1)
+    monkeypatch.setattr(transport_mod.config, "max_retries", 1)
+    monkeypatch.setattr(transport_mod.config, "retry_backoff", 0)
+    monkeypatch.setattr(transport_mod.config, "default_timeout", 1)
 
     class FakeClient:
         def __init__(self, response):

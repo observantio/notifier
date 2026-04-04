@@ -26,7 +26,7 @@ def group_enabled_rules(rules: List[AlertRule]) -> Dict[str, List[AlertRule]]:
     for rule in rules:
         if not rule.enabled:
             continue
-        group_name = rule.group or config.DEFAULT_RULE_GROUP
+        group_name = str(rule.group or config.default_rule_group)
         grouped.setdefault(group_name, []).append(rule)
     return grouped
 

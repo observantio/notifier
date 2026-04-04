@@ -775,7 +775,7 @@ class IncidentStorageService:
                         AlertRuleDB.name == alertname,
                         AlertRuleDB.enabled.is_(True),
                     )
-                    .limit(int(app_config.MAX_QUERY_LIMIT))
+                    .limit(int(app_config.max_query_limit))
                     .all()
                 )
                 if not candidates:

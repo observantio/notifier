@@ -17,8 +17,8 @@ from config import config as app_config
 
 
 def cap_pagination(limit: Optional[int], offset: int) -> tuple[int, int]:
-    default = int(app_config.DEFAULT_QUERY_LIMIT)
-    maximum = int(app_config.MAX_QUERY_LIMIT)
+    default = int(app_config.default_query_limit)
+    maximum = int(app_config.max_query_limit)
     resolved_limit = int(limit) if limit is not None else default
     capped_limit = max(1, min(resolved_limit, maximum))
     capped_offset = max(0, int(offset))

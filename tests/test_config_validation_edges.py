@@ -237,8 +237,8 @@ def test_config_loads_vault_values_and_get_secret_falls_back(monkeypatch):
         ctx.setenv("VAULT_ADDR", "http://vault:8200")
         ctx.setitem(sys.modules, "services.secrets.vault_client", fake_module)
         module = _reload_config_module()
-        assert module.config.DATABASE_URL == "postgresql://vaultuser:vaultpass@db:5432/notifier"
-        assert module.config.NOTIFIER_CONTEXT_VERIFY_KEY == "vault-verify"
+        assert module.config.database_url == "postgresql://vaultuser:vaultpass@db:5432/notifier"
+        assert module.config.notifier_context_verify_key == "vault-verify"
         assert module.config.get_secret("NOTIFIER_CONTEXT_VERIFY_KEY") == "vault-verify"
 
         module.config.MISSING_VALUE = None
@@ -260,27 +260,27 @@ def test_config_auto_generates_rsa_and_ec_keys(monkeypatch):
         for key, value in _valid_dev_env().items():
             ctx.setenv(key, value)
         module = _reload_config_module()
-        assert "BEGIN PRIVATE KEY" in module.config.JWT_PRIVATE_KEY
-        assert "BEGIN PUBLIC KEY" in module.config.JWT_PUBLIC_KEY
+        assert "BEGIN PRIVATE KEY" in module.config.jwt_private_key
+        assert "BEGIN PUBLIC KEY" in module.config.jwt_public_key
 
     with monkeypatch.context() as ctx:
         for key, value in _valid_dev_env().items():
             ctx.setenv(key, value)
         ctx.setenv("JWT_ALGORITHM", "ES256")
         module = _reload_config_module()
-        assert "BEGIN PRIVATE KEY" in module.config.JWT_PRIVATE_KEY
-        assert "BEGIN PUBLIC KEY" in module.config.JWT_PUBLIC_KEY
+        assert "BEGIN PRIVATE KEY" in module.config.jwt_private_key
+        assert "BEGIN PUBLIC KEY" in module.config.jwt_public_key
 
 
 def test_apply_security_defaults_rejects_unknown_auto_key_algorithm():
     module = _reload_config_module()
     cfg = module.Config.__new__(module.Config)
-    cfg.JWT_ALGORITHM = "HS512"
-    cfg.ALLOWED_JWT_ALGORITHMS = {"HS512"}
-    cfg.JWT_PRIVATE_KEY = ""
-    cfg.JWT_PUBLIC_KEY = ""
-    cfg.JWT_AUTO_GENERATE_KEYS = True
-    cfg.IS_PRODUCTION = False
+    cfg.jwt_algorithm = "HS512"
+    cfg.allowed_jwt_algorithms = {"HS512"}
+    cfg.jwt_private_key = ""
+    cfg.jwt_public_key = ""
+    cfg.jwt_auto_generate_keys = True
+    cfg.is_production = False
     with pytest.raises(ValueError, match="Unsupported JWT_ALGORITHM"):
         module.Config._apply_security_defaults(cfg)
 
@@ -328,7 +328,7 @@ def test_config_accepts_valid_production_environment(monkeypatch):
         for key, value in _valid_prod_env().items():
             ctx.setenv(key, value)
         module = _reload_config_module()
-        assert module.config.IS_PRODUCTION is True
+        assert module.config.is_production is True
         assert module.config.get_secret("NOTIFIER_EXPECTED_SERVICE_TOKEN") == "strong_expected_token_123"
 
 
@@ -346,7 +346,7 @@ def test_config_init_handles_nonfatal_vault_load_failure(monkeypatch):
 
             module.Config._load_vault_secrets = failing_loader
             cfg = module.Config()
-            assert cfg.VAULT_ENABLED is True
+            assert cfg.vault_enabled is True
             assert cfg._secret_provider is not None
     finally:
         module.Config._load_vault_secrets = original_loader
@@ -356,8 +356,8 @@ def test_load_vault_secrets_requires_addr_and_secret_source(monkeypatch):
     module = _reload_config_module()
 
     cfg = module.Config.__new__(module.Config)
-    cfg.VAULT_ENABLED = True
-    cfg.VAULT_ADDR = None
+    cfg.vault_enabled = True
+    cfg.vault_addr = None
     with pytest.raises(ValueError, match="VAULT_ADDR must be set"):
         module.Config._load_vault_secrets(cfg)
 
@@ -367,18 +367,18 @@ def test_load_vault_secrets_requires_addr_and_secret_source(monkeypatch):
     )
 
     cfg = module.Config.__new__(module.Config)
-    cfg.VAULT_ENABLED = True
-    cfg.VAULT_ADDR = "http://vault:8200"
-    cfg.VAULT_TOKEN = None
-    cfg.VAULT_ROLE_ID = "role-id"
-    cfg.VAULT_SECRET_ID = None
-    cfg.VAULT_SECRET_ID_FILE = None
-    cfg.VAULT_SECRETS_PREFIX = "secret"
-    cfg.VAULT_KV_VERSION = 2
-    cfg.VAULT_TIMEOUT = 2.0
-    cfg.VAULT_CACERT = None
-    cfg.VAULT_CACHE_TTL = 30.0
-    cfg.VAULT_SECRET_KEYS = ()
+    cfg.vault_enabled = True
+    cfg.vault_addr = "http://vault:8200"
+    cfg.vault_token = None
+    cfg.vault_role_id = "role-id"
+    cfg.vault_secret_id = None
+    cfg.vault_secret_id_file = None
+    cfg.vault_secrets_prefix = "secret"
+    cfg.vault_kv_version = 2
+    cfg.vault_timeout = 2.0
+    cfg.vault_cacert = None
+    cfg.vault_cache_ttl = 30.0
+    cfg.vault_secret_keys = ()
     with monkeypatch.context() as ctx:
         ctx.setitem(sys.modules, "services.secrets.vault_client", fake_module)
         with pytest.raises(RuntimeError, match="neither VAULT_SECRET_ID nor VAULT_SECRET_ID_FILE"):
@@ -391,7 +391,7 @@ def test_config_validate_warns_when_jwt_secret_key_set(monkeypatch):
             ctx.setenv(key, value)
         ctx.setenv("JWT_SECRET_KEY", "legacy-secret")
         module = _reload_config_module()
-        assert module.config.JWT_SECRET_KEY == "legacy-secret"
+        assert module.config.jwt_secret_key == "legacy-secret"
 
 
 def test_config_init_raises_when_vault_required_and_load_fails(monkeypatch):
@@ -428,16 +428,16 @@ def test_load_vault_secrets_selects_file_and_literal_secret_callbacks(monkeypatc
     )
 
     cfg = module.Config.__new__(module.Config)
-    cfg.VAULT_ENABLED = True
-    cfg.VAULT_ADDR = "http://vault:8200"
-    cfg.VAULT_TOKEN = None
-    cfg.VAULT_ROLE_ID = "role-1"
-    cfg.VAULT_CACERT = None
-    cfg.VAULT_SECRETS_PREFIX = "secret"
-    cfg.VAULT_KV_VERSION = 2
-    cfg.VAULT_TIMEOUT = 2.0
-    cfg.VAULT_CACHE_TTL = 30.0
-    cfg.VAULT_SECRET_KEYS = ()
+    cfg.vault_enabled = True
+    cfg.vault_addr = "http://vault:8200"
+    cfg.vault_token = None
+    cfg.vault_role_id = "role-1"
+    cfg.vault_cacert = None
+    cfg.vault_secrets_prefix = "secret"
+    cfg.vault_kv_version = 2
+    cfg.vault_timeout = 2.0
+    cfg.vault_cache_ttl = 30.0
+    cfg.vault_secret_keys = ()
 
     with tempfile.NamedTemporaryFile("w", encoding="utf-8", delete=False) as handle:
         handle.write("file-secret\n")
@@ -446,16 +446,16 @@ def test_load_vault_secrets_selects_file_and_literal_secret_callbacks(monkeypatc
     try:
         with monkeypatch.context() as ctx:
             ctx.setitem(sys.modules, "services.secrets.vault_client", fake_module)
-            cfg.VAULT_SECRET_ID_FILE = secret_file
-            cfg.VAULT_SECRET_ID = None
+            cfg.vault_secret_id_file = secret_file
+            cfg.vault_secret_id = None
             module.Config._load_vault_secrets(cfg)
             assert callable(captured[-1]["secret_id_fn"])
             assert captured[-1]["secret_id_fn"]() == "file-secret"
 
         with monkeypatch.context() as ctx:
             ctx.setitem(sys.modules, "services.secrets.vault_client", fake_module)
-            cfg.VAULT_SECRET_ID_FILE = None
-            cfg.VAULT_SECRET_ID = "inline-secret"
+            cfg.vault_secret_id_file = None
+            cfg.vault_secret_id = "inline-secret"
             module.Config._load_vault_secrets(cfg)
             assert callable(captured[-1]["secret_id_fn"])
             assert captured[-1]["secret_id_fn"]() == "inline-secret"

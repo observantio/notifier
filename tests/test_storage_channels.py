@@ -23,16 +23,16 @@ from db_models import NotificationChannel as NotificationChannelDB
 
 def test_encrypt_decrypt_config_roundtrip(monkeypatch):
     key = Fernet.generate_key().decode()
-    prev = config.DATA_ENCRYPTION_KEY
+    prev = config.data_encryption_key
     try:
-        config.DATA_ENCRYPTION_KEY = key
+        config.data_encryption_key = key
         cfg = {"a": 1, "b": "s"}
         enc = encryption_module.encrypt_config(cfg)
         assert isinstance(enc, dict) and "__encrypted__" in enc
         dec = encryption_module.decrypt_config(enc)
         assert dec == cfg
     finally:
-        config.DATA_ENCRYPTION_KEY = prev
+        config.data_encryption_key = prev
 
 
 import pytest
@@ -41,9 +41,9 @@ import pytest
 @pytest.mark.skipif(not __import__("database", fromlist=[""]).connection_test(), reason="DB not available")
 def test_create_channel_stores_encrypted_and_owner_sees_config(monkeypatch):
     svc = ChannelStorageService(None)
-    prev = config.DATA_ENCRYPTION_KEY
+    prev = config.data_encryption_key
     try:
-        config.DATA_ENCRYPTION_KEY = Fernet.generate_key().decode()
+        config.data_encryption_key = Fernet.generate_key().decode()
         ch_in = NotificationChannelCreate(
             name="c1", type=ChannelType.SLACK, config={"webhook_url": "https://x"}, enabled=True, visibility="private"
         )
@@ -56,7 +56,7 @@ def test_create_channel_stores_encrypted_and_owner_sees_config(monkeypatch):
             assert isinstance(db_ch.config, dict)
             assert "__encrypted__" in db_ch.config
     finally:
-        config.DATA_ENCRYPTION_KEY = prev
+        config.data_encryption_key = prev
 
 
 import pytest

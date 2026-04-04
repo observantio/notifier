@@ -119,7 +119,7 @@ def test_suppression_metadata_meta_and_url_helpers():
 
 def test_encryption_roundtrip_and_error_paths(monkeypatch):
     key = Fernet.generate_key().decode()
-    monkeypatch.setattr(encryption.app_config, "DATA_ENCRYPTION_KEY", key)
+    monkeypatch.setattr(encryption.app_config, "data_encryption_key", key)
     encryption._get_fernet.cache_clear()
 
     encrypted = encryption.encrypt_config({"apiKey": "secret"})

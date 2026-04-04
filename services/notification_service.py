@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 class NotificationService:
 
     def __init__(self) -> None:
-        self.timeout = config.DEFAULT_TIMEOUT
+        self.timeout = config.default_timeout
         self._client = create_async_client(self.timeout)
 
     @staticmethod
@@ -115,7 +115,7 @@ class NotificationService:
             smtp_port = 587
         smtp_user = config.get_secret("INCIDENT_ASSIGNMENT_SMTP_USERNAME")
         smtp_pass = config.get_secret("INCIDENT_ASSIGNMENT_SMTP_PASSWORD")
-        smtp_from = config.get_secret("INCIDENT_ASSIGNMENT_FROM") or config.DEFAULT_ADMIN_EMAIL
+        smtp_from = config.get_secret("INCIDENT_ASSIGNMENT_FROM") or config.default_admin_email
         use_starttls = self._as_bool(config.get_secret("INCIDENT_ASSIGNMENT_SMTP_STARTTLS") or "true")
         use_ssl = self._as_bool(config.get_secret("INCIDENT_ASSIGNMENT_SMTP_USE_SSL") or "false")
         msg = EmailMessage()
@@ -160,7 +160,7 @@ class NotificationService:
         body = notification_payloads.format_alert_body(alert, action)
         provider_value = cfg.get("email_provider") or cfg.get("emailProvider") or "smtp"
         provider = str(provider_value).strip().lower()
-        smtp_from = str(cfg.get("smtp_from") or cfg.get("smtpFrom") or cfg.get("from") or config.DEFAULT_ADMIN_EMAIL)
+        smtp_from = str(cfg.get("smtp_from") or cfg.get("smtpFrom") or cfg.get("from") or config.default_admin_email)
 
         if provider == "sendgrid":
             api_key = str(

@@ -132,7 +132,7 @@ async def import_rules(
 )
 async def list_rules(
     request: Request,
-    limit: int = Query(config.DEFAULT_QUERY_LIMIT, ge=1, le=config.MAX_QUERY_LIMIT),
+    limit: int = Query(config.default_query_limit, ge=1, le=config.max_query_limit),
     offset: int = Query(0, ge=0),
     show_hidden: str = Query("false", pattern="^(true|false)$"),
     current_user: TokenData = Depends(require_permission_with_scope(Permission.READ_RULES, "alertmanager")),
@@ -173,14 +173,14 @@ async def list_public_rules(request: Request) -> List[AlertRule]:
     enforce_public_endpoint_security(
         request,
         scope="alertmanager_public_rules",
-        limit=config.RATE_LIMIT_PUBLIC_PER_MINUTE,
+        limit=config.rate_limit_public_per_minute,
         window_seconds=60,
-        allowlist=config.AUTH_PUBLIC_IP_ALLOWLIST,
+        allowlist=config.auth_public_ip_allowlist,
     )
 
     def _resolve_default_tenant_id() -> Optional[str]:
         with get_db_session() as db:
-            tenant = db.query(Tenant).filter_by(name=config.DEFAULT_ADMIN_TENANT).first()
+            tenant = db.query(Tenant).filter_by(name=config.default_admin_tenant).first()
             return tenant.id if tenant else None
 
     tenant_id = await run_in_threadpool(_resolve_default_tenant_id)

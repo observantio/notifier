@@ -52,17 +52,17 @@ def _channel(**kwargs) -> NotificationChannel:
 def test_encryption_roundtrip_and_failures(monkeypatch):
     key = Fernet.generate_key()
     enc_mod._get_fernet.cache_clear()
-    monkeypatch.setattr(enc_mod.app_config, "DATA_ENCRYPTION_KEY", None, raising=False)
+    monkeypatch.setattr(enc_mod.app_config, "data_encryption_key", None, raising=False)
     with pytest.raises(RuntimeError):
         enc_mod._get_fernet()
 
     enc_mod._get_fernet.cache_clear()
-    monkeypatch.setattr(enc_mod.app_config, "DATA_ENCRYPTION_KEY", b"bad", raising=False)
+    monkeypatch.setattr(enc_mod.app_config, "data_encryption_key", b"bad", raising=False)
     with pytest.raises(RuntimeError):
         enc_mod._get_fernet()
 
     enc_mod._get_fernet.cache_clear()
-    monkeypatch.setattr(enc_mod.app_config, "DATA_ENCRYPTION_KEY", key, raising=False)
+    monkeypatch.setattr(enc_mod.app_config, "data_encryption_key", key, raising=False)
     encrypted = enc_mod.encrypt_config({"token": "secret"})
     assert enc_mod.decrypt_config(encrypted) == {"token": "secret"}
     assert enc_mod.decrypt_config({"plain": True}) == {"plain": True}
@@ -113,7 +113,7 @@ async def test_notification_service_paths(monkeypatch):
         "INCIDENT_ASSIGNMENT_SMTP_STARTTLS": "true",
         "INCIDENT_ASSIGNMENT_SMTP_USE_SSL": "false",
     }
-    monkeypatch.setattr(notif_mod.config, "DEFAULT_ADMIN_EMAIL", "admin@example.com", raising=False)
+    monkeypatch.setattr(notif_mod.config, "default_admin_email", "admin@example.com", raising=False)
     monkeypatch.setattr(notif_mod.config, "get_secret", lambda key: secrets.get(key))
 
     smtp_calls = []
@@ -160,7 +160,7 @@ async def test_notification_email_provider_paths(monkeypatch):
         "format_alert_body",
         lambda alert, action: f"{action}:{alert.labels['alertname']}",
     )
-    monkeypatch.setattr(notif_mod.config, "DEFAULT_ADMIN_EMAIL", "admin@example.com", raising=False)
+    monkeypatch.setattr(notif_mod.config, "default_admin_email", "admin@example.com", raising=False)
     monkeypatch.setattr(
         notif_mod.notification_email,
         "build_smtp_message",

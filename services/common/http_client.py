@@ -19,8 +19,8 @@ def create_async_client(timeout_seconds: float) -> httpx.AsyncClient:
     return httpx.AsyncClient(
         timeout=httpx.Timeout(timeout_seconds),
         limits=httpx.Limits(
-            max_connections=config.HTTP_CLIENT_MAX_CONNECTIONS,
-            max_keepalive_connections=config.HTTP_CLIENT_MAX_KEEPALIVE_CONNECTIONS,
-            keepalive_expiry=config.HTTP_CLIENT_KEEPALIVE_EXPIRY,
+            max_connections=config.http_client_max_connections,
+            max_keepalive_connections=config.http_client_max_keepalive_connections,
+            keepalive_expiry=config.http_client_keepalive_expiry,
         ),
     )

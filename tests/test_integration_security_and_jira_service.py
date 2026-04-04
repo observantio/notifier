@@ -111,8 +111,8 @@ def test_integration_security_core_helpers(monkeypatch):
 
 
 def test_tenant_resolution_and_inference(monkeypatch):
-    monkeypatch.setattr(sec_mod.config, "DEFAULT_ADMIN_TENANT", "admin")
-    monkeypatch.setattr(sec_mod.config, "DEFAULT_ORG_ID", "default-org")
+    monkeypatch.setattr(sec_mod.config, "default_admin_tenant", "admin")
+    monkeypatch.setattr(sec_mod.config, "default_org_id", "default-org")
 
     db = FakeDB(SimpleNamespace(id="admin-id"))
     monkeypatch.setattr(sec_mod, "get_db_session", lambda: FakeCtx(db))
@@ -157,12 +157,12 @@ def test_secret_storage_config_and_visibility_helpers(monkeypatch):
     key = Fernet.generate_key()
     monkeypatch.setattr(sec_mod, "is_safe_http_url", lambda url: bool(url and str(url).startswith("https://")))
     monkeypatch.setattr(sec_mod, "flag_modified", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(sec_mod.config, "DATA_ENCRYPTION_KEY", key)
+    monkeypatch.setattr(sec_mod.config, "data_encryption_key", key)
     encrypted = sec_mod.encrypt_tenant_secret("secret")
     assert encrypted and encrypted.startswith("enc:")
     assert sec_mod.decrypt_tenant_secret(encrypted) == "secret"
     assert sec_mod.decrypt_tenant_secret("plain") == "plain"
-    monkeypatch.setattr(sec_mod.config, "DATA_ENCRYPTION_KEY", None)
+    monkeypatch.setattr(sec_mod.config, "data_encryption_key", None)
     with pytest.raises(HTTPException):
         sec_mod.encrypt_tenant_secret("secret")
     assert sec_mod.decrypt_tenant_secret(encrypted) is None
@@ -180,7 +180,7 @@ def test_secret_storage_config_and_visibility_helpers(monkeypatch):
     )
     db = FakeDB(tenant)
     monkeypatch.setattr(sec_mod, "get_db_session", lambda: FakeCtx(db))
-    monkeypatch.setattr(sec_mod.config, "DATA_ENCRYPTION_KEY", key)
+    monkeypatch.setattr(sec_mod.config, "data_encryption_key", key)
     loaded = sec_mod.load_tenant_jira_config("tenant-a")
     assert loaded["api_token"] == "secret"
 
@@ -215,7 +215,7 @@ def test_secret_storage_config_and_visibility_helpers(monkeypatch):
     assert creds["base_url"] == "https://jira"
     assert sec_mod.jira_is_enabled_for_tenant("tenant-a") is True
     assert sec_mod.allowed_channel_types() == [
-        t.lower() for t in (sec_mod.config.ENABLED_NOTIFICATION_CHANNEL_TYPES or [])
+        t.lower() for t in (sec_mod.config.enabled_notification_channel_types or [])
     ]
     assert sec_mod.normalize_visibility("public") == "tenant"
 

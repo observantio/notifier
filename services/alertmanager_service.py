@@ -81,11 +81,11 @@ MIMIR_RULER_CONFIG_BASEPATH = "/prometheus/config/v1/rules"
 
 
 class AlertManagerService:
-    def __init__(self, alertmanager_url: str = config.ALERTMANAGER_URL) -> None:
+    def __init__(self, alertmanager_url: str = config.alertmanager_url) -> None:
         self.mimir_rules_namespace = MIMIR_RULES_NAMESPACE
         self.mimir_ruler_config_basepath = MIMIR_RULER_CONFIG_BASEPATH
         self.alertmanager_url = alertmanager_url.rstrip("/")
-        self.timeout = config.DEFAULT_TIMEOUT
+        self.timeout = config.default_timeout
         self.logger = logger
         self._client = create_async_client(self.timeout)
         self._mimir_client = create_async_client(self.timeout)
@@ -112,13 +112,13 @@ class AlertManagerService:
         enforce_public_endpoint_security(
             request,
             scope=scope,
-            limit=config.RATE_LIMIT_PUBLIC_PER_MINUTE,
+            limit=config.rate_limit_public_per_minute,
             window_seconds=60,
-            allowlist=config.WEBHOOK_IP_ALLOWLIST,
+            allowlist=config.webhook_ip_allowlist,
         )
-        expected = config.INBOUND_WEBHOOK_TOKEN
+        expected = config.inbound_webhook_token
         if not expected:
-            if config.IS_PRODUCTION:
+            if config.is_production:
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                     detail="INBOUND_WEBHOOK_TOKEN is required in production",
