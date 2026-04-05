@@ -18,6 +18,8 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.responses import Response
+import uvicorn
+
 from config import config
 import database as database_module
 from middleware.headers import security_headers_middleware
@@ -162,6 +164,4 @@ ready = readiness
 
 
 if __name__ == "__main__":
-    import uvicorn
-
     uvicorn.run(app, host=config.host, port=config.port, loop="uvloop", log_level=config.log_level)
