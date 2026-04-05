@@ -23,9 +23,13 @@ except ImportError:
 ensure_test_env()
 
 from models.alerting.channels import NotificationChannelCreate
+from models.alerting.incidents import AlertIncidentUpdateRequest
 from models.alerting.rules import AlertRuleCreate, RuleSeverity
 from services.storage import channels as channels_mod
 from services.storage import incidents as incidents_mod
+from services.storage import incidents_core as incidents_core_mod
+from services.storage import incidents_jira as incidents_jira_mod
+from services.storage import incidents_sync as incidents_sync_mod
 from services.storage import rules as rules_mod
 
 
@@ -514,10 +518,10 @@ def test_incident_run_async_falls_back_to_new_loop(monkeypatch):
         def close(self):
             events.append("close")
 
-    monkeypatch.setattr(incidents_mod.asyncio, "run", fake_asyncio_run)
-    monkeypatch.setattr(incidents_mod.asyncio, "new_event_loop", lambda: FakeLoop())
+    monkeypatch.setattr(incidents_jira_mod.asyncio, "run", fake_asyncio_run)
+    monkeypatch.setattr(incidents_jira_mod.asyncio, "new_event_loop", lambda: FakeLoop())
 
-    incidents_mod._run_async(noop())
+    incidents_jira_mod._run_async(noop())
 
     assert events == ["run", "close"]
 
@@ -528,7 +532,7 @@ async def test_incident_helpers_and_jira_side_effects(monkeypatch):
         def __init__(self, shared_groups):
             self.shared_groups = shared_groups
 
-    monkeypatch.setattr(incidents_mod, "AlertRuleDB", FakeAlertRule)
+    monkeypatch.setattr("services.storage.incidents_core.AlertRuleDB", FakeAlertRule)
     shared_rule = FakeAlertRule([SimpleNamespace(id="g1")])
     incident_row = SimpleNamespace(
         annotations={incidents_mod.INCIDENT_META_KEY: '{"incident_key":"rule:CPU|scope:tenant-a"}'},
@@ -547,14 +551,16 @@ async def test_incident_helpers_and_jira_side_effects(monkeypatch):
     assert incidents_mod.incident_key_from_labels({"severity": "warning"}) is None
     assert incidents_mod.incident_key_from_db_row(incident_row) == "rule:CPU|scope:tenant-a"
     assert incidents_mod.incident_activity_token_from_row(incident_row) == "k:rule:CPU|scope:tenant-a"
-    assert incidents_mod._extract_metric_state({"metric_state": "critical"}) == "critical"
-    assert incidents_mod._parse_metric_states("a, b,a,,c") == ["a", "b", "c"]
+    assert incidents_core_mod._extract_metric_state({"metric_state": "critical"}) == "critical"
+    assert incidents_core_mod._parse_metric_states("a, b,a,,c") == ["a", "b", "c"]
     assert (
-        incidents_mod._merge_metric_states({incidents_mod.METRIC_STATES_ANNOTATION_KEY: "warn"}, "warn", "crit")
+        incidents_core_mod._merge_metric_states({incidents_mod.METRIC_STATES_ANNOTATION_KEY: "warn"}, "warn", "crit")
         == "warn,crit"
     )
-    monkeypatch.setattr(incidents_mod, "is_suppressed_status", lambda status: status == {"state": "suppressed"})
-    assert incidents_mod._is_alert_suppressed({"status": {"state": "suppressed"}}) is True
+    monkeypatch.setattr(
+        "services.storage.incidents_core.is_suppressed_status", lambda status: status == {"state": "suppressed"}
+    )
+    assert incidents_core_mod._is_alert_suppressed({"status": {"state": "suppressed"}}) is True
     assert (
         incidents_mod._incident_access_allowed(
             visibility="group",
@@ -567,23 +573,23 @@ async def test_incident_helpers_and_jira_side_effects(monkeypatch):
     )
 
     usable_integration = {"id": "jira-1", "base_url": "https://jira", "username": "u"}
-    monkeypatch.setattr(incidents_mod, "load_tenant_jira_integrations", lambda _tenant: [usable_integration])
-    monkeypatch.setattr(incidents_mod, "integration_is_usable", lambda item: bool(item.get("base_url")))
+    monkeypatch.setattr(incidents_jira_mod, "load_tenant_jira_integrations", lambda _tenant: [usable_integration])
+    monkeypatch.setattr(incidents_jira_mod, "integration_is_usable", lambda item: bool(item.get("base_url")))
     monkeypatch.setattr(
-        incidents_mod,
+        incidents_jira_mod,
         "jira_integration_credentials",
         lambda item: {"base_url": item["base_url"], "user": item["username"]},
     )
     monkeypatch.setattr(
-        incidents_mod,
+        incidents_jira_mod,
         "get_effective_jira_credentials",
         lambda _tenant: {"base_url": "https://tenant-jira", "token": "x"},
     )
-    assert incidents_mod._resolve_incident_jira_credentials("tenant", "jira-1") == {
+    assert incidents_jira_mod._resolve_incident_jira_credentials("tenant", "jira-1") == {
         "base_url": "https://jira",
         "user": "u",
     }
-    assert incidents_mod._resolve_incident_jira_credentials("tenant", None) == {
+    assert incidents_jira_mod._resolve_incident_jira_credentials("tenant", None) == {
         "base_url": "https://tenant-jira",
         "token": "x",
     }
@@ -597,21 +603,21 @@ async def test_incident_helpers_and_jira_side_effects(monkeypatch):
         notes.append(("comment", kwargs))
 
     monkeypatch.setattr(
-        incidents_mod, "_resolve_incident_jira_credentials", lambda *_args: {"base_url": "https://jira"}
+        incidents_jira_mod, "_resolve_incident_jira_credentials", lambda *_args: {"base_url": "https://jira"}
     )
 
     def fake_run_async(coro):
         notes.append((coro.cr_code.co_name, None))
         coro.close()
 
-    monkeypatch.setattr(incidents_mod, "_run_async", fake_run_async)
-    monkeypatch.setattr(incidents_mod.jira_service, "transition_issue_to_todo", fake_transition_issue_to_todo)
-    monkeypatch.setattr(incidents_mod.jira_service, "add_comment", fake_add_comment)
+    monkeypatch.setattr(incidents_jira_mod, "_run_async", fake_run_async)
+    monkeypatch.setattr(incidents_jira_mod.jira_service, "transition_issue_to_todo", fake_transition_issue_to_todo)
+    monkeypatch.setattr(incidents_jira_mod.jira_service, "add_comment", fake_add_comment)
     jira_incident = SimpleNamespace(
         annotations={incidents_mod.INCIDENT_META_KEY: '{"jira_ticket_key":"ABC-1","jira_integration_id":"jira-1"}'},
     )
-    incidents_mod._move_reopened_incident_jira_ticket_to_todo("tenant", jira_incident)
-    incidents_mod._sync_reopened_incident_note_to_jira(
+    incidents_jira_mod._move_reopened_incident_jira_ticket_to_todo("tenant", jira_incident)
+    incidents_jira_mod._sync_reopened_incident_note_to_jira(
         "tenant",
         jira_incident,
         note_text="Reopened",
@@ -620,9 +626,9 @@ async def test_incident_helpers_and_jira_side_effects(monkeypatch):
     assert notes[0][0] == "fake_transition_issue_to_todo"
     assert notes[1][0] == "fake_add_comment"
 
-    monkeypatch.setattr(incidents_mod, "_resolve_incident_jira_credentials", lambda *_args: None)
-    incidents_mod._move_reopened_incident_jira_ticket_to_todo("tenant", jira_incident)
-    incidents_mod._sync_reopened_incident_note_to_jira(
+    monkeypatch.setattr(incidents_jira_mod, "_resolve_incident_jira_credentials", lambda *_args: None)
+    incidents_jira_mod._move_reopened_incident_jira_ticket_to_todo("tenant", jira_incident)
+    incidents_jira_mod._sync_reopened_incident_note_to_jira(
         "tenant",
         jira_incident,
         note_text="Ignored",
@@ -648,7 +654,7 @@ def test_incident_update_private_assignment_guard(monkeypatch):
             "inc-1",
             "tenant",
             "owner",
-            incidents_mod.AlertIncidentUpdateRequest(assignee="someone-else"),
+            AlertIncidentUpdateRequest(assignee="someone-else"),
             [],
         )
     assert exc.value.status_code == 403
@@ -663,13 +669,13 @@ def test_incident_storage_additional_edges(monkeypatch):
     alert_name_fallback_incident = SimpleNamespace(annotations={}, labels={}, alert_name="CPUHigh")
     assert incidents_mod.incident_key_from_db_row(alert_name_fallback_incident) == "rule:CPUHigh|scope:*"
 
-    monkeypatch.setattr(incidents_mod, "load_tenant_jira_integrations", lambda _tenant: [{"id": "other"}])
-    monkeypatch.setattr(incidents_mod, "get_effective_jira_credentials", lambda _tenant: {})
-    assert incidents_mod._resolve_incident_jira_credentials("tenant", "target") is None
+    monkeypatch.setattr(incidents_jira_mod, "load_tenant_jira_integrations", lambda _tenant: [{"id": "other"}])
+    monkeypatch.setattr(incidents_jira_mod, "get_effective_jira_credentials", lambda _tenant: {})
+    assert incidents_jira_mod._resolve_incident_jira_credentials("tenant", "target") is None
 
     no_ticket_incident = SimpleNamespace(annotations={incidents_mod.INCIDENT_META_KEY: "{}"})
-    incidents_mod._move_reopened_incident_jira_ticket_to_todo("tenant", no_ticket_incident)
-    incidents_mod._sync_reopened_incident_note_to_jira(
+    incidents_jira_mod._move_reopened_incident_jira_ticket_to_todo("tenant", no_ticket_incident)
+    incidents_jira_mod._sync_reopened_incident_note_to_jira(
         "tenant",
         no_ticket_incident,
         note_text="ignored",
@@ -713,7 +719,7 @@ def test_incident_storage_additional_edges(monkeypatch):
     sync_db = FakeDB([existing_incident], None, [managed_incident])
     monkeypatch.setattr(incidents_mod, "get_db_session", lambda: FakeCtx(sync_db))
     monkeypatch.setattr(incidents_mod, "ensure_tenant_exists", lambda *_args: None)
-    monkeypatch.setattr(incidents_mod, "_is_alert_suppressed", lambda _alert: False)
+    monkeypatch.setattr(incidents_sync_mod, "_is_alert_suppressed", lambda _alert: False)
 
     svc.sync_incidents_from_alerts(
         "tenant",

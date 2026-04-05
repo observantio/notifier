@@ -15,7 +15,7 @@ http://www.apache.org/licenses/LICENSE-2.0
 import logging
 import os
 from contextlib import contextmanager
-from typing import Callable, Generator, Iterator, Optional
+from typing import Generator, Iterator, Optional, Protocol
 
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import SQLAlchemyError
@@ -26,8 +26,17 @@ from db_models import Base
 
 logger = logging.getLogger(__name__)
 
+
+class _SessionFactory(Protocol):
+    def __call__(self) -> Session: ...
+
+
+def _new_session(factory: _SessionFactory) -> Session:
+    return factory()
+
+
 _ENGINE: Optional[Engine] = None
-_SESSION_LOCAL: Optional[Callable[[], Session]] = None
+_SESSION_LOCAL: Optional[_SessionFactory] = None
 
 
 def ensure_database_exists(database_url: str) -> None:
@@ -76,18 +85,17 @@ def init_database(
     return
 
 
-def _require_session_factory() -> Callable[[], Session]:
-    session_local = _SESSION_LOCAL
-    if not callable(session_local):
+def _require_session_factory() -> _SessionFactory:
+    if _SESSION_LOCAL is None:
         raise RuntimeError("Database not initialized. Call init_database() first.")
-    return session_local
+    return _SESSION_LOCAL
 
 
 @contextmanager
 def get_db_session() -> Iterator[Session]:
     if _ENGINE is None or _SESSION_LOCAL is None:
         raise RuntimeError("Database not initialized. Call init_database() first.")
-    session: Session = _require_session_factory()()
+    session: Session = _new_session(_require_session_factory())
     try:
         yield session
         session.commit()
@@ -101,7 +109,7 @@ def get_db_session() -> Iterator[Session]:
 def get_db() -> Generator[Session, None, None]:
     if _ENGINE is None or _SESSION_LOCAL is None:
         raise RuntimeError("Database not initialized. Call init_database() first.")
-    session: Session = _require_session_factory()()
+    session: Session = _new_session(_require_session_factory())
     try:
         yield session
         session.commit()

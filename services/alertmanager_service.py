@@ -11,8 +11,9 @@ http://www.apache.org/licenses/LICENSE-2.0
 
 import json
 import logging
+from collections.abc import Awaitable, Callable
 from hmac import compare_digest
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 import httpx
 
@@ -20,16 +21,14 @@ from fastapi import HTTPException, Request, status
 from sqlalchemy.exc import SQLAlchemyError
 
 from config import config
-from custom_types.json import JSONDict
 from database import get_db_session
 from db_models import PurgedSilence
 from middleware.dependencies import enforce_public_endpoint_security
 from middleware.resilience import with_retry, with_timeout
 from models.access.auth_models import TokenData
-from models.alerting.alerts import Alert, AlertGroup
-from models.alerting.receivers import AlertManagerStatus
+from models.alerting.alerts import Alert
 from models.alerting.rules import AlertRule
-from models.alerting.silences import Silence, SilenceCreate
+from models.alerting.silences import Silence
 from services.alerting.alerts_ops import (
     delete_alerts as delete_alerts_ops,
     evaluate_promql as evaluate_promql_ops,
@@ -72,10 +71,29 @@ from services.alerting.silences_ops import (
     update_silence as update_silence_ops,
 )
 from services.common.http_client import create_async_client
-from services.notification_service import NotificationService
-from services.storage_db_service import DatabaseStorageService
 
 logger = logging.getLogger(__name__)
+
+_AsyncOp = Callable[..., Awaitable[Any]]
+
+_ALERTMANAGER_ASYNC_OPS: dict[str, _AsyncOp] = {
+    "notify_for_alerts": notify_for_alerts_ops,
+    "list_metric_names": list_metric_names_ops,
+    "list_label_names": list_label_names_ops,
+    "list_label_values": list_label_values_ops,
+    "evaluate_promql": evaluate_promql_ops,
+    "sync_mimir_rules_for_org": sync_mimir_rules_for_org_ops,
+    "get_alert_groups": get_alert_groups_ops,
+    "post_alerts": post_alerts_ops,
+    "delete_alerts": delete_alerts_ops,
+    "get_silences": get_silences_ops,
+    "get_silence": get_silence_ops,
+    "create_silence": create_silence_ops,
+    "update_silence": update_silence_ops,
+    "prune_removed_member_group_silences": prune_removed_member_group_silences_ops,
+    "get_status": get_status_ops,
+    "get_receivers": get_receivers_ops,
+}
 
 LABELS_JSON_ERROR = "Invalid filter_labels JSON"
 MIMIR_RULES_NAMESPACE = "watchdog"
@@ -177,29 +195,15 @@ class AlertManagerService:
     def _extract_mimir_group_names(self, namespace_yaml: str) -> List[str]:
         return extract_mimir_group_names(namespace_yaml)
 
-    async def notify_for_alerts(
-        self,
-        tenant_id: str,
-        alerts_list: List[JSONDict],
-        storage_service: DatabaseStorageService,
-        notification_service: NotificationService,
-    ) -> None:
-        return await notify_for_alerts_ops(self, tenant_id, alerts_list, storage_service, notification_service)
+    def __getattr__(self, name: str) -> Any:
+        op = _ALERTMANAGER_ASYNC_OPS.get(name)
+        if op is None:
+            raise AttributeError(f"{type(self).__name__!r} object has no attribute {name!r}")
 
-    async def list_metric_names(self, org_id: str) -> List[str]:
-        return await list_metric_names_ops(self, org_id)
+        async def _async_bound(*args: object, **kwargs: object) -> Any:
+            return await op(self, *args, **kwargs)
 
-    async def list_label_names(self, org_id: str) -> List[str]:
-        return await list_label_names_ops(self, org_id)
-
-    async def list_label_values(self, org_id: str, label: str, metric_name: Optional[str] = None) -> List[str]:
-        return await list_label_values_ops(self, org_id, label, metric_name)
-
-    async def evaluate_promql(self, org_id: str, query: str, sample_limit: int = 5) -> JSONDict:
-        return await evaluate_promql_ops(self, org_id, query, sample_limit)
-
-    async def sync_mimir_rules_for_org(self, org_id: str, rules: List[AlertRule]) -> None:
-        return await sync_mimir_rules_for_org_ops(self, org_id, rules)
+        return _async_bound
 
     @with_retry()
     @with_timeout()
@@ -211,41 +215,6 @@ class AlertManagerService:
         inhibited: Optional[bool] = None,
     ) -> List[Alert]:
         return await get_alerts_ops(self, filter_labels, active, silenced, inhibited)
-
-    async def get_alert_groups(self, filter_labels: Optional[Dict[str, str]] = None) -> List[AlertGroup]:
-        return await get_alert_groups_ops(self, filter_labels)
-
-    async def post_alerts(self, alerts: List[Alert]) -> bool:
-        return await post_alerts_ops(self, alerts)
-
-    async def delete_alerts(self, filter_labels: Optional[Dict[str, str]] = None) -> bool:
-        return await delete_alerts_ops(self, filter_labels)
-
-    async def get_silences(self, filter_labels: Optional[Dict[str, str]] = None) -> List[Silence]:
-        return await get_silences_ops(self, filter_labels)
-
-    async def get_silence(self, silence_id: str) -> Optional[Silence]:
-        return await get_silence_ops(self, silence_id)
-
-    async def create_silence(self, silence: SilenceCreate) -> Optional[str]:
-        return await create_silence_ops(self, silence)
-
-    async def update_silence(self, silence_id: str, silence: SilenceCreate) -> Optional[str]:
-        return await update_silence_ops(self, silence_id, silence)
-
-    async def prune_removed_member_group_silences(
-        self,
-        *,
-        group_id: str,
-        removed_user_ids: Optional[List[str]] = None,
-        removed_usernames: Optional[List[str]] = None,
-    ) -> int:
-        return await prune_removed_member_group_silences_ops(
-            self,
-            group_id=group_id,
-            removed_user_ids=removed_user_ids,
-            removed_usernames=removed_usernames,
-        )
 
     async def delete_silence(self, silence_id: str) -> bool:
         if not await delete_silence_ops(self, silence_id):
@@ -259,9 +228,3 @@ class AlertManagerService:
         except SQLAlchemyError as exc:
             logger.warning("Failed to persist purged silence %s: %s", silence_id, exc)
         return True
-
-    async def get_status(self) -> Optional[AlertManagerStatus]:
-        return await get_status_ops(self)
-
-    async def get_receivers(self) -> List[str]:
-        return await get_receivers_ops(self)

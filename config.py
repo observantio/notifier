@@ -15,7 +15,7 @@ http://www.apache.org/licenses/LICENSE-2.0
 import importlib
 import logging
 import os
-from typing import Callable, List, Optional, cast
+from typing import Any, Callable, List, Optional, cast
 
 from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import serialization
@@ -149,8 +149,189 @@ def build_secret_provider() -> SecretProvider:
     )
 
 
+_CONFIG_EXAMPLE_DATABASE_URL = "postgresql://user:changeme123@localhost:5432/appdb"
+
+
+def _config_identity_block(app_env: str, is_production: bool) -> dict[str, Any]:
+    return {
+        "app_env": app_env,
+        "is_production": is_production,
+        "default_admin_email": os.getenv("DEFAULT_ADMIN_EMAIL", "admin@example.com"),
+        "default_admin_tenant": os.getenv("DEFAULT_ADMIN_TENANT", "default"),
+    }
+
+
+def _config_listen_block(is_production: bool) -> dict[str, Any]:
+    return {
+        "host": os.getenv("HOST", "127.0.0.1"),
+        "port": int(os.getenv("PORT", "4319")),
+        "log_level": os.getenv("LOG_LEVEL", "info"),
+        "enable_api_docs": _to_bool(os.getenv("ENABLE_API_DOCS"), default=not is_production),
+    }
+
+
+def _config_metrics_urls() -> dict[str, Any]:
+    return {
+        "alertmanager_url": os.getenv("ALERTMANAGER_URL", "http://alertmanager:9093"),
+        "mimir_url": os.getenv("MIMIR_URL", "http://mimir:9009"),
+    }
+
+
+def _config_resilience_block() -> dict[str, Any]:
+    return {
+        "default_timeout": float(os.getenv("DEFAULT_TIMEOUT", "30.0")),
+        "max_retries": int(os.getenv("MAX_RETRIES", "3")),
+        "retry_backoff": float(os.getenv("RETRY_BACKOFF", "1.0")),
+        "retry_max_backoff": float(os.getenv("RETRY_MAX_BACKOFF", "8.0")),
+        "retry_jitter": float(os.getenv("RETRY_JITTER", "0.1")),
+    }
+
+
+def _config_rate_limit_block() -> dict[str, Any]:
+    return {
+        "rate_limit_gc_every": int(os.getenv("RATE_LIMIT_GC_EVERY", "1000")),
+        "rate_limit_stale_after_seconds": int(os.getenv("RATE_LIMIT_STALE_AFTER_SECONDS", "300")),
+        "rate_limit_max_states": int(os.getenv("RATE_LIMIT_MAX_STATES", "10000")),
+        "rate_limit_fallback_mode": os.getenv("RATE_LIMIT_FALLBACK_MODE", "memory").strip().lower(),
+    }
+
+
+def _config_http_client_block() -> dict[str, Any]:
+    return {
+        "http_client_max_connections": int(os.getenv("HTTP_CLIENT_MAX_CONNECTIONS", "100")),
+        "http_client_max_keepalive_connections": int(os.getenv("HTTP_CLIENT_MAX_KEEPALIVE_CONNECTIONS", "40")),
+        "http_client_keepalive_expiry": float(os.getenv("HTTP_CLIENT_KEEPALIVE_EXPIRY", "30")),
+        "service_cache_ttl_seconds": int(os.getenv("SERVICE_CACHE_TTL_SECONDS", "60")),
+    }
+
+
+def _config_query_limits_block() -> dict[str, Any]:
+    return {
+        "max_query_limit": int(os.getenv("MAX_QUERY_LIMIT", "1000")),
+        "default_query_limit": int(os.getenv("DEFAULT_QUERY_LIMIT", "20")),
+    }
+
+
+def _config_request_limits_block() -> dict[str, Any]:
+    return {
+        "max_request_bytes": int(os.getenv("MAX_REQUEST_BYTES", "1048576")),
+        "max_concurrent_requests": int(os.getenv("MAX_CONCURRENT_REQUESTS", "200")),
+        "concurrency_acquire_timeout": float(os.getenv("CONCURRENCY_ACQUIRE_TIMEOUT", "1.0")),
+        "rate_limit_public_per_minute": int(os.getenv("RATE_LIMIT_PUBLIC_PER_MINUTE", "120")),
+    }
+
+
+def _config_proxy_and_allowlists(is_production: bool) -> dict[str, Any]:
+    return {
+        "trust_proxy_headers": _to_bool(os.getenv("TRUST_PROXY_HEADERS"), default=False),
+        "trusted_proxy_cidrs": _to_list(os.getenv("TRUSTED_PROXY_CIDRS"), default=[]),
+        "require_client_ip_for_public_endpoints": _to_bool(
+            os.getenv("REQUIRE_CLIENT_IP_FOR_PUBLIC_ENDPOINTS"), default=is_production
+        ),
+        "allowlist_fail_open": _to_bool(os.getenv("ALLOWLIST_FAIL_OPEN"), default=False),
+        "auth_public_ip_allowlist": os.getenv("AUTH_PUBLIC_IP_ALLOWLIST"),
+        "webhook_ip_allowlist": os.getenv("WEBHOOK_IP_ALLOWLIST"),
+        "grafana_proxy_ip_allowlist": os.getenv("GRAFANA_PROXY_IP_ALLOWLIST"),
+    }
+
+
+def _config_tokens_block() -> dict[str, Any]:
+    return {
+        "inbound_webhook_token": os.getenv("INBOUND_WEBHOOK_TOKEN"),
+        "gateway_internal_service_token": os.getenv("GATEWAY_INTERNAL_SERVICE_TOKEN"),
+        "notifier_expected_service_token": os.getenv("NOTIFIER_EXPECTED_SERVICE_TOKEN"),
+        "notifier_context_verify_key": os.getenv("NOTIFIER_CONTEXT_VERIFY_KEY"),
+        "notifier_context_signing_key": os.getenv("NOTIFIER_CONTEXT_SIGNING_KEY"),
+    }
+
+
+def _config_notifier_context_block() -> dict[str, Any]:
+    ctx_algo = (
+        (os.getenv("NOTIFIER_CONTEXT_ALGORITHM") or os.getenv("NOTIFIER_CONTEXT_ALGORITHMS") or "HS256")
+        .strip()
+        .upper()
+    )
+    return {
+        "notifier_context_issuer": os.getenv("NOTIFIER_CONTEXT_ISSUER", "watchdog-main"),
+        "notifier_context_audience": os.getenv("NOTIFIER_CONTEXT_AUDIENCE", "notifier"),
+        "notifier_context_algorithm": ctx_algo,
+        "notifier_context_algorithms": ctx_algo,
+        "notifier_context_replay_ttl_seconds": int(os.getenv("NOTIFIER_CONTEXT_REPLAY_TTL_SECONDS", "180")),
+        "notifier_tls_enabled": _to_bool(os.getenv("NOTIFIER_TLS_ENABLED"), default=False),
+    }
+
+
+def _config_org_and_jwt_block(is_production: bool) -> dict[str, Any]:
+    return {
+        "default_org_id": os.getenv("DEFAULT_ORG_ID", "default"),
+        "jwt_algorithm": os.getenv("JWT_ALGORITHM", "RS256").strip().upper(),
+        "jwt_secret_key": os.getenv("JWT_SECRET_KEY"),
+        "jwt_private_key": os.getenv("JWT_PRIVATE_KEY"),
+        "jwt_public_key": os.getenv("JWT_PUBLIC_KEY"),
+        "jwt_auto_generate_keys": _to_bool(os.getenv("JWT_AUTO_GENERATE_KEYS"), default=not is_production),
+    }
+
+
+def _config_cors_block() -> dict[str, Any]:
+    return {
+        "cors_origins": _to_list(os.getenv("CORS_ORIGINS"), default=["http://localhost:3000"]),
+        "cors_allow_credentials": _to_bool(os.getenv("CORS_ALLOW_CREDENTIALS"), default=True),
+    }
+
+
+def _config_vault_env_block(is_production: bool) -> dict[str, Any]:
+    return {
+        "vault_enabled": _to_bool(os.getenv("VAULT_ENABLED"), default=False),
+        "vault_addr": os.getenv("VAULT_ADDR"),
+        "vault_token": os.getenv("VAULT_TOKEN"),
+        "vault_role_id": os.getenv("VAULT_ROLE_ID"),
+        "vault_secret_id": os.getenv("VAULT_SECRET_ID"),
+        "vault_secret_id_file": os.getenv("VAULT_SECRET_ID_FILE"),
+        "vault_cacert": os.getenv("VAULT_CACERT"),
+        "vault_secrets_prefix": os.getenv("VAULT_SECRETS_PREFIX", "secret"),
+        "vault_kv_version": int(os.getenv("VAULT_KV_VERSION", "2")),
+        "vault_timeout": float(os.getenv("VAULT_TIMEOUT", "2.0")),
+        "vault_cache_ttl": float(os.getenv("VAULT_CACHE_TTL", "30.0")),
+        "vault_fail_on_missing": _to_bool(os.getenv("VAULT_FAIL_ON_MISSING"), default=is_production),
+    }
+
+
+def _config_notification_channels_block() -> dict[str, Any]:
+    raw_types = os.getenv("ENABLED_NOTIFICATION_CHANNEL_TYPES", "email,slack,teams,webhook,pagerduty")
+    return {
+        "default_rule_group": os.getenv("DEFAULT_RULE_GROUP", "BENOTFIED"),
+        "enabled_notification_channel_types": [t.strip().lower() for t in raw_types.split(",") if t.strip()],
+    }
+
+
+def _build_config_values() -> dict[str, Any]:
+    app_env = _env_name()
+    is_production = _is_production_env()
+    database_url = os.getenv("DATABASE_URL", _CONFIG_EXAMPLE_DATABASE_URL)
+    values: dict[str, Any] = {}
+    values.update(_config_identity_block(app_env, is_production))
+    values.update(_config_listen_block(is_production))
+    values.update(_config_metrics_urls())
+    values["database_url"] = database_url
+    values["notifier_database_url"] = os.getenv("NOTIFIER_DATABASE_URL", database_url)
+    values["data_encryption_key"] = os.getenv("DATA_ENCRYPTION_KEY")
+    values.update(_config_resilience_block())
+    values.update(_config_rate_limit_block())
+    values.update(_config_http_client_block())
+    values.update(_config_query_limits_block())
+    values.update(_config_request_limits_block())
+    values.update(_config_proxy_and_allowlists(is_production))
+    values.update(_config_tokens_block())
+    values.update(_config_notifier_context_block())
+    values.update(_config_org_and_jwt_block(is_production))
+    values.update(_config_cors_block())
+    values.update(_config_vault_env_block(is_production))
+    values.update(_config_notification_channels_block())
+    return values
+
+
 class Config:
-    EXAMPLE_DATABASE_URL: str = "postgresql://user:changeme123@localhost:5432/appdb"
+    EXAMPLE_DATABASE_URL: str = _CONFIG_EXAMPLE_DATABASE_URL
     ALLOWED_JWT_ALGORITHMS: frozenset[str] = frozenset({"RS256", "ES256"})
     ALLOWED_CONTEXT_ALGORITHMS: frozenset[str] = frozenset({"HS256", "HS512", "RS256", "ES256"})
     example_database_url: str = EXAMPLE_DATABASE_URL
@@ -173,101 +354,8 @@ class Config:
     vault_secret_keys: tuple[str, ...] = VAULT_SECRET_KEYS
 
     def __init__(self) -> None:
-        self.app_env: str = _env_name()
-        self.is_production: bool = _is_production_env()
-        self.default_admin_email: str = os.getenv("DEFAULT_ADMIN_EMAIL", "admin@example.com")
-        self.default_admin_tenant = os.getenv("DEFAULT_ADMIN_TENANT", "default")
-
-        self.host: str = os.getenv("HOST", "127.0.0.1")
-        self.port: int = int(os.getenv("PORT", "4319"))
-        self.log_level: str = os.getenv("LOG_LEVEL", "info")
-        self.enable_api_docs: bool = _to_bool(os.getenv("ENABLE_API_DOCS"), default=not self.is_production)
-
-        self.alertmanager_url: str = os.getenv("ALERTMANAGER_URL", "http://alertmanager:9093")
-        self.mimir_url: str = os.getenv("MIMIR_URL", "http://mimir:9009")
-
-        self.database_url: str = os.getenv("DATABASE_URL", self.example_database_url)
-        self.notifier_database_url: str = os.getenv("NOTIFIER_DATABASE_URL", self.database_url)
-
-        self.data_encryption_key: Optional[str] = os.getenv("DATA_ENCRYPTION_KEY")
-
-        self.default_timeout: float = float(os.getenv("DEFAULT_TIMEOUT", "30.0"))
-        self.max_retries: int = int(os.getenv("MAX_RETRIES", "3"))
-        self.retry_backoff: float = float(os.getenv("RETRY_BACKOFF", "1.0"))
-        self.retry_max_backoff: float = float(os.getenv("RETRY_MAX_BACKOFF", "8.0"))
-        self.retry_jitter: float = float(os.getenv("RETRY_JITTER", "0.1"))
-
-        self.rate_limit_gc_every = int(os.getenv("RATE_LIMIT_GC_EVERY", "1000"))
-        self.rate_limit_stale_after_seconds: int = int(os.getenv("RATE_LIMIT_STALE_AFTER_SECONDS", "300"))
-        self.rate_limit_max_states: int = int(os.getenv("RATE_LIMIT_MAX_STATES", "10000"))
-        self.rate_limit_fallback_mode: str = os.getenv("RATE_LIMIT_FALLBACK_MODE", "memory").strip().lower()
-
-        self.http_client_max_connections: int = int(os.getenv("HTTP_CLIENT_MAX_CONNECTIONS", "100"))
-        self.http_client_max_keepalive_connections: int = int(os.getenv("HTTP_CLIENT_MAX_KEEPALIVE_CONNECTIONS", "40"))
-        self.http_client_keepalive_expiry: float = float(os.getenv("HTTP_CLIENT_KEEPALIVE_EXPIRY", "30"))
-        self.service_cache_ttl_seconds: int = int(os.getenv("SERVICE_CACHE_TTL_SECONDS", "60"))
-
-        self.max_query_limit: int = int(os.getenv("MAX_QUERY_LIMIT", "1000"))
-        self.default_query_limit: int = int(os.getenv("DEFAULT_QUERY_LIMIT", "20"))
-
-        self.max_request_bytes: int = int(os.getenv("MAX_REQUEST_BYTES", "1048576"))
-        self.max_concurrent_requests: int = int(os.getenv("MAX_CONCURRENT_REQUESTS", "200"))
-        self.concurrency_acquire_timeout: float = float(os.getenv("CONCURRENCY_ACQUIRE_TIMEOUT", "1.0"))
-
-        self.rate_limit_public_per_minute: int = int(os.getenv("RATE_LIMIT_PUBLIC_PER_MINUTE", "120"))
-
-        self.trust_proxy_headers: bool = _to_bool(os.getenv("TRUST_PROXY_HEADERS"), default=False)
-        self.trusted_proxy_cidrs: List[str] = _to_list(os.getenv("TRUSTED_PROXY_CIDRS"), default=[])
-        self.require_client_ip_for_public_endpoints: bool = _to_bool(
-            os.getenv("REQUIRE_CLIENT_IP_FOR_PUBLIC_ENDPOINTS"), default=self.is_production
-        )
-        self.allowlist_fail_open: bool = _to_bool(os.getenv("ALLOWLIST_FAIL_OPEN"), default=False)
-
-        self.auth_public_ip_allowlist: Optional[str] = os.getenv("AUTH_PUBLIC_IP_ALLOWLIST")
-        self.webhook_ip_allowlist: Optional[str] = os.getenv("WEBHOOK_IP_ALLOWLIST")
-        self.grafana_proxy_ip_allowlist: Optional[str] = os.getenv("GRAFANA_PROXY_IP_ALLOWLIST")
-        self.inbound_webhook_token: Optional[str] = os.getenv("INBOUND_WEBHOOK_TOKEN")
-        self.gateway_internal_service_token: Optional[str] = os.getenv("GATEWAY_INTERNAL_SERVICE_TOKEN")
-        self.notifier_expected_service_token: Optional[str] = os.getenv("NOTIFIER_EXPECTED_SERVICE_TOKEN")
-        self.notifier_context_verify_key: Optional[str] = os.getenv("NOTIFIER_CONTEXT_VERIFY_KEY")
-        self.notifier_context_signing_key: Optional[str] = os.getenv("NOTIFIER_CONTEXT_SIGNING_KEY")
-        self.notifier_context_issuer: str = os.getenv("NOTIFIER_CONTEXT_ISSUER", "watchdog-main")
-        self.notifier_context_audience: str = os.getenv("NOTIFIER_CONTEXT_AUDIENCE", "notifier")
-        self.notifier_context_algorithm: str = (
-            (os.getenv("NOTIFIER_CONTEXT_ALGORITHM") or os.getenv("NOTIFIER_CONTEXT_ALGORITHMS") or "HS256")
-            .strip()
-            .upper()
-        )
-        self.notifier_context_algorithms: str = self.notifier_context_algorithm
-        self.notifier_context_replay_ttl_seconds: int = int(os.getenv("NOTIFIER_CONTEXT_REPLAY_TTL_SECONDS", "180"))
-        self.notifier_tls_enabled: bool = _to_bool(os.getenv("NOTIFIER_TLS_ENABLED"), default=False)
-
-        self.default_org_id: str = os.getenv("DEFAULT_ORG_ID", "default")
-
-        self.jwt_algorithm: str = os.getenv("JWT_ALGORITHM", "RS256").strip().upper()
-        self.jwt_secret_key: Optional[str] = os.getenv("JWT_SECRET_KEY")
-        self.jwt_private_key: Optional[str] = os.getenv("JWT_PRIVATE_KEY")
-        self.jwt_public_key: Optional[str] = os.getenv("JWT_PUBLIC_KEY")
-        self.jwt_auto_generate_keys: bool = _to_bool(
-            os.getenv("JWT_AUTO_GENERATE_KEYS"), default=not self.is_production
-        )
-
-        self.cors_origins: List[str] = _to_list(os.getenv("CORS_ORIGINS"), default=["http://localhost:3000"])
-        self.cors_allow_credentials: bool = _to_bool(os.getenv("CORS_ALLOW_CREDENTIALS"), default=True)
-
-        self.vault_enabled: bool = _to_bool(os.getenv("VAULT_ENABLED"), default=False)
-        self.vault_addr: Optional[str] = os.getenv("VAULT_ADDR")
-        self.vault_token: Optional[str] = os.getenv("VAULT_TOKEN")
-        self.vault_role_id: Optional[str] = os.getenv("VAULT_ROLE_ID")
-        self.vault_secret_id: Optional[str] = os.getenv("VAULT_SECRET_ID")
-        self.vault_secret_id_file: Optional[str] = os.getenv("VAULT_SECRET_ID_FILE")
-        self.vault_cacert: Optional[str] = os.getenv("VAULT_CACERT")
-        self.vault_secrets_prefix: str = os.getenv("VAULT_SECRETS_PREFIX", "secret")
-        self.vault_kv_version: int = int(os.getenv("VAULT_KV_VERSION", "2"))
-        self.vault_timeout: float = float(os.getenv("VAULT_TIMEOUT", "2.0"))
-        self.vault_cache_ttl: float = float(os.getenv("VAULT_CACHE_TTL", "30.0"))
-        self.vault_fail_on_missing: bool = _to_bool(os.getenv("VAULT_FAIL_ON_MISSING"), default=self.is_production)
-
+        object.__setattr__(self, "_secret_provider", None)
+        object.__setattr__(self, "_values", _build_config_values())
         try:
             self._load_vault_secrets()
         except (OSError, RuntimeError, TypeError, ValueError) as exc:
@@ -275,18 +363,32 @@ class Config:
                 raise
             logger.warning("Vault not available or misconfigured; continuing with environment variables: %s", exc)
 
-        if not hasattr(self, "_secret_provider") or self._secret_provider is None:
-            self._secret_provider: SecretProvider = EnvSecretProvider()
-
-        self.default_rule_group: str = os.getenv("DEFAULT_RULE_GROUP", "BENOTFIED")
-        self.enabled_notification_channel_types: List[str] = [
-            t.strip().lower()
-            for t in os.getenv("ENABLED_NOTIFICATION_CHANNEL_TYPES", "email,slack,teams,webhook,pagerduty").split(",")
-            if t.strip()
-        ]
+        if object.__getattribute__(self, "_secret_provider") is None:
+            object.__setattr__(self, "_secret_provider", EnvSecretProvider())
 
         self._apply_security_defaults()
         self.validate()
+
+    def __getattr__(self, name: str) -> Any:
+        vals = object.__getattribute__(self, "_values")
+        try:
+            return vals[name]
+        except KeyError:
+            raise AttributeError(name) from None
+
+    def __setattr__(self, name: str, value: object) -> None:
+        if name in ("_secret_provider", "_values"):
+            object.__setattr__(self, name, value)
+            return
+        try:
+            vals = object.__getattribute__(self, "_values")
+        except AttributeError:
+            object.__setattr__(self, name, value)
+            return
+        if name in vals:
+            vals[name] = value
+            return
+        object.__setattr__(self, name, value)
 
     def _load_vault_secrets(self) -> None:
         if not self.vault_enabled:
@@ -308,28 +410,34 @@ class Config:
                     "VAULT_ROLE_ID set but neither VAULT_SECRET_ID nor VAULT_SECRET_ID_FILE provided"
                 )
 
-        self._secret_provider = cast(
-            SecretProvider,
-            vault_mod.VaultSecretProvider(
-                address=self.vault_addr,
-                token=self.vault_token,
-                role_id=self.vault_role_id,
-                secret_id_fn=secret_id_fn,
-                prefix=self.vault_secrets_prefix,
-                kv_version=self.vault_kv_version,
-                timeout=self.vault_timeout,
-                cacert=self.vault_cacert,
-                cache_ttl=self.vault_cache_ttl,
+        object.__setattr__(
+            self,
+            "_secret_provider",
+            cast(
+                SecretProvider,
+                vault_mod.VaultSecretProvider(
+                    address=self.vault_addr,
+                    token=self.vault_token,
+                    role_id=self.vault_role_id,
+                    secret_id_fn=secret_id_fn,
+                    prefix=self.vault_secrets_prefix,
+                    kv_version=self.vault_kv_version,
+                    timeout=self.vault_timeout,
+                    cacert=self.vault_cacert,
+                    cache_ttl=self.vault_cache_ttl,
+                ),
             ),
         )
 
+        vals = object.__getattribute__(self, "_values")
+        provider = object.__getattribute__(self, "_secret_provider")
         for key in self.vault_secret_keys:
             try:
-                val = self._secret_provider.get(key)
+                val = provider.get(key)
             except (OSError, RuntimeError, TypeError, ValueError):
                 val = None
             if val:
-                setattr(self, key.lower(), val)
+                vals[key.lower()] = val
                 logger.info("Loaded secret %s from Vault", key)
 
     def get_secret(self, key: str) -> Optional[str]:
@@ -337,12 +445,15 @@ class Config:
         if isinstance(val, str) and val:
             return val
         try:
-            return self._secret_provider.get(key)
+            return cast(Optional[str], object.__getattribute__(self, "_secret_provider").get(key))
         except (OSError, RuntimeError, TypeError, ValueError):
             return None
 
     def _apply_security_defaults(self) -> None:
-        if self.jwt_algorithm in self.allowed_jwt_algorithms and (not self.jwt_private_key or not self.jwt_public_key):
+        vals = object.__getattribute__(self, "_values")
+        if self.jwt_algorithm in self.allowed_jwt_algorithms and (
+            not vals.get("jwt_private_key") or not vals.get("jwt_public_key")
+        ):
             if self.jwt_auto_generate_keys and not self.is_production:
                 if self.jwt_algorithm == "RS256":
                     private_key, public_key = _generate_rsa_keypair()
@@ -350,8 +461,8 @@ class Config:
                     private_key, public_key = _generate_ec_keypair()
                 else:
                     raise ValueError("Unsupported JWT_ALGORITHM for auto key generation")
-                self.jwt_private_key = private_key
-                self.jwt_public_key = public_key
+                vals["jwt_private_key"] = private_key
+                vals["jwt_public_key"] = public_key
                 logger.warning(
                     "Generated ephemeral JWT keypair for %s. Persist JWT_PRIVATE_KEY and JWT_PUBLIC_KEY "
                     "in a secret manager to avoid token invalidation on restart.",

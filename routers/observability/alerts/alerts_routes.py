@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import List, Optional, cast
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from fastapi.concurrency import run_in_threadpool
@@ -86,8 +86,11 @@ async def list_alert_groups(
     current_user: TokenData = Depends(require_permission_with_scope(Permission.READ_ALERTS, "alertmanager")),
 ) -> List[AlertGroup]:
     _ = current_user
-    return await alertmanager_service.get_alert_groups(
-        filter_labels=alertmanager_service.parse_filter_labels(filter_labels)
+    return cast(
+        List[AlertGroup],
+        await alertmanager_service.get_alert_groups(
+            filter_labels=alertmanager_service.parse_filter_labels(filter_labels)
+        ),
     )
 
 

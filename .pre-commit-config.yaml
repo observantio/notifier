@@ -4,7 +4,14 @@ repos:
       - id: notifier-unit-tests
         name: Notifier unit tests
         language: system
-        entry: bash -lc 'python -m pytest -q'
+        entry: >-
+          bash -lc 'R="$(git rev-parse --show-toplevel 2>/dev/null || echo "$PWD")";
+          cd "$R" || exit 1;
+          P=""; for c in "$PWD/.venv/bin/python" "$PWD/venv/bin/python" "$(command -v python3)" "$(command -v python)"; do
+          [[ -n "$c" && -x "$c" ]] || continue;
+          "$c" -c "import pytest" 2>/dev/null && { P="$c"; break; }; done;
+          [[ -n "$P" ]] || { echo "error: no Python with pytest; use .venv and pip install -e .[dev]" >&2; exit 1; };
+          "$P" -m pytest -q'
         pass_filenames: false
         files: \.py$
         exclude: (^|/)tests/
@@ -14,20 +21,14 @@ repos:
         name: Notifier mypy
         language: system
         entry: >-
-          bash -lc 'APP_ENV=development
-          ENVIRONMENT=development
-          DATABASE_URL=postgresql://ci_user:ci_password_123@localhost:5432/watchdog
-          NOTIFIER_DATABASE_URL=postgresql://ci_user:ci_password_123@localhost:5432/notifier
-          CORS_ORIGINS=http://localhost:3000
-          CORS_ALLOW_CREDENTIALS=true
-          JWT_AUTO_GENERATE_KEYS=true
-          GATEWAY_INTERNAL_SERVICE_TOKEN=ci_gateway_internal_service_token_123456789
-          NOTIFIER_EXPECTED_SERVICE_TOKEN=ci_notifier_expected_service_token_123456789
-          NOTIFIER_CONTEXT_VERIFY_KEY=ci_notifier_context_verify_key_12345678901234567890
-          NOTIFIER_CONTEXT_SIGNING_KEY=ci_notifier_context_signing_key_12345678901234567890
-          INBOUND_WEBHOOK_TOKEN=ci_inbound_webhook_token_123456789
-          PYTHONPATH=$PWD
-          mypy --config-file "$PWD/pyproject.toml" "$@"' --
+          bash -lc 'R="$(git rev-parse --show-toplevel 2>/dev/null || echo "$PWD")";
+          cd "$R" || exit 1;
+          P=""; for c in "$PWD/.venv/bin/python" "$PWD/venv/bin/python" "$(command -v python3)" "$(command -v python)"; do
+          [[ -n "$c" && -x "$c" ]] || continue;
+          "$c" -c "import mypy, cryptography, httpx, fastapi, sqlalchemy" 2>/dev/null && { P="$c"; break; }; done;
+          [[ -n "$P" ]] || { echo "error: no Python with mypy + notifier deps; pip install -e .[dev] in notifier/" >&2; exit 1; };
+          APP_ENV=development ENVIRONMENT=development DATABASE_URL=postgresql://ci_user:ci_password_123@localhost:5432/watchdog NOTIFIER_DATABASE_URL=postgresql://ci_user:ci_password_123@localhost:5432/notifier CORS_ORIGINS=http://localhost:3000 CORS_ALLOW_CREDENTIALS=true JWT_AUTO_GENERATE_KEYS=true GATEWAY_INTERNAL_SERVICE_TOKEN=ci_gateway_internal_service_token_123456789 NOTIFIER_EXPECTED_SERVICE_TOKEN=ci_notifier_expected_service_token_123456789 NOTIFIER_CONTEXT_VERIFY_KEY=ci_notifier_context_verify_key_12345678901234567890 NOTIFIER_CONTEXT_SIGNING_KEY=ci_notifier_context_signing_key_12345678901234567890 INBOUND_WEBHOOK_TOKEN=ci_inbound_webhook_token_123456789 PYTHONPATH="$PWD" "$P" -m mypy --python-executable "$P" --cache-dir /tmp/notifier-mypy-cache --config-file "$PWD/pyproject.toml" .'
+        pass_filenames: false
         files: \.py$
         exclude: (^|/)tests/
         types: [python]
@@ -36,20 +37,14 @@ repos:
         name: Notifier pylint
         language: system
         entry: >-
-          bash -lc 'APP_ENV=development
-          ENVIRONMENT=development
-          DATABASE_URL=postgresql://ci_user:ci_password_123@localhost:5432/watchdog
-          NOTIFIER_DATABASE_URL=postgresql://ci_user:ci_password_123@localhost:5432/notifier
-          CORS_ORIGINS=http://localhost:3000
-          CORS_ALLOW_CREDENTIALS=true
-          JWT_AUTO_GENERATE_KEYS=true
-          GATEWAY_INTERNAL_SERVICE_TOKEN=ci_gateway_internal_service_token_123456789
-          NOTIFIER_EXPECTED_SERVICE_TOKEN=ci_notifier_expected_service_token_123456789
-          NOTIFIER_CONTEXT_VERIFY_KEY=ci_notifier_context_verify_key_12345678901234567890
-          NOTIFIER_CONTEXT_SIGNING_KEY=ci_notifier_context_signing_key_12345678901234567890
-          INBOUND_WEBHOOK_TOKEN=ci_inbound_webhook_token_123456789
-          PYTHONPATH=$PWD
-          pylint --rcfile "$PWD/pyproject.toml" "$@"' --
+          bash -lc 'R="$(git rev-parse --show-toplevel 2>/dev/null || echo "$PWD")";
+          cd "$R" || exit 1;
+          P=""; for c in "$PWD/.venv/bin/python" "$PWD/venv/bin/python" "$(command -v python3)" "$(command -v python)"; do
+          [[ -n "$c" && -x "$c" ]] || continue;
+          "$c" -c "import pylint, cryptography, httpx, fastapi, sqlalchemy" 2>/dev/null && { P="$c"; break; }; done;
+          [[ -n "$P" ]] || { echo "error: no Python with pylint + notifier deps; pip install -e .[dev] in notifier/" >&2; exit 1; };
+          APP_ENV=development ENVIRONMENT=development DATABASE_URL=postgresql://ci_user:ci_password_123@localhost:5432/watchdog NOTIFIER_DATABASE_URL=postgresql://ci_user:ci_password_123@localhost:5432/notifier CORS_ORIGINS=http://localhost:3000 CORS_ALLOW_CREDENTIALS=true JWT_AUTO_GENERATE_KEYS=true GATEWAY_INTERNAL_SERVICE_TOKEN=ci_gateway_internal_service_token_123456789 NOTIFIER_EXPECTED_SERVICE_TOKEN=ci_notifier_expected_service_token_123456789 NOTIFIER_CONTEXT_VERIFY_KEY=ci_notifier_context_verify_key_12345678901234567890 NOTIFIER_CONTEXT_SIGNING_KEY=ci_notifier_context_signing_key_12345678901234567890 INBOUND_WEBHOOK_TOKEN=ci_inbound_webhook_token_123456789 PYTHONPATH="$PWD" "$P" -m pylint --rcfile "$PWD/pyproject.toml" notifier'
+        pass_filenames: false
         files: \.py$
         exclude: (^|/)tests/
         types: [python]
