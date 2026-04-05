@@ -79,20 +79,6 @@ exclude = [
   "^(tests/|build/|dist/|venv/|\\.venv/|__pycache__/|migrations/)",
 ]
 
-[[tool.mypy.overrides]]
-module = ["tests.*"]
-disallow_untyped_defs = false
-disallow_incomplete_defs = false
-check_untyped_defs = true
-
-[[tool.mypy.overrides]]
-module = ["*.migrations.*"]
-ignore_errors = true
-
-[[tool.mypy.overrides]]
-module = ["requests.*", "setuptools.*"]
-ignore_missing_imports = true
-
 [tool.pylint.main]
 jobs = 1
 extension-pkg-allow-list = ["sqlalchemy"]
