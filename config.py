@@ -12,6 +12,7 @@ License. You may obtain a copy of the License at
 http://www.apache.org/licenses/LICENSE-2.0
 """
 
+import importlib
 import logging
 import os
 from typing import Callable, List, Optional
@@ -114,7 +115,7 @@ def build_secret_provider() -> SecretProvider:
     if not vault_addr:
         return EnvSecretProvider()
 
-    from services.secrets.vault_client import VaultClientError, VaultSecretProvider
+    vault_mod = importlib.import_module("services.secrets.vault_client")
 
     token = os.getenv("VAULT_TOKEN", "").strip() or None
     role_id = os.getenv("VAULT_ROLE_ID", "").strip() or None
@@ -128,9 +129,11 @@ def build_secret_provider() -> SecretProvider:
         elif secret_id:
             secret_id_fn = _literal_secret_callback(secret_id)
         else:
-            raise VaultClientError("VAULT_ROLE_ID set but neither VAULT_SECRET_ID nor VAULT_SECRET_ID_FILE provided")
+            raise vault_mod.VaultClientError(
+                "VAULT_ROLE_ID set but neither VAULT_SECRET_ID nor VAULT_SECRET_ID_FILE provided"
+            )
 
-    return VaultSecretProvider(
+    return vault_mod.VaultSecretProvider(
         address=vault_addr,
         token=token,
         role_id=role_id,
@@ -286,7 +289,7 @@ class Config:
         if not self.vault_enabled:
             return
 
-        from services.secrets.vault_client import VaultClientError, VaultSecretProvider
+        vault_mod = importlib.import_module("services.secrets.vault_client")
 
         if not self.vault_addr:
             raise ValueError("VAULT_ADDR must be set when VAULT_ENABLED=true")
@@ -298,11 +301,11 @@ class Config:
             elif self.vault_secret_id:
                 secret_id_fn = _literal_secret_callback(self.vault_secret_id)
             else:
-                raise VaultClientError(
+                raise vault_mod.VaultClientError(
                     "VAULT_ROLE_ID set but neither VAULT_SECRET_ID nor VAULT_SECRET_ID_FILE provided"
                 )
 
-        provider = VaultSecretProvider(
+        provider = vault_mod.VaultSecretProvider(
             address=self.vault_addr,
             token=self.vault_token,
             role_id=self.vault_role_id,
