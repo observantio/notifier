@@ -325,7 +325,7 @@ class Config:
 
         for key in self.vault_secret_keys:
             try:
-                val = provider.get(key)
+                val = self._secret_provider.get(key)
             except (OSError, RuntimeError, TypeError, ValueError):
                 val = None
             if val:
