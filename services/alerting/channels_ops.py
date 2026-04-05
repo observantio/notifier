@@ -159,7 +159,7 @@ async def notify_for_alerts(
 
 async def get_status(service: AlertManagerService) -> AlertManagerStatus | None:
     try:
-        response = await service._client.get(f"{service.alertmanager_url}/api/v2/status")
+        response = await service.alertmanager_http_client.get(f"{service.alertmanager_url}/api/v2/status")
         response.raise_for_status()
         return AlertManagerStatus.model_validate(response.json())
     except (httpx.HTTPError, TypeError, ValueError) as exc:

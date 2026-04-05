@@ -159,7 +159,7 @@ async def test_get_silences_get_single_create_and_update(monkeypatch):
         ],
         post_payload={"silenceID": "new-id"},
     )
-    service = SimpleNamespace(_client=client, alertmanager_url="https://am")
+    service = SimpleNamespace(alertmanager_http_client=client, alertmanager_url="https://am")
     monkeypatch.setattr(sil_mod, "get_db_session", lambda: _Ctx(_DB([SimpleNamespace(id="purged")])))
 
     silences = await sil_mod.get_silences(service, filter_labels={"severity": "critical"})
@@ -217,13 +217,13 @@ async def test_get_silences_get_single_create_and_update(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_silence_error_and_delete_paths(monkeypatch):
-    service = SimpleNamespace(_client=_Client(get_payload=[]), alertmanager_url="https://am")
-    service._client.get_error = httpx.RequestError("boom", request=httpx.Request("GET", "https://am"))
+    service = SimpleNamespace(alertmanager_http_client=_Client(get_payload=[]), alertmanager_url="https://am")
+    service.alertmanager_http_client.get_error = httpx.RequestError("boom", request=httpx.Request("GET", "https://am"))
     monkeypatch.setattr(sil_mod, "get_db_session", lambda: _Ctx(_DB([], error=SQLAlchemyError("db"))))
     assert await sil_mod.get_silences(service) == []
     assert await sil_mod.get_silence(service, "missing") is None
 
-    service = SimpleNamespace(_client=_Client(get_payload=[], delete_status=200), alertmanager_url="https://am")
+    service = SimpleNamespace(alertmanager_http_client=_Client(get_payload=[], delete_status=200), alertmanager_url="https://am")
 
     states = iter(
         [

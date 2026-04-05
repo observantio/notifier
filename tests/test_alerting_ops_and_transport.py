@@ -60,8 +60,8 @@ def _current_user(**kwargs) -> TokenData:
 @pytest.mark.asyncio
 async def test_alerts_ops_cover_success_and_failure_branches(monkeypatch):
     service = SimpleNamespace(
-        _mimir_client=SimpleNamespace(),
-        _client=SimpleNamespace(),
+        mimir_http_client=SimpleNamespace(),
+        alertmanager_http_client=SimpleNamespace(),
         alertmanager_url="https://alertmanager",
         logger=SimpleNamespace(error=lambda *_args, **_kwargs: None, warning=lambda *_args, **_kwargs: None),
     )
@@ -69,13 +69,13 @@ async def test_alerts_ops_cover_success_and_failure_branches(monkeypatch):
     async def fake_mimir_get(*_args, **_kwargs):
         return FakeResponse(payload={"status": "success", "data": ["up", "http_requests_total"]})
 
-    monkeypatch.setattr(service._mimir_client, "get", fake_mimir_get, raising=False)
+    monkeypatch.setattr(service.mimir_http_client, "get", fake_mimir_get, raising=False)
     assert await alerts_ops.list_metric_names(service, "org-1") == ["up", "http_requests_total"]
 
     async def fake_mimir_get_bad(*_args, **_kwargs):
         return FakeResponse(payload={"status": "error"})
 
-    monkeypatch.setattr(service._mimir_client, "get", fake_mimir_get_bad, raising=False)
+    monkeypatch.setattr(service.mimir_http_client, "get", fake_mimir_get_bad, raising=False)
     with pytest.raises(httpx.HTTPStatusError):
         await alerts_ops.list_metric_names(service, "org-1")
 
@@ -93,21 +93,21 @@ async def test_alerts_ops_cover_success_and_failure_branches(monkeypatch):
             ]
         )
 
-    monkeypatch.setattr(service._client, "get", fake_alert_get, raising=False)
+    monkeypatch.setattr(service.alertmanager_http_client, "get", fake_alert_get, raising=False)
     alerts = await alerts_ops.get_alerts(service, {"service": "api"}, active=True, silenced=False, inhibited=False)
     assert alerts[0].labels["alertname"] == "CPUHigh"
 
     async def fake_group_get(*_args, **_kwargs):
         return FakeResponse(payload=[{"labels": {"service": "api"}, "receiver": "default", "alerts": []}])
 
-    monkeypatch.setattr(service._client, "get", fake_group_get, raising=False)
+    monkeypatch.setattr(service.alertmanager_http_client, "get", fake_group_get, raising=False)
     groups = await alerts_ops.get_alert_groups(service, {"service": "api"})
     assert groups[0].labels["service"] == "api"
 
     async def fake_post(*_args, **_kwargs):
         return FakeResponse(status_code=200)
 
-    monkeypatch.setattr(service._client, "post", fake_post, raising=False)
+    monkeypatch.setattr(service.alertmanager_http_client, "post", fake_post, raising=False)
     assert (
         await alerts_ops.post_alerts(
             service,
@@ -128,8 +128,8 @@ async def test_alerts_ops_cover_success_and_failure_branches(monkeypatch):
     async def raise_http_error(*_args, **_kwargs):
         raise httpx.RequestError("boom", request=httpx.Request("GET", "https://example.test"))
 
-    monkeypatch.setattr(service._client, "get", raise_http_error, raising=False)
-    monkeypatch.setattr(service._client, "post", raise_http_error, raising=False)
+    monkeypatch.setattr(service.alertmanager_http_client, "get", raise_http_error, raising=False)
+    monkeypatch.setattr(service.alertmanager_http_client, "post", raise_http_error, raising=False)
     assert await alerts_ops.get_alerts(service) == []
     assert await alerts_ops.get_alert_groups(service) == []
     assert await alerts_ops.post_alerts(service, []) is False
@@ -150,12 +150,20 @@ async def test_alerts_ops_cover_success_and_failure_branches(monkeypatch):
 @pytest.mark.asyncio
 async def test_rules_ops_cover_org_resolution_and_sync(monkeypatch):
     service = SimpleNamespace(
-        _mimir_client=SimpleNamespace(),
+        mimir_http_client=SimpleNamespace(),
         MIMIR_RULES_NAMESPACE="tenant/rules",
         MIMIR_RULER_CONFIG_BASEPATH="/ruler/v1/rules",
-        _group_enabled_rules=lambda rules: {"infra": rules[:1], "apps": rules[1:]},
-        _extract_mimir_group_names=lambda text: ["infra", "stale"],
-        _build_ruler_group_yaml=lambda name, rules: f"group: {name} count={len(rules)}",
+    )
+    monkeypatch.setattr(
+        rules_ops,
+        "group_enabled_rules",
+        lambda rules: {"infra": rules[:1], "apps": rules[1:]},
+    )
+    monkeypatch.setattr(rules_ops, "extract_mimir_group_names", lambda text: ["infra", "stale"])
+    monkeypatch.setattr(
+        rules_ops,
+        "build_ruler_group_yaml",
+        lambda name, rules: f"group: {name} count={len(rules)}",
     )
 
     assert rules_ops.resolve_rule_org_id("rule-org", _current_user()) == "rule-org"
@@ -183,9 +191,9 @@ async def test_rules_ops_cover_org_resolution_and_sync(monkeypatch):
         calls.append(("post", url, kwargs["content"]))
         return FakeResponse(status_code=202)
 
-    monkeypatch.setattr(service._mimir_client, "get", fake_get, raising=False)
-    monkeypatch.setattr(service._mimir_client, "delete", fake_delete, raising=False)
-    monkeypatch.setattr(service._mimir_client, "post", fake_post, raising=False)
+    monkeypatch.setattr(service.mimir_http_client, "get", fake_get, raising=False)
+    monkeypatch.setattr(service.mimir_http_client, "delete", fake_delete, raising=False)
+    monkeypatch.setattr(service.mimir_http_client, "post", fake_post, raising=False)
     await rules_ops.sync_mimir_rules_for_org(service, "org-1", rules)
     assert calls[0][0] == "delete"
     assert calls[1][0] == "post"
@@ -193,28 +201,28 @@ async def test_rules_ops_cover_org_resolution_and_sync(monkeypatch):
     async def fake_get_404(*_args, **_kwargs):
         return FakeResponse(status_code=404)
 
-    monkeypatch.setattr(service._mimir_client, "get", fake_get_404, raising=False)
+    monkeypatch.setattr(service.mimir_http_client, "get", fake_get_404, raising=False)
     await rules_ops.sync_mimir_rules_for_org(service, "org-1", rules)
 
     async def fake_get_error(*_args, **_kwargs):
         raise httpx.RequestError("boom", request=httpx.Request("GET", "https://example.test"))
 
-    monkeypatch.setattr(service._mimir_client, "get", fake_get_error, raising=False)
+    monkeypatch.setattr(service.mimir_http_client, "get", fake_get_error, raising=False)
     await rules_ops.sync_mimir_rules_for_org(service, "org-1", rules)
 
     async def bad_delete(*_args, **_kwargs):
         return FakeResponse(status_code=500)
 
-    monkeypatch.setattr(service._mimir_client, "get", fake_get, raising=False)
-    monkeypatch.setattr(service._mimir_client, "delete", bad_delete, raising=False)
+    monkeypatch.setattr(service.mimir_http_client, "get", fake_get, raising=False)
+    monkeypatch.setattr(service.mimir_http_client, "delete", bad_delete, raising=False)
     with pytest.raises(httpx.HTTPStatusError):
         await rules_ops.sync_mimir_rules_for_org(service, "org-1", rules)
 
     async def bad_post(*_args, **_kwargs):
         return FakeResponse(status_code=500)
 
-    monkeypatch.setattr(service._mimir_client, "delete", fake_delete, raising=False)
-    monkeypatch.setattr(service._mimir_client, "post", bad_post, raising=False)
+    monkeypatch.setattr(service.mimir_http_client, "delete", fake_delete, raising=False)
+    monkeypatch.setattr(service.mimir_http_client, "post", bad_post, raising=False)
     with pytest.raises(httpx.HTTPStatusError):
         await rules_ops.sync_mimir_rules_for_org(service, "org-1", rules)
 

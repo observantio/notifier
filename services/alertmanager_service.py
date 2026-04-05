@@ -14,10 +14,13 @@ import logging
 from hmac import compare_digest
 from typing import Dict, List, Optional
 
+import httpx
+
 from fastapi import HTTPException, Request, status
 from sqlalchemy.exc import SQLAlchemyError
 
 from config import config
+from custom_types.json import JSONDict
 from database import get_db_session
 from db_models import PurgedSilence
 from middleware.dependencies import enforce_public_endpoint_security
@@ -27,9 +30,6 @@ from models.alerting.alerts import Alert, AlertGroup
 from models.alerting.receivers import AlertManagerStatus
 from models.alerting.rules import AlertRule
 from models.alerting.silences import Silence, SilenceCreate
-from services.storage_db_service import DatabaseStorageService
-from services.notification_service import NotificationService
-from custom_types.json import JSONDict
 from services.alerting.alerts_ops import (
     delete_alerts as delete_alerts_ops,
     evaluate_promql as evaluate_promql_ops,
@@ -72,6 +72,8 @@ from services.alerting.silences_ops import (
     update_silence as update_silence_ops,
 )
 from services.common.http_client import create_async_client
+from services.notification_service import NotificationService
+from services.storage_db_service import DatabaseStorageService
 
 logger = logging.getLogger(__name__)
 
@@ -89,6 +91,14 @@ class AlertManagerService:
         self.logger = logger
         self._client = create_async_client(self.timeout)
         self._mimir_client = create_async_client(self.timeout)
+
+    @property
+    def alertmanager_http_client(self) -> httpx.AsyncClient:
+        return self._client
+
+    @property
+    def mimir_http_client(self) -> httpx.AsyncClient:
+        return self._mimir_client
 
     def parse_filter_labels(self, filter_labels: Optional[str]) -> Optional[Dict[str, str]]:
         if not filter_labels:

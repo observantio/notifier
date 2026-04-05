@@ -12,10 +12,10 @@ http://www.apache.org/licenses/LICENSE-2.0
 from urllib.parse import urlparse
 
 from fastapi import HTTPException, status
-from models.access.auth_models import TokenData
-from custom_types.json import JSONDict
-from models.alerting.incidents import AlertIncident
 
+from custom_types.json import JSONDict
+from models.access.auth_models import TokenData
+from models.alerting.incidents import AlertIncident
 from services.alerting.integration_security_service import (
     get_effective_jira_credentials,
     integration_is_usable,
@@ -24,7 +24,6 @@ from services.alerting.integration_security_service import (
     load_tenant_jira_integrations,
     resolve_jira_integration,
 )
-
 from services.jira_service import JiraError, jira_service
 
 

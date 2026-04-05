@@ -15,11 +15,14 @@ http://www.apache.org/licenses/LICENSE-2.0
 
 import logging
 from collections.abc import Mapping
+
 import httpx
-from models.alerting.alerts import Alert
-from . import payloads, transport
+
 from custom_types.json import JSONDict, JSONValue
+from models.alerting.alerts import Alert
 from services.common.url_utils import is_safe_http_url
+
+from . import payloads, transport
 
 logger = logging.getLogger(__name__)
 

@@ -472,7 +472,7 @@ async def test_silences_ops_uncovered_paths(monkeypatch):
         return {"comment": comment, "visibility": "group", "shared_group_ids": ["g2"]}
 
     service = SimpleNamespace(
-        _client=_AMClient(
+        alertmanager_http_client=_AMClient(
             get_payload=[_silence(id="s-get").model_dump(by_alias=True)],
             post_payload={"silenceID": "x"},
             delete_code=200,
@@ -515,7 +515,7 @@ async def test_silences_ops_uncovered_paths(monkeypatch):
     assert len(raw) == 1
 
     service_err = SimpleNamespace(
-        _client=_AMClient(
+        alertmanager_http_client=_AMClient(
             get_payload=[],
             post_payload={},
             delete_code=200,
@@ -526,7 +526,7 @@ async def test_silences_ops_uncovered_paths(monkeypatch):
     async def failing_post(_url, json=None):
         return _AMResponse({}, status_code=500)
 
-    service_err._client.post = failing_post
+    service_err.alertmanager_http_client.post = failing_post
     created = await sil_mod.create_silence(
         service_err,
         SilenceCreate(
@@ -547,7 +547,7 @@ async def test_silences_ops_uncovered_paths(monkeypatch):
     assert await sil_mod.delete_silence(service, "s1") is True
 
     failing_delete_service = SimpleNamespace(
-        _client=_AMClient(get_payload=[], post_payload={}, delete_code=500),
+        alertmanager_http_client=_AMClient(get_payload=[], post_payload={}, delete_code=500),
         alertmanager_url="https://am.local",
     )
     assert await sil_mod.delete_silence(failing_delete_service, "s1") is False
@@ -559,7 +559,7 @@ def test_notification_service_uncovered_paths(monkeypatch):
     def raise_attr_error(_value):
         raise AttributeError("missing")
 
-    monkeypatch.setattr(notif_mod.notification_validators, "_as_bool", raise_attr_error)
+    monkeypatch.setattr(notif_mod.notification_validators, "coerce_bool", raise_attr_error)
     assert svc._as_bool(True) is True
     assert svc._as_bool(1) is True
     assert svc._as_bool(object()) is False

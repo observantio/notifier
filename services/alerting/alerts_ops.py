@@ -11,13 +11,15 @@ http://www.apache.org/licenses/LICENSE-2.0
 
 from __future__ import annotations
 
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 from collections.abc import Mapping, Sequence
-from typing import TYPE_CHECKING, Dict, List, Optional, Any
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
+
+import httpx
+
+from config import config
 from models.alerting.alerts import Alert, AlertGroup
 from models.alerting.silences import Matcher, SilenceCreate
-import httpx
-from config import config
 
 if TYPE_CHECKING:
     from services.alertmanager_service import AlertManagerService
@@ -27,7 +29,7 @@ QueryParamMapping = Mapping[str, QueryParamValue | Sequence[QueryParamValue]]
 
 
 async def list_metric_names(service: AlertManagerService, org_id: str) -> List[str]:
-    response = await service._mimir_client.get(
+    response = await service.mimir_http_client.get(
         f"{config.mimir_url.rstrip('/')}/prometheus/api/v1/label/__name__/values",
         headers={"X-Scope-OrgID": org_id},
     )
@@ -44,7 +46,7 @@ async def list_metric_names(service: AlertManagerService, org_id: str) -> List[s
 
 
 async def list_label_names(service: AlertManagerService, org_id: str) -> List[str]:
-    response = await service._mimir_client.get(
+    response = await service.mimir_http_client.get(
         f"{config.mimir_url.rstrip('/')}/prometheus/api/v1/labels",
         headers={"X-Scope-OrgID": org_id},
     )
@@ -71,7 +73,7 @@ async def list_label_values(
         metric = str(metric_name).strip()
         if metric:
             params["match[]"] = metric
-    response = await service._mimir_client.get(
+    response = await service.mimir_http_client.get(
         f"{config.mimir_url.rstrip('/')}/prometheus/api/v1/label/{label}/values",
         headers={"X-Scope-OrgID": org_id},
         params=params or None,
@@ -94,7 +96,7 @@ async def evaluate_promql(
     query: str,
     sample_limit: int = 5,
 ) -> Dict[str, Any]:
-    response = await service._mimir_client.get(
+    response = await service.mimir_http_client.get(
         f"{config.mimir_url.rstrip('/')}/prometheus/api/v1/query",
         headers={"X-Scope-OrgID": org_id},
         params={"query": query},
@@ -177,7 +179,7 @@ async def get_alerts(
         params["inhibited"] = str(inhibited).lower()
 
     try:
-        response = await service._client.get(
+        response = await service.alertmanager_http_client.get(
             f"{service.alertmanager_url}/api/v2/alerts",
             params=params,
         )
@@ -196,7 +198,7 @@ async def get_alert_groups(
         params["filter"] = [f'{k}="{v}"' for k, v in filter_labels.items()]
 
     try:
-        response = await service._client.get(
+        response = await service.alertmanager_http_client.get(
             f"{service.alertmanager_url}/api/v2/alerts/groups",
             params=params,
         )
@@ -209,7 +211,7 @@ async def get_alert_groups(
 
 async def post_alerts(service: AlertManagerService, alerts: List[Alert]) -> bool:
     try:
-        response = await service._client.post(
+        response = await service.alertmanager_http_client.post(
             f"{service.alertmanager_url}/api/v2/alerts",
             json=[alert.model_dump(by_alias=True) for alert in alerts],
         )

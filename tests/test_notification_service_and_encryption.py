@@ -81,7 +81,7 @@ async def test_notification_service_paths(monkeypatch):
     service = notif_mod.NotificationService()
     service._client = object()
 
-    monkeypatch.delattr(notif_mod.notification_validators, "_as_bool", raising=False)
+    monkeypatch.delattr(notif_mod.notification_validators, "coerce_bool", raising=False)
     assert service._as_bool("yes") is True
     monkeypatch.setattr(
         notif_mod.notification_validators,

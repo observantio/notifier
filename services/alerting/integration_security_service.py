@@ -18,13 +18,12 @@ from typing import Dict, List, Optional
 from cryptography.fernet import Fernet, InvalidToken
 from fastapi import HTTPException, status
 from sqlalchemy import and_
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 from sqlalchemy.orm.attributes import flag_modified
 
 from config import config
 from database import get_db_session
-from sqlalchemy.dialects.postgresql import insert as pg_insert
-
 from db_models import AlertRule, Tenant
 from models.access.auth_models import Role, TokenData
 from custom_types.json import JSONDict
