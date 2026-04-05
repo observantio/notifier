@@ -15,7 +15,7 @@ http://www.apache.org/licenses/LICENSE-2.0
 import importlib
 import logging
 import os
-from typing import Callable, List, Optional
+from typing import Callable, List, Optional, cast
 
 from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import serialization
@@ -133,16 +133,19 @@ def build_secret_provider() -> SecretProvider:
                 "VAULT_ROLE_ID set but neither VAULT_SECRET_ID nor VAULT_SECRET_ID_FILE provided"
             )
 
-    return vault_mod.VaultSecretProvider(
-        address=vault_addr,
-        token=token,
-        role_id=role_id,
-        secret_id_fn=secret_id_fn,
-        prefix=os.getenv("VAULT_PREFIX", "secret").strip(),
-        kv_version=int(os.getenv("VAULT_KV_VERSION", "2")),
-        timeout=float(os.getenv("VAULT_TIMEOUT", "2.0")),
-        cacert=os.getenv("VAULT_CACERT", "").strip() or None,
-        cache_ttl=float(os.getenv("VAULT_CACHE_TTL", "30.0")),
+    return cast(
+        SecretProvider,
+        vault_mod.VaultSecretProvider(
+            address=vault_addr,
+            token=token,
+            role_id=role_id,
+            secret_id_fn=secret_id_fn,
+            prefix=os.getenv("VAULT_PREFIX", "secret").strip(),
+            kv_version=int(os.getenv("VAULT_KV_VERSION", "2")),
+            timeout=float(os.getenv("VAULT_TIMEOUT", "2.0")),
+            cacert=os.getenv("VAULT_CACERT", "").strip() or None,
+            cache_ttl=float(os.getenv("VAULT_CACHE_TTL", "30.0")),
+        ),
     )
 
 
@@ -305,18 +308,20 @@ class Config:
                     "VAULT_ROLE_ID set but neither VAULT_SECRET_ID nor VAULT_SECRET_ID_FILE provided"
                 )
 
-        provider = vault_mod.VaultSecretProvider(
-            address=self.vault_addr,
-            token=self.vault_token,
-            role_id=self.vault_role_id,
-            secret_id_fn=secret_id_fn,
-            prefix=self.vault_secrets_prefix,
-            kv_version=self.vault_kv_version,
-            timeout=self.vault_timeout,
-            cacert=self.vault_cacert,
-            cache_ttl=self.vault_cache_ttl,
+        self._secret_provider = cast(
+            SecretProvider,
+            vault_mod.VaultSecretProvider(
+                address=self.vault_addr,
+                token=self.vault_token,
+                role_id=self.vault_role_id,
+                secret_id_fn=secret_id_fn,
+                prefix=self.vault_secrets_prefix,
+                kv_version=self.vault_kv_version,
+                timeout=self.vault_timeout,
+                cacert=self.vault_cacert,
+                cache_ttl=self.vault_cache_ttl,
+            ),
         )
-        self._secret_provider = provider
 
         for key in self.vault_secret_keys:
             try:
