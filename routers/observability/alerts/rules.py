@@ -12,7 +12,7 @@ http://www.apache.org/licenses/LICENSE-2.0
 import asyncio
 import logging
 from datetime import datetime, timezone
-from typing import List, Optional
+from typing import List, Optional, cast
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, status
 from fastapi.concurrency import run_in_threadpool
@@ -333,7 +333,7 @@ async def get_rule(
     raw = await run_in_threadpool(storage_service.get_alert_rule_raw, rule_id, tenant_id)
     if raw and raw.created_by != current_user.user_id and not getattr(current_user, "is_superuser", False):
         rule.org_id = None
-    return rule
+    return cast(AlertRule, rule)
 
 
 @router.post(
@@ -393,7 +393,7 @@ async def create_rule(
     await alertmanager_service.sync_mimir_rules_for_org(
         org_to_sync, await run_in_threadpool(storage_service.get_alert_rules_for_org, tenant_id, org_to_sync)
     )
-    return created_rule
+    return cast(AlertRule, created_rule)
 
 
 @router.put(
@@ -437,7 +437,7 @@ async def update_rule(
             existing_rule.org_id,
             await run_in_threadpool(storage_service.get_alert_rules_for_org, tenant_id, existing_rule.org_id),
         )
-    return updated_rule
+    return cast(AlertRule, updated_rule)
 
 
 @router.post(

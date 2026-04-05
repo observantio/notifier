@@ -26,6 +26,9 @@ from fastapi import HTTPException
 
 from models.alerting.incidents import AlertIncidentUpdateRequest
 from services.storage import incidents as incidents_mod
+from services.storage import incidents_core as incidents_core_mod
+from services.storage import incidents_jira as incidents_jira_mod
+from services.storage import incidents_sync as incidents_sync_mod
 
 
 def _incident_row(
@@ -139,7 +142,7 @@ def test_incident_storage_helper_functions(monkeypatch):
         def __init__(self):
             self.shared_groups = [SimpleNamespace(id="g1"), SimpleNamespace(id="g2")]
 
-    monkeypatch.setattr(incidents_mod, "AlertRuleDB", FakeRule)
+    monkeypatch.setattr("services.storage.incidents_core.AlertRuleDB", FakeRule)
     assert incidents_mod._shared_group_ids(FakeRule()) == ["g1", "g2"]
     assert incidents_mod._shared_group_ids(object()) == []
 
@@ -168,13 +171,13 @@ def test_incident_storage_helper_functions(monkeypatch):
         "inc-3", annotations={incidents_mod.INCIDENT_META_KEY: "{}"}, labels={"alertname": "DiskFull"}
     )
     assert incidents_mod.incident_key_from_db_row(row_fallback) == "rule:DiskFull|scope:*"
-    assert incidents_mod._extract_metric_state({"mem_state": "critical"}) == "critical"
-    assert incidents_mod._parse_metric_states("high,high, low ") == ["high", "low"]
+    assert incidents_core_mod._extract_metric_state({"mem_state": "critical"}) == "critical"
+    assert incidents_core_mod._parse_metric_states("high,high, low ") == ["high", "low"]
     assert (
-        incidents_mod._merge_metric_states({incidents_mod.METRIC_STATES_ANNOTATION_KEY: "high"}, "low", "high")
+        incidents_core_mod._merge_metric_states({incidents_mod.METRIC_STATES_ANNOTATION_KEY: "high"}, "low", "high")
         == "high,low"
     )
-    assert incidents_mod._is_alert_suppressed({"status": {"state": "suppressed"}}) is True
+    assert incidents_core_mod._is_alert_suppressed({"status": {"state": "suppressed"}}) is True
     assert (
         incidents_mod._incident_access_allowed(
             visibility="group",
@@ -191,38 +194,38 @@ def test_incident_storage_helper_functions(monkeypatch):
     async def fake_coro():
         called.append("done")
 
-    incidents_mod._run_async(fake_coro())
+    incidents_jira_mod._run_async(fake_coro())
     assert called == ["done"]
 
 
 def test_resolve_incident_jira_credentials(monkeypatch):
-    monkeypatch.setattr(incidents_mod, "load_tenant_jira_integrations", lambda tenant_id: [{"id": "jira-1"}])
-    monkeypatch.setattr(incidents_mod, "integration_is_usable", lambda item: True)
+    monkeypatch.setattr(incidents_jira_mod, "load_tenant_jira_integrations", lambda tenant_id: [{"id": "jira-1"}])
+    monkeypatch.setattr(incidents_jira_mod, "integration_is_usable", lambda item: True)
     monkeypatch.setattr(
-        incidents_mod,
+        incidents_jira_mod,
         "jira_integration_credentials",
         lambda item: {"base_url": "https://jira.example.com", "token": "x"},
     )
-    assert incidents_mod._resolve_incident_jira_credentials("tenant-a", "jira-1") == {
+    assert incidents_jira_mod._resolve_incident_jira_credentials("tenant-a", "jira-1") == {
         "base_url": "https://jira.example.com",
         "token": "x",
     }
 
-    monkeypatch.setattr(incidents_mod, "integration_is_usable", lambda item: False)
-    assert incidents_mod._resolve_incident_jira_credentials("tenant-a", "jira-1") is None
+    monkeypatch.setattr(incidents_jira_mod, "integration_is_usable", lambda item: False)
+    assert incidents_jira_mod._resolve_incident_jira_credentials("tenant-a", "jira-1") is None
 
     monkeypatch.setattr(
-        incidents_mod,
+        incidents_jira_mod,
         "get_effective_jira_credentials",
         lambda tenant_id: {"base_url": "https://jira.example.com", "token": "y"},
     )
-    assert incidents_mod._resolve_incident_jira_credentials("tenant-a", None) == {
+    assert incidents_jira_mod._resolve_incident_jira_credentials("tenant-a", None) == {
         "base_url": "https://jira.example.com",
         "token": "y",
     }
 
-    monkeypatch.setattr(incidents_mod, "get_effective_jira_credentials", lambda tenant_id: {})
-    assert incidents_mod._resolve_incident_jira_credentials("tenant-a", None) is None
+    monkeypatch.setattr(incidents_jira_mod, "get_effective_jira_credentials", lambda tenant_id: {})
+    assert incidents_jira_mod._resolve_incident_jira_credentials("tenant-a", None) is None
 
 
 def test_resolve_rule_by_alertname_and_jira_side_effect_error_paths(monkeypatch):
@@ -235,35 +238,34 @@ def test_resolve_rule_by_alertname_and_jira_side_effect_error_paths(monkeypatch)
             return _BrokenQuery()
 
     monkeypatch.setattr(
-        incidents_mod,
-        "AlertRuleDB",
+        "services.storage.incidents_core.AlertRuleDB",
         SimpleNamespace(
             tenant_id="tenant_id", name="name", org_id=SimpleNamespace(is_=lambda *_: None, desc=lambda: None)
         ),
     )
-    assert incidents_mod._resolve_rule_by_alertname(_BrokenDB(), "tenant-a", {"alertname": "CPUHigh"}) is None
-    assert incidents_mod._resolve_rule_by_alertname(_BrokenDB(), "tenant-a", {}) is None
+    assert incidents_core_mod._resolve_rule_by_alertname(_BrokenDB(), "tenant-a", {"alertname": "CPUHigh"}) is None
+    assert incidents_core_mod._resolve_rule_by_alertname(_BrokenDB(), "tenant-a", {}) is None
 
     from services.jira_service import JiraError
 
     monkeypatch.setattr(
-        incidents_mod, "_resolve_incident_jira_credentials", lambda *_args: {"base_url": "https://jira"}
+        incidents_jira_mod, "_resolve_incident_jira_credentials", lambda *_args: {"base_url": "https://jira"}
     )
 
     def _raise_jira(coro):
         coro.close()
         raise JiraError("boom")
 
-    monkeypatch.setattr(incidents_mod, "_run_async", _raise_jira)
+    monkeypatch.setattr(incidents_jira_mod, "_run_async", _raise_jira)
     warnings = []
-    monkeypatch.setattr(incidents_mod.logger, "warning", lambda msg, *args: warnings.append(msg % args))
+    monkeypatch.setattr(incidents_jira_mod.logger, "warning", lambda msg, *args: warnings.append(msg % args))
     incident = SimpleNamespace(
         annotations={
             incidents_mod.INCIDENT_META_KEY: json.dumps({"jira_ticket_key": "OPS-1", "jira_integration_id": "jira-1"})
         }
     )
-    incidents_mod._move_reopened_incident_jira_ticket_to_todo("tenant-a", incident)
-    incidents_mod._sync_reopened_incident_note_to_jira(
+    incidents_jira_mod._move_reopened_incident_jira_ticket_to_todo("tenant-a", incident)
+    incidents_jira_mod._sync_reopened_incident_note_to_jira(
         "tenant-a",
         incident,
         note_text="reopened",
@@ -359,10 +361,10 @@ def test_sync_incidents_from_alerts_dedupe_reopen_and_resolve_missing(monkeypatc
     db = _SyncDB()
     monkeypatch.setattr(incidents_mod, "get_db_session", lambda: _db_session(db))
     monkeypatch.setattr(incidents_mod, "ensure_tenant_exists", lambda *_args: None)
-    monkeypatch.setattr(incidents_mod, "_is_alert_suppressed", lambda alert: False)
-    monkeypatch.setattr(incidents_mod, "_resolve_rule_by_alertname", lambda *_args: db.rule)
-    monkeypatch.setattr(incidents_mod, "_move_reopened_incident_jira_ticket_to_todo", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(incidents_mod, "_sync_reopened_incident_note_to_jira", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(incidents_sync_mod, "_is_alert_suppressed", lambda alert: False)
+    monkeypatch.setattr(incidents_sync_mod, "_resolve_rule_by_alertname", lambda *_args: db.rule)
+    monkeypatch.setattr(incidents_sync_mod, "_move_reopened_incident_jira_ticket_to_todo", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(incidents_sync_mod, "_sync_reopened_incident_note_to_jira", lambda *_args, **_kwargs: None)
 
     alerts = [
         {
@@ -715,8 +717,8 @@ def test_sync_incidents_from_alerts_additional_branch_edges(monkeypatch):
 
     monkeypatch.setattr(incidents_mod, "get_db_session", lambda: _db_session(db))
     monkeypatch.setattr(incidents_mod, "ensure_tenant_exists", lambda *_args: None)
-    monkeypatch.setattr(incidents_mod, "_is_alert_suppressed", lambda *_args: False)
-    monkeypatch.setattr(incidents_mod, "_resolve_rule_by_alertname", lambda *_args: rule)
+    monkeypatch.setattr(incidents_sync_mod, "_is_alert_suppressed", lambda *_args: False)
+    monkeypatch.setattr(incidents_sync_mod, "_resolve_rule_by_alertname", lambda *_args: rule)
 
     alerts = [
         {

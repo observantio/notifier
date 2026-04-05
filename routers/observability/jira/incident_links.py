@@ -1,4 +1,5 @@
 import logging
+from typing import cast
 
 from fastapi import APIRouter, Body, Depends, HTTPException, status
 from fastapi.concurrency import run_in_threadpool
@@ -135,7 +136,7 @@ async def create_incident_link(
         logger.warning("Failed to backfill incident notes to Jira issue %s: %s", response.get("key"), exc)
 
     logger.info("Created Jira issue %s for incident %s", response.get("key"), incident_id)
-    return updated
+    return cast(AlertIncident, updated)
 
 
 @router.post(

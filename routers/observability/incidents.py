@@ -10,7 +10,7 @@ http://www.apache.org/licenses/LICENSE-2.0
 """
 
 import logging
-from typing import List, Optional
+from typing import List, Optional, cast
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -235,4 +235,4 @@ async def update_incident(
             current_user=current_user,
         )
 
-    return updated
+    return cast(AlertIncident, updated)

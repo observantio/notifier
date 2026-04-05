@@ -10,7 +10,7 @@ http://www.apache.org/licenses/LICENSE-2.0
 """
 
 from datetime import datetime, timezone
-from typing import List
+from typing import List, cast
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, status
 from fastapi.concurrency import run_in_threadpool
@@ -68,7 +68,7 @@ async def list_channels(
         channel.is_hidden = bool(channel.id and channel.id in hidden_ids)
     if not parse_show_hidden(show_hidden):
         channels = [channel for channel in channels if not channel.is_hidden]
-    return channels
+    return cast(List[NotificationChannel], channels)
 
 
 @router.get(
@@ -91,7 +91,7 @@ async def get_channel(
         raise HTTPException(status_code=404, detail=f"Notification channel {channel_id} not found")
     hidden_ids = set(await run_in_threadpool(storage_service.get_hidden_channel_ids, tenant_id, user_id))
     channel.is_hidden = bool(channel.id and channel.id in hidden_ids)
-    return channel
+    return cast(NotificationChannel, channel)
 
 
 @router.post(
@@ -168,7 +168,7 @@ async def update_channel(
     )
     if not updated_channel:
         raise HTTPException(status_code=404, detail=f"Notification channel {channel_id} not found or access denied")
-    return updated_channel
+    return cast(NotificationChannel, updated_channel)
 
 
 @router.delete(

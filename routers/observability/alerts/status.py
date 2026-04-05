@@ -8,7 +8,7 @@ License. You may obtain a copy of the License at
 http://www.apache.org/licenses/LICENSE-2.0
 """
 
-from typing import List
+from typing import List, cast
 
 from fastapi import APIRouter, Depends, HTTPException
 
@@ -37,7 +37,7 @@ async def get_alertmanager_status(
     result = await alertmanager_service.get_status()
     if not result:
         raise HTTPException(status_code=500, detail="Failed to fetch AlertManager status")
-    return result
+    return cast(AlertManagerStatus, result)
 
 
 @router.get(
@@ -52,4 +52,4 @@ async def list_receivers(
     current_user: TokenData = Depends(require_permission_with_scope(Permission.READ_ALERTS, "alertmanager")),
 ) -> List[str]:
     _ = current_user
-    return await alertmanager_service.get_receivers()
+    return cast(List[str], await alertmanager_service.get_receivers())

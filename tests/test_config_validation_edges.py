@@ -275,6 +275,7 @@ def test_config_auto_generates_rsa_and_ec_keys(monkeypatch):
 def test_apply_security_defaults_rejects_unknown_auto_key_algorithm():
     module = _reload_config_module()
     cfg = module.Config.__new__(module.Config)
+    object.__setattr__(cfg, "_values", {"jwt_private_key": "", "jwt_public_key": ""})
     cfg.jwt_algorithm = "HS512"
     cfg.allowed_jwt_algorithms = {"HS512"}
     cfg.jwt_private_key = ""
@@ -428,6 +429,7 @@ def test_load_vault_secrets_selects_file_and_literal_secret_callbacks(monkeypatc
     )
 
     cfg = module.Config.__new__(module.Config)
+    object.__setattr__(cfg, "_values", {})
     cfg.vault_enabled = True
     cfg.vault_addr = "http://vault:8200"
     cfg.vault_token = None
