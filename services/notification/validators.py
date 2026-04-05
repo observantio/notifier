@@ -20,7 +20,7 @@ from custom_types.json import JSONDict
 from services.common.url_utils import is_safe_http_url
 
 
-def _as_bool(value: object) -> bool:
+def coerce_bool(value: object) -> bool:
     if isinstance(value, bool):
         return value
     if isinstance(value, (int, float)):

@@ -38,7 +38,7 @@ class NotificationService:
     @staticmethod
     def _as_bool(value: object) -> bool:
         try:
-            return notification_validators._as_bool(value)
+            return notification_validators.coerce_bool(value)
         except AttributeError:
             if isinstance(value, bool):
                 return value

@@ -8,9 +8,10 @@ License. You may obtain a copy of the License at
 http://www.apache.org/licenses/LICENSE-2.0
 """
 
-from typing import Dict, List, Optional
-from pydantic import BaseModel, ConfigDict, Field, StrictBool
 from enum import Enum
+from typing import Dict, List, Optional
+
+from pydantic import BaseModel, ConfigDict, Field, StrictBool
 
 from .silences import Visibility
 

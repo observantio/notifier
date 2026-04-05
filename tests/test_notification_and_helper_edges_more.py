@@ -350,8 +350,8 @@ async def test_email_providers_and_payload_helpers(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_notification_validators_senders_and_transport(monkeypatch):
-    assert validators._as_bool(0) is False
-    assert validators._as_bool(2) is True
+    assert validators.coerce_bool(0) is False
+    assert validators.coerce_bool(2) is True
     assert validators._as_text(123) == "123"
     assert validators._as_optional_url("  ") is None
     assert validators._as_int("22") == 22
@@ -554,7 +554,7 @@ groups:
     class _Svc:
         MIMIR_RULES_NAMESPACE = "watchdog"
         MIMIR_RULER_CONFIG_BASEPATH = "/ruler/api/v1/rules"
-        _mimir_client = _MimirClient()
+        mimir_http_client = _MimirClient()
 
         @staticmethod
         def _group_enabled_rules(_rules):

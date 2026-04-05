@@ -12,13 +12,15 @@ http://www.apache.org/licenses/LICENSE-2.0
 from __future__ import annotations
 
 import logging
-import httpx
 from typing import TYPE_CHECKING, List, Optional
 from urllib.parse import quote
 
+import httpx
+
+from config import config
 from models.access.auth_models import TokenData
 from models.alerting.rules import AlertRule
-from config import config
+from services.alerting.ruler_yaml import build_ruler_group_yaml, extract_mimir_group_names, group_enabled_rules
 
 if TYPE_CHECKING:
     from services.alertmanager_service import AlertManagerService
@@ -31,7 +33,7 @@ def resolve_rule_org_id(rule_org_id: Optional[str], current_user: TokenData) -> 
 
 
 async def sync_mimir_rules_for_org(service: AlertManagerService, org_id: str, rules: List[AlertRule]) -> None:
-    desired_groups = service._group_enabled_rules(rules)
+    desired_groups = group_enabled_rules(rules)
     base_url = config.mimir_url.rstrip("/")
     namespace = quote(getattr(service, "mimir_rules_namespace", getattr(service, "MIMIR_RULES_NAMESPACE")), safe="")
     ruler_basepath = getattr(
@@ -44,9 +46,9 @@ async def sync_mimir_rules_for_org(service: AlertManagerService, org_id: str, ru
 
     existing_group_names: List[str] = []
     try:
-        response = await service._mimir_client.get(namespace_url, headers=org_header)
+        response = await service.mimir_http_client.get(namespace_url, headers=org_header)
         if response.status_code == 200:
-            existing_group_names = service._extract_mimir_group_names(response.text)
+            existing_group_names = extract_mimir_group_names(response.text)
         elif response.status_code != 404:
             logger.warning(
                 "Failed to list Mimir groups for org %s (status %s); stale groups will not be pruned",
@@ -60,7 +62,7 @@ async def sync_mimir_rules_for_org(service: AlertManagerService, org_id: str, ru
         if group_name in desired_groups:
             continue
         delete_url = f"{namespace_url}/{quote(group_name, safe='')}"
-        delete_response = await service._mimir_client.delete(delete_url, headers=org_header)
+        delete_response = await service.mimir_http_client.delete(delete_url, headers=org_header)
         if delete_response.status_code not in {200, 202, 204, 404}:
             raise httpx.HTTPStatusError(
                 f"Unexpected Mimir delete response: {delete_response.status_code}",
@@ -69,8 +71,8 @@ async def sync_mimir_rules_for_org(service: AlertManagerService, org_id: str, ru
             )
 
     for group_name, group_rules in desired_groups.items():
-        payload = service._build_ruler_group_yaml(group_name, group_rules)
-        post_response = await service._mimir_client.post(
+        payload = build_ruler_group_yaml(group_name, group_rules)
+        post_response = await service.mimir_http_client.post(
             namespace_url,
             content=payload,
             headers={**org_header, "Content-Type": "application/yaml"},

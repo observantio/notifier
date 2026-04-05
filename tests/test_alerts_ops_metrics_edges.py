@@ -56,7 +56,7 @@ async def test_metric_name_label_and_label_values_paths():
             return _Response({"status": "success", "data": ["api", "db"]})
 
     client = _MimirClient()
-    service = SimpleNamespace(_mimir_client=client)
+    service = SimpleNamespace(mimir_http_client=client)
 
     names = await alerts_ops.list_metric_names(service, "org-a")
     labels = await alerts_ops.list_label_names(service, "org-a")
@@ -109,7 +109,7 @@ async def test_metric_queries_and_http_status_handling():
             )
 
     client = _MimirClient()
-    service = SimpleNamespace(_mimir_client=client)
+    service = SimpleNamespace(mimir_http_client=client)
 
     ok = await alerts_ops.evaluate_promql(service, "org-a", "up", sample_limit=1)
     assert ok["valid"] is True
@@ -151,7 +151,7 @@ async def test_metrics_non_success_raise_http_status_error():
         async def get(self, _url, headers=None, params=None):
             return _Response({"status": "error"})
 
-    service = SimpleNamespace(_mimir_client=_MimirClient())
+    service = SimpleNamespace(mimir_http_client=_MimirClient())
 
     with pytest.raises(httpx.HTTPStatusError):
         await alerts_ops.list_metric_names(service, "org-a")
@@ -206,7 +206,7 @@ async def test_alert_and_group_get_post_delete_paths():
     client = _Client()
     logs = []
     service = SimpleNamespace(
-        _client=client,
+        alertmanager_http_client=client,
         alertmanager_url="https://alertmanager",
         logger=SimpleNamespace(
             error=lambda *_args: logs.append("error"), warning=lambda *_args: logs.append("warning")

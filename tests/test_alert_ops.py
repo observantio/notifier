@@ -33,7 +33,7 @@ class AlertOpsTests(unittest.IsolatedAsyncioTestCase):
         response = SimpleNamespace(raise_for_status=lambda: None, json=lambda: payload)
 
         service = SimpleNamespace(
-            _client=SimpleNamespace(get=AsyncMock(return_value=response)),
+            alertmanager_http_client=SimpleNamespace(get=AsyncMock(return_value=response)),
             alertmanager_url="http://am",
             logger=SimpleNamespace(error=lambda *_args, **_kwargs: None),
         )

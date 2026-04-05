@@ -12,10 +12,11 @@ http://www.apache.org/licenses/LICENSE-2.0
 from __future__ import annotations
 
 import asyncio
+import logging
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, Dict, List, Optional
+
 import httpx
-import logging
 from sqlalchemy.exc import SQLAlchemyError
 from database import get_db_session
 from db_models import PurgedSilence
@@ -134,7 +135,7 @@ async def get_silences(service: AlertManagerService, filter_labels: Optional[Dic
         params["filter"] = [f'{k}="{v}"' for k, v in filter_labels.items()]
 
     try:
-        response = await service._client.get(
+        response = await service.alertmanager_http_client.get(
             f"{service.alertmanager_url}/api/v2/silences",
             params=params,
         )
@@ -161,7 +162,7 @@ async def get_silences(service: AlertManagerService, filter_labels: Optional[Dic
 
 async def get_silence(service: AlertManagerService, silence_id: str) -> Optional[Silence]:
     try:
-        response = await service._client.get(f"{service.alertmanager_url}/api/v2/silence/{silence_id}")
+        response = await service.alertmanager_http_client.get(f"{service.alertmanager_url}/api/v2/silence/{silence_id}")
         response.raise_for_status()
         return Silence(**response.json())
     except (httpx.HTTPError, UnicodeError, ValueError, TypeError) as exc:
@@ -171,7 +172,7 @@ async def get_silence(service: AlertManagerService, silence_id: str) -> Optional
 
 async def create_silence(service: AlertManagerService, silence: SilenceCreate) -> Optional[str]:
     try:
-        response = await service._client.post(
+        response = await service.alertmanager_http_client.post(
             f"{service.alertmanager_url}/api/v2/silences",
             json=silence.model_dump(by_alias=True, exclude_none=True),
         )
@@ -186,7 +187,9 @@ async def create_silence(service: AlertManagerService, silence: SilenceCreate) -
 
 async def delete_silence(service: AlertManagerService, silence_id: str) -> bool:
     try:
-        response = await service._client.delete(f"{service.alertmanager_url}/api/v2/silence/{silence_id}")
+        response = await service.alertmanager_http_client.delete(
+            f"{service.alertmanager_url}/api/v2/silence/{silence_id}"
+        )
         response.raise_for_status()
 
         for attempt in range(3):

@@ -260,6 +260,8 @@ def test_storage_service_hidden_resource_helpers(monkeypatch):
 @pytest.mark.asyncio
 async def test_alertmanager_service_helpers_and_delete_silence(monkeypatch):
     svc = alert_mod.AlertManagerService("http://alertmanager/")
+    assert svc.alertmanager_http_client is svc._client
+    assert svc.mimir_http_client is svc._mimir_client
     assert svc.alertmanager_url == "http://alertmanager"
     assert svc.parse_filter_labels(None) is None
     assert svc.parse_filter_labels('{"a":1}') == {"a": "1"}

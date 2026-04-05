@@ -27,7 +27,7 @@ from services.notification_service import NotificationService
 @pytest.mark.asyncio
 async def test_notification_service_support_helpers(monkeypatch):
     svc = NotificationService()
-    monkeypatch.setattr(notification_mod.notification_validators, "_as_bool", lambda value: str(value) == "ok")
+    monkeypatch.setattr(notification_mod.notification_validators, "coerce_bool", lambda value: str(value) == "ok")
     monkeypatch.setattr(notification_mod.notification_validators, "validate_channel_config", lambda *_args: ["err"])
 
     async def fake_send_smtp_with_retry(*args, **kwargs):

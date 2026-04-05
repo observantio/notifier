@@ -12,12 +12,13 @@ http://www.apache.org/licenses/LICENSE-2.0
 from __future__ import annotations
 
 from typing import List, Optional
+
+import yaml
+
 from custom_types.json import JSONDict
 from models.alerting.rules import AlertRuleCreate, RuleSeverity
 from models.alerting.silences import Visibility
 from services.common.visibility import normalize_visibility
-
-import yaml
 
 VALID_SEVERITIES = {"info", "warning", "error", "critical"}
 

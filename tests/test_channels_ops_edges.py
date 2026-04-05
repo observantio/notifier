@@ -130,7 +130,7 @@ async def test_notify_for_alerts_covers_skip_suppressed_and_dispatch_paths(monke
 
 @pytest.mark.asyncio
 async def test_channels_status_and_receivers_helpers(monkeypatch):
-    service = SimpleNamespace(_client=SimpleNamespace(), alertmanager_url="https://alertmanager")
+    service = SimpleNamespace(alertmanager_http_client=SimpleNamespace(), alertmanager_url="https://alertmanager")
 
     async def fake_get_status(*_args, **_kwargs):
         return FakeResponse(
@@ -144,7 +144,7 @@ async def test_channels_status_and_receivers_helpers(monkeypatch):
             }
         )
 
-    monkeypatch.setattr(service._client, "get", fake_get_status, raising=False)
+    monkeypatch.setattr(service.alertmanager_http_client, "get", fake_get_status, raising=False)
     status = await channels_ops.get_status(service)
     assert status is not None
     assert await channels_ops.get_receivers(service) == ["default", "ops"]
@@ -152,7 +152,7 @@ async def test_channels_status_and_receivers_helpers(monkeypatch):
     async def raise_http_error(*_args, **_kwargs):
         raise httpx.RequestError("boom", request=httpx.Request("GET", "https://example.test"))
 
-    monkeypatch.setattr(service._client, "get", raise_http_error, raising=False)
+    monkeypatch.setattr(service.alertmanager_http_client, "get", raise_http_error, raising=False)
     assert await channels_ops.get_status(service) is None
     assert await channels_ops.get_receivers(service) == []
 
@@ -168,7 +168,7 @@ async def test_channels_status_and_receivers_helpers(monkeypatch):
             }
         )
 
-    monkeypatch.setattr(service._client, "get", status_with_non_list_receivers, raising=False)
+    monkeypatch.setattr(service.alertmanager_http_client, "get", status_with_non_list_receivers, raising=False)
     assert await channels_ops.get_receivers(service) == []
 
 
