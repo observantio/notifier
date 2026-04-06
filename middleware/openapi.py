@@ -64,7 +64,7 @@ BAD_REQUEST_ERRORS: ResponsesMap = error_responses(401, 403, 429, 400)
 NOT_FOUND_ERRORS: ResponsesMap = error_responses(401, 403, 429, 404)
 BAD_REQUEST_NOT_FOUND_ERRORS: ResponsesMap = error_responses(401, 403, 429, 400, 404)
 CONFLICT_ERRORS: ResponsesMap = error_responses(401, 403, 429, 400, 404, 409)
-DEFAULT_APP_VERSION = "1.0.0"
+DEFAULT_APP_VERSION = "0.0.1"
 
 
 def _project_version() -> str:
