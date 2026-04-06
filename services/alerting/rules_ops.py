@@ -27,6 +27,9 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+DEFAULT_MIMIR_RULES_NAMESPACE = "watchdog"
+DEFAULT_MIMIR_RULER_CONFIG_BASEPATH = "/prometheus/config/v1/rules"
+
 
 def resolve_rule_org_id(rule_org_id: str | None, current_user: TokenData) -> str:
     return rule_org_id or getattr(current_user, "org_id", None) or config.default_org_id
@@ -35,11 +38,12 @@ def resolve_rule_org_id(rule_org_id: str | None, current_user: TokenData) -> str
 async def sync_mimir_rules_for_org(service: AlertManagerService, org_id: str, rules: list[AlertRule]) -> None:
     desired_groups = group_enabled_rules(rules)
     base_url = config.mimir_url.rstrip("/")
-    namespace = quote(getattr(service, "mimir_rules_namespace", service.MIMIR_RULES_NAMESPACE), safe="")
-    ruler_basepath = getattr(
-        service,
-        "mimir_ruler_config_basepath",
-        service.MIMIR_RULER_CONFIG_BASEPATH,
+    namespace_value = getattr(service, "mimir_rules_namespace", None) or getattr(
+        service, "MIMIR_RULES_NAMESPACE", DEFAULT_MIMIR_RULES_NAMESPACE
+    )
+    namespace = quote(str(namespace_value), safe="")
+    ruler_basepath = getattr(service, "mimir_ruler_config_basepath", None) or getattr(
+        service, "MIMIR_RULER_CONFIG_BASEPATH", DEFAULT_MIMIR_RULER_CONFIG_BASEPATH
     )
     namespace_url = f"{base_url}{ruler_basepath}/{namespace}"
     org_header = {"X-Scope-OrgID": org_id}
