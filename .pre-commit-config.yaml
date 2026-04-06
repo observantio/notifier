@@ -17,38 +17,6 @@ repos:
         exclude: (^|/)tests/
         types: [python]
 
-      - id: notifier-ruff-check
-        name: Notifier ruff check (autofix)
-        language: system
-        entry: >-
-          bash -lc 'R="$(git rev-parse --show-toplevel 2>/dev/null || echo "$PWD")";
-          cd "$R" || exit 1;
-          P=""; for c in "$PWD/../.venv/bin/python" "$PWD/../venv/bin/python" "$PWD/.venv/bin/python" "$PWD/venv/bin/python" "$(command -v python3)" "$(command -v python)"; do
-          [[ -n "$c" && -x "$c" ]] || continue;
-          "$c" -c "import ruff" 2>/dev/null && { P="$c"; break; }; done;
-          [[ -n "$P" ]] || { echo "error: no Python with ruff; use .venv and pip install -e .[dev]" >&2; exit 1; };
-          "$P" -m ruff check --config pyproject.toml --fix --fix-only'
-        pass_filenames: false
-        files: \.py$
-        exclude: (^|/)tests/
-        types: [python]
-
-      - id: notifier-ruff-format
-        name: Notifier ruff format
-        language: system
-        entry: >-
-          bash -lc 'R="$(git rev-parse --show-toplevel 2>/dev/null || echo "$PWD")";
-          cd "$R" || exit 1;
-          P=""; for c in "$PWD/../.venv/bin/python" "$PWD/../venv/bin/python" "$PWD/.venv/bin/python" "$PWD/venv/bin/python" "$(command -v python3)" "$(command -v python)"; do
-          [[ -n "$c" && -x "$c" ]] || continue;
-          "$c" -c "import ruff" 2>/dev/null && { P="$c"; break; }; done;
-          [[ -n "$P" ]] || { echo "error: no Python with ruff; use .venv and pip install -e .[dev]" >&2; exit 1; };
-          "$P" -m ruff format --config pyproject.toml'
-        pass_filenames: false
-        files: \.py$
-        exclude: (^|/)tests/
-        types: [python]
-
       - id: notifier-mypy
         name: Notifier mypy
         language: system
