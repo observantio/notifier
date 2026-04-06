@@ -17,6 +17,24 @@ repos:
         exclude: (^|/)tests/
         types: [python]
 
+      - id: notifier-ruff-check
+        name: Notifier ruff check (autofix)
+        language: system
+        entry: .venv/bin/python
+        args: [-m, ruff, check, --config, pyproject.toml, --fix, --fix-only]
+        files: \.py$
+        exclude: (^|/)tests/
+        types: [python]
+
+      - id: notifier-ruff-format
+        name: Notifier ruff format
+        language: system
+        entry: .venv/bin/python
+        args: [-m, ruff, format, --config, pyproject.toml]
+        files: \.py$
+        exclude: (^|/)tests/
+        types: [python]
+
       - id: notifier-mypy
         name: Notifier mypy
         language: system
