@@ -11,6 +11,8 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
+- Reworked runtime dependency declaration to standard PEP 621 `dependencies = [...]` syntax in `pyproject.toml`.
+- Pinned notifier runtime dependencies to explicit `==` versions for reproducible installs/builds.
 - Applied a clean pylint reformat/refactor pass across notifier with safe readability-oriented formatting updates.
 - Enforced strict naming consistency for config attributes, module-level state/constants, and related helper/test touchpoints to match pylint policy.
 - Removed legacy uppercase alias compatibility paths and migrated code/tests to strict snake_case config naming only.
