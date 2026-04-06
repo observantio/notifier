@@ -10,8 +10,10 @@ http://www.apache.org/licenses/LICENSE-2.0
 
 from __future__ import annotations
 
+import tomllib
 from collections.abc import Mapping
 from http import HTTPStatus
+from pathlib import Path
 from typing import Any, TypeAlias
 
 from fastapi import FastAPI
@@ -62,6 +64,17 @@ BAD_REQUEST_ERRORS: ResponsesMap = error_responses(401, 403, 429, 400)
 NOT_FOUND_ERRORS: ResponsesMap = error_responses(401, 403, 429, 404)
 BAD_REQUEST_NOT_FOUND_ERRORS: ResponsesMap = error_responses(401, 403, 429, 400, 404)
 CONFLICT_ERRORS: ResponsesMap = error_responses(401, 403, 429, 400, 404, 409)
+DEFAULT_APP_VERSION = "1.0.0"
+
+
+def _project_version() -> str:
+    pyproject_path = Path(__file__).resolve().parents[1] / "pyproject.toml"
+    try:
+        project = tomllib.loads(pyproject_path.read_text(encoding="utf-8")).get("project", {})
+    except (OSError, tomllib.TOMLDecodeError):
+        return DEFAULT_APP_VERSION
+    version = project.get("version")
+    return version if isinstance(version, str) and version.strip() else DEFAULT_APP_VERSION
 
 
 def tag_description(tag_name: str) -> str:
@@ -147,6 +160,9 @@ def install_custom_openapi(app: FastAPI) -> None:
             description=app.description,
             routes=app.routes,
         )
+        info = schema.get("info")
+        if isinstance(info, dict):
+            info["version"] = _project_version()
 
         paths = schema.get("paths", {})
         if isinstance(paths, dict):
