@@ -11,9 +11,8 @@ http://www.apache.org/licenses/LICENSE-2.0
 
 import logging
 import os
-from urllib.parse import urlparse
 from collections.abc import Mapping, Sequence
-from typing import Dict, List, Optional
+from urllib.parse import urlparse
 
 from cryptography.fernet import Fernet, InvalidToken
 from fastapi import HTTPException, status
@@ -23,10 +22,10 @@ from sqlalchemy.orm import Session
 from sqlalchemy.orm.attributes import flag_modified
 
 from config import config
+from custom_types.json import JSONDict
 from database import get_db_session
 from db_models import AlertRule, Tenant
 from models.access.auth_models import Role, TokenData
-from custom_types.json import JSONDict
 from services.common.url_utils import is_safe_http_url
 from services.common.visibility import normalize_visibility as _base_normalize_visibility
 
@@ -38,7 +37,7 @@ def _normalized_id(value: object) -> str:
     return str(value or "").strip()
 
 
-def _normalized_id_list(values: Optional[List[object]]) -> List[str]:
+def _normalized_id_list(values: list[object] | None) -> list[str]:
     return [_normalized_id(v) for v in (values or []) if _normalized_id(v)]
 
 
@@ -56,7 +55,7 @@ def _persist_tenant_settings(tenant: Tenant, settings: JSONDict) -> None:
     flag_modified(tenant, "settings")
 
 
-def _optional_string(value: object) -> Optional[str]:
+def _optional_string(value: object) -> str | None:
     text = str(value or "").strip()
     return text or None
 
@@ -77,7 +76,7 @@ def ensure_default_tenant(db: Session) -> str:
     return row.id if row else config.default_admin_tenant
 
 
-def tenant_id_from_scope_header(scoped_header: Optional[str]) -> str:
+def tenant_id_from_scope_header(scoped_header: str | None) -> str:
     candidate = (scoped_header.split("|")[0].strip() if scoped_header else "") or config.default_org_id
 
     with get_db_session() as db:
@@ -95,7 +94,7 @@ def tenant_id_from_scope_header(scoped_header: Optional[str]) -> str:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Unknown tenant scope header")
 
 
-def _alert_label_value(labels: Dict[str, object], *keys: str) -> str:
+def _alert_label_value(labels: dict[str, object], *keys: str) -> str:
     for key in keys:
         value = str(labels.get(key) or "").strip()
         if value:
@@ -104,7 +103,7 @@ def _alert_label_value(labels: Dict[str, object], *keys: str) -> str:
 
 
 def infer_tenant_id_from_alerts(
-    scoped_header: Optional[str],
+    scoped_header: str | None,
     alerts: Sequence[Mapping[str, object]] | None,
 ) -> str:
     base_tenant_id = tenant_id_from_scope_header(scoped_header)
@@ -171,7 +170,7 @@ def infer_tenant_id_from_alerts(
     return base_tenant_id
 
 
-def encrypt_tenant_secret(value: Optional[str]) -> Optional[str]:
+def encrypt_tenant_secret(value: str | None) -> str | None:
     if not value:
         return None
     if not config.data_encryption_key:
@@ -190,7 +189,7 @@ def encrypt_tenant_secret(value: Optional[str]) -> Optional[str]:
         ) from exc
 
 
-def decrypt_tenant_secret(value: Optional[str]) -> Optional[str]:
+def decrypt_tenant_secret(value: str | None) -> str | None:
     if not value:
         return None
     text = str(value)
@@ -206,7 +205,7 @@ def decrypt_tenant_secret(value: Optional[str]) -> Optional[str]:
         return None
 
 
-def load_tenant_jira_config(tenant_id: str) -> Dict[str, object]:
+def load_tenant_jira_config(tenant_id: str) -> dict[str, object]:
     with get_db_session() as db:
         tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
         settings = (tenant.settings or {}) if tenant else {}
@@ -226,11 +225,11 @@ def save_tenant_jira_config(
     tenant_id: str,
     *,
     enabled: bool,
-    base_url: Optional[str],
-    email: Optional[str],
-    api_token: Optional[str],
-    bearer: Optional[str],
-) -> Dict[str, object]:
+    base_url: str | None,
+    email: str | None,
+    api_token: str | None,
+    bearer: str | None,
+) -> dict[str, object]:
     normalized_url = str(base_url or "").strip() or None
     normalized_email = str(email or "").strip() or None
     normalized_api_token = str(api_token or "").strip() or None
@@ -269,7 +268,7 @@ def save_tenant_jira_config(
         }
 
 
-def get_effective_jira_credentials(tenant_id: str) -> Dict[str, Optional[str]]:
+def get_effective_jira_credentials(tenant_id: str) -> dict[str, str | None]:
     tenant_cfg = load_tenant_jira_config(tenant_id)
     base_url = tenant_cfg.get("base_url")
     email = tenant_cfg.get("email")
@@ -294,11 +293,11 @@ def jira_is_enabled_for_tenant(tenant_id: str) -> bool:
     return bool(credentials.get("base_url") and (credentials.get("api_token") or credentials.get("bearer")))
 
 
-def allowed_channel_types() -> List[str]:
+def allowed_channel_types() -> list[str]:
     return [t.lower() for t in (config.enabled_notification_channel_types or [])]
 
 
-def normalize_visibility(value: Optional[str], default_value: str = "private") -> str:
+def normalize_visibility(value: str | None, default_value: str = "private") -> str:
     return _base_normalize_visibility(
         value,
         default_value=default_value,
@@ -314,7 +313,7 @@ def is_jira_sso_available() -> bool:
     return auth_provider in {"keycloak", "oidc"} and bool(oidc_issuer and oidc_client_id)
 
 
-def normalize_jira_auth_mode(value: Optional[str]) -> str:
+def normalize_jira_auth_mode(value: str | None) -> str:
     mode = str(value or "api_token").strip().lower()
     if mode not in ALLOWED_JIRA_AUTH_MODES:
         raise HTTPException(
@@ -331,11 +330,11 @@ def normalize_jira_auth_mode(value: Optional[str]) -> str:
 
 def validate_jira_credentials(
     *,
-    base_url: Optional[str],
+    base_url: str | None,
     auth_mode: str,
-    email: Optional[str],
-    api_token: Optional[str],
-    bearer_token: Optional[str],
+    email: str | None,
+    api_token: str | None,
+    bearer_token: str | None,
 ) -> None:
     normalized_base_url = str(base_url or "").strip()
     if not is_safe_http_url(normalized_base_url):
@@ -366,7 +365,7 @@ def validate_jira_credentials(
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=detail)
 
 
-def load_tenant_jira_integrations(tenant_id: str) -> List[JSONDict]:
+def load_tenant_jira_integrations(tenant_id: str) -> list[JSONDict]:
     with get_db_session() as db:
         tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
         settings = (tenant.settings or {}) if tenant else {}
@@ -376,7 +375,7 @@ def load_tenant_jira_integrations(tenant_id: str) -> List[JSONDict]:
         return [item for item in raw_items if isinstance(item, dict)]
 
 
-def save_tenant_jira_integrations(tenant_id: str, items: List[JSONDict]) -> None:
+def save_tenant_jira_integrations(tenant_id: str, items: list[JSONDict]) -> None:
     with get_db_session() as db:
         tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
         if not tenant:
@@ -389,9 +388,9 @@ def save_tenant_jira_integrations(tenant_id: str, items: List[JSONDict]) -> None
 
 def validate_shared_group_ids_for_user(
     tenant_id: str,
-    shared_group_ids: List[str],
+    shared_group_ids: list[str],
     current_user: TokenData,
-) -> List[str]:
+) -> list[str]:
     _ = tenant_id
     normalized = [str(gid).strip() for gid in (shared_group_ids or []) if str(gid).strip()]
     if not normalized:
@@ -460,7 +459,7 @@ def resolve_jira_integration(
     return match
 
 
-def jira_integration_credentials(item: Mapping[str, object]) -> Dict[str, Optional[str]]:
+def jira_integration_credentials(item: Mapping[str, object]) -> dict[str, str | None]:
     auth_mode_raw = item.get("authMode")
     api_token_raw = item.get("apiToken")
     bearer_token_raw = item.get("bearerToken")

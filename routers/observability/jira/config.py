@@ -3,7 +3,7 @@ from fastapi import APIRouter, Body, Depends
 from custom_types.json import JSONDict
 from middleware.dependencies import require_permission_with_scope
 from middleware.error_handlers import handle_route_errors
-from middleware.openapi import BAD_REQUEST_ERRORS, merge_responses, NOT_FOUND_ERRORS
+from middleware.openapi import BAD_REQUEST_ERRORS, NOT_FOUND_ERRORS, merge_responses
 from models.access.auth_models import Permission, TokenData
 from models.alerting.requests import JiraConfigUpdateRequest
 from services.alerting.integration_security_service import load_tenant_jira_config, save_tenant_jira_config

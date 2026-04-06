@@ -14,11 +14,10 @@ import sys
 import tempfile
 import types
 
+import pytest
 from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives.asymmetric import ec
-from cryptography.hazmat.primitives.asymmetric import rsa
-import pytest
+from cryptography.hazmat.primitives.asymmetric import ec, rsa
 
 from tests._env import ensure_test_env
 

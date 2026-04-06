@@ -9,7 +9,7 @@ http://www.apache.org/licenses/LICENSE-2.0
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from types import SimpleNamespace
 
 import pytest
@@ -621,7 +621,7 @@ async def test_incident_helpers_and_jira_side_effects(monkeypatch):
         "tenant",
         jira_incident,
         note_text="Reopened",
-        created_at=datetime(2024, 1, 1, tzinfo=timezone.utc),
+        created_at=datetime(2024, 1, 1, tzinfo=UTC),
     )
     assert notes[0][0] == "fake_transition_issue_to_todo"
     assert notes[1][0] == "fake_add_comment"
@@ -632,7 +632,7 @@ async def test_incident_helpers_and_jira_side_effects(monkeypatch):
         "tenant",
         jira_incident,
         note_text="Ignored",
-        created_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
     )
 
 
@@ -679,7 +679,7 @@ def test_incident_storage_additional_edges(monkeypatch):
         "tenant",
         no_ticket_incident,
         note_text="ignored",
-        created_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
     )
 
     summary_incident = SimpleNamespace(
@@ -732,7 +732,7 @@ def test_incident_storage_additional_edges(monkeypatch):
         id="inc-private",
         annotations={incidents_mod.INCIDENT_META_KEY: '{"visibility":"private","created_by":"owner"}'},
         status="open",
-        updated_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(UTC),
     )
     list_db = FakeDB([incident_private])
     monkeypatch.setattr(incidents_mod, "get_db_session", lambda: FakeCtx(list_db))
@@ -744,7 +744,7 @@ def test_incident_storage_additional_edges(monkeypatch):
         id="inc-public",
         annotations={incidents_mod.INCIDENT_META_KEY: '{"visibility":"public","created_by":"owner"}'},
         status="open",
-        updated_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(UTC),
     )
     list_db = FakeDB([incident_public])
     monkeypatch.setattr(incidents_mod, "get_db_session", lambda: FakeCtx(list_db))

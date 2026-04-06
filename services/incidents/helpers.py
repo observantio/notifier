@@ -12,8 +12,7 @@ from __future__ import annotations
 
 import logging
 import re
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 
 from models.access.auth_models import TokenData
 from models.alerting.incidents import AlertIncident
@@ -23,7 +22,7 @@ from services.jira_service import JiraError, jira_service
 logger = logging.getLogger(__name__)
 
 
-def format_incident_description(incident: AlertIncident, fallback: Optional[str]) -> str:
+def format_incident_description(incident: AlertIncident, fallback: str | None) -> str:
     if fallback and fallback.strip():
         return fallback.strip()
 
@@ -39,7 +38,7 @@ def format_incident_description(incident: AlertIncident, fallback: Optional[str]
     return str(incident.alert_name or "Incident").strip()
 
 
-def map_severity_to_jira_priority(severity: Optional[str]) -> str:
+def map_severity_to_jira_priority(severity: str | None) -> str:
     normalized = str(severity or "").strip().lower()
     if normalized == "critical":
         return "High"
@@ -51,15 +50,15 @@ def map_severity_to_jira_priority(severity: Optional[str]) -> str:
 def format_note_for_jira_comment(
     note_text: str,
     author_label: str,
-    created_at: Optional[str] = None,
+    created_at: str | None = None,
 ) -> str:
     raw_text = str(note_text or "").strip()
     if not raw_text:
         return ""
-    when = created_at or datetime.now(timezone.utc).isoformat()
+    when = created_at or datetime.now(UTC).isoformat()
     try:
         dt = datetime.fromisoformat(str(when).replace("Z", "+00:00"))
-        when_label = dt.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+        when_label = dt.astimezone(UTC).strftime("%Y-%m-%d %H:%M:%S UTC")
     except ValueError:
         when_label = str(when)
     return f"{author_label} · {when_label}\n{raw_text}"
@@ -124,7 +123,7 @@ async def sync_note_to_jira_comment(
     *,
     tenant_id: str,
     current_user: TokenData,
-    note_text: Optional[str],
+    note_text: str | None,
 ) -> None:
     text = str(note_text or "").strip()
     if not text or not incident.jira_ticket_key:

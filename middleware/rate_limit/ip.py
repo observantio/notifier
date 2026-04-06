@@ -11,14 +11,13 @@ http://www.apache.org/licenses/LICENSE-2.0
 from __future__ import annotations
 
 from ipaddress import ip_address, ip_network
-from typing import Optional
 
 from fastapi import Request
 
 from config import config
 
 
-def _valid_ip(value: str) -> Optional[str]:
+def _valid_ip(value: str) -> str | None:
     candidate = (value or "").strip()
     if not candidate:
         return None

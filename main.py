@@ -13,18 +13,19 @@ from __future__ import annotations
 import logging
 import secrets
 from collections.abc import Awaitable, Callable
+
+import uvicorn
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.responses import Response
-import uvicorn
 
-from config import config
 import database as database_module
-from middleware.headers import security_headers_middleware
-from middleware.error_handlers import general_exception_handler, http_exception_handler, validation_exception_handler
+from config import config
 from middleware.concurrency_limit import ConcurrencyLimitMiddleware
+from middleware.error_handlers import general_exception_handler, http_exception_handler, validation_exception_handler
+from middleware.headers import security_headers_middleware
 from middleware.openapi import (
     install_custom_openapi,
     openapi_contact,
@@ -35,6 +36,8 @@ from middleware.openapi import (
 from middleware.request_size_limit import RequestSizeLimitMiddleware
 from routers.observability.alerts import (
     router as alertmanager_alerts_router,
+)
+from routers.observability.alerts import (
     webhook_router as alertmanager_webhook_router,
 )
 from routers.observability.incidents import router as alertmanager_incidents_router

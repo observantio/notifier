@@ -6,12 +6,12 @@ License. You may obtain a copy of the License at
 http://www.apache.org/licenses/LICENSE-2.0
 """
 
+from services.storage.channels import ChannelStorageService
 from services.storage.incidents import IncidentStorageService
 from services.storage.rules import RuleStorageService
-from services.storage.channels import ChannelStorageService
 
 __all__ = [
+    "ChannelStorageService",
     "IncidentStorageService",
     "RuleStorageService",
-    "ChannelStorageService",
 ]

@@ -8,7 +8,7 @@ http://www.apache.org/licenses/LICENSE-2.0
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from types import SimpleNamespace
 from typing import Any, cast
 
@@ -51,9 +51,9 @@ def _incident(**kwargs) -> AlertIncident:
         "notes": [],
         "labels": {},
         "annotations": {},
-        "lastSeenAt": datetime.now(timezone.utc),
-        "createdAt": datetime.now(timezone.utc),
-        "updatedAt": datetime.now(timezone.utc),
+        "lastSeenAt": datetime.now(UTC),
+        "createdAt": datetime.now(UTC),
+        "updatedAt": datetime.now(UTC),
     }
     payload.update(kwargs)
     return AlertIncident.model_validate(payload)
@@ -101,7 +101,7 @@ def test_incident_helper_formatting_and_author_rewrites():
 
 
 def test_incident_note_serializer_handles_timezone_aware_values() -> None:
-    aware = datetime(2026, 1, 1, 12, 0, tzinfo=timezone.utc)
+    aware = datetime(2026, 1, 1, 12, 0, tzinfo=UTC)
     note = IncidentNote.model_validate({"author": "alice", "text": "investigating", "createdAt": aware})
     assert note.model_dump(by_alias=True)["createdAt"] == "2026-01-01T12:00:00Z"
 
@@ -175,7 +175,7 @@ async def test_incident_helper_jira_sync_paths(monkeypatch):
 
 
 def test_storage_serializers_cover_rule_channel_and_incident_payloads():
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     rule = SimpleNamespace(
         id="rule-1",
         created_by="owner",
@@ -265,7 +265,7 @@ def test_storage_serializers_cover_rule_channel_and_incident_payloads():
 
 
 def test_storage_serializer_incident_status_enum_and_correlation_case_bridge():
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     incident = SimpleNamespace(
         id="inc-3",
         fingerprint="fp-3",
@@ -290,7 +290,7 @@ def test_storage_serializer_incident_status_enum_and_correlation_case_bridge():
 
 
 def test_storage_serializer_incident_without_correlation_leaves_keys_absent():
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     incident = SimpleNamespace(
         id="inc-4",
         fingerprint="fp-4",
@@ -314,7 +314,7 @@ def test_storage_serializer_incident_without_correlation_leaves_keys_absent():
 
 
 def test_storage_serializer_preserves_existing_dual_correlation_keys():
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     incident = SimpleNamespace(
         id="inc-5",
         fingerprint="fp-5",

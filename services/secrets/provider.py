@@ -17,17 +17,17 @@ http://www.apache.org/licenses/LICENSE-2.0
 from __future__ import annotations
 
 import os
-from typing import Dict, List, Optional, Protocol
+from typing import Protocol
 
 
 class SecretProvider(Protocol):
-    def get(self, key: str) -> Optional[str]: ...
-    def get_many(self, keys: List[str]) -> Dict[str, Optional[str]]: ...
+    def get(self, key: str) -> str | None: ...
+    def get_many(self, keys: list[str]) -> dict[str, str | None]: ...
 
 
 class EnvSecretProvider:
-    def get(self, key: str) -> Optional[str]:
+    def get(self, key: str) -> str | None:
         return os.environ.get(key) or None
 
-    def get_many(self, keys: List[str]) -> Dict[str, Optional[str]]:
+    def get_many(self, keys: list[str]) -> dict[str, str | None]:
         return {k: self.get(k) for k in keys}

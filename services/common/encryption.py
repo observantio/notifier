@@ -16,6 +16,7 @@ import logging
 from functools import lru_cache
 
 from cryptography.fernet import Fernet, InvalidToken
+
 from config import config as app_config
 from custom_types.json import JSONDict, is_json_object
 

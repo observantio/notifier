@@ -6,10 +6,10 @@ License. You may obtain a copy of the License at
 http://www.apache.org/licenses/LICENSE-2.0
 """
 
-import os
 import json
+import os
 from contextlib import contextmanager
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -17,12 +17,12 @@ from sqlalchemy.orm import sessionmaker
 os.environ.setdefault("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/observantio_test")
 
 from db_models import AlertIncident, Base
+from services.common.meta import INCIDENT_META_KEY
 from services.storage import incidents as incidents_module
 from services.storage.incidents import (
-    IncidentStorageService,
     METRIC_STATES_ANNOTATION_KEY,
+    IncidentStorageService,
 )
-from services.common.meta import INCIDENT_META_KEY
 
 
 def _session_factory():
@@ -146,7 +146,7 @@ def test_sync_incidents_deduplicates_existing_open_rows_with_same_incident_key(m
     monkeypatch.setattr(incidents_module, "get_db_session", fake_db_session)
 
     tenant_id = "t1"
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     key = "rule:Memory Boom|scope:*"
 
     with SessionLocal() as db:

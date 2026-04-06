@@ -10,17 +10,17 @@ http://www.apache.org/licenses/LICENSE-2.0
 """
 
 import logging
-from typing import Sequence
+from collections.abc import Sequence
 
 from fastapi import HTTPException, Request, status
 from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field, StrictBool
 from sqlalchemy.exc import SQLAlchemyError
 
+from custom_types.json import JSONDict
 from models.access.auth_models import TokenData
 from models.alerting.channels import NotificationChannel, NotificationChannelCreate
 from models.alerting.silences import SilenceCreate, SilenceCreateRequest, Visibility
-from custom_types.json import JSONDict
 from services.alerting.integration_security_service import allowed_channel_types, validate_shared_group_ids_for_user
 from services.alertmanager_service import AlertManagerService
 from services.notification_service import NotificationService

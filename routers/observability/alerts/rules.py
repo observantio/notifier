@@ -11,8 +11,8 @@ http://www.apache.org/licenses/LICENSE-2.0
 
 import asyncio
 import logging
-from datetime import datetime, timezone
-from typing import List, Optional, cast
+from datetime import UTC, datetime
+from typing import cast
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, status
 from fastapi.concurrency import run_in_threadpool
@@ -86,7 +86,7 @@ async def import_rules(
     existing_rules = await run_in_threadpool(storage_service.get_alert_rules, tenant_id, user_id, group_ids)
     existing_index = {(item.name, item.group, item.org_id or ""): item for item in existing_rules}
     created = updated = 0
-    imported_rules: List[AlertRule] = []
+    imported_rules: list[AlertRule] = []
 
     for rule in parsed_rules:
         rule = _with_creator_username(rule, current_user)
@@ -124,7 +124,7 @@ async def import_rules(
 
 @router.get(
     "/rules",
-    response_model=List[AlertRule],
+    response_model=list[AlertRule],
     summary="List Alert Rules",
     description="Lists alert rules visible to the current user with pagination support.",
     response_description="The alert rules visible to the current caller.",
@@ -136,7 +136,7 @@ async def list_rules(
     offset: int = Query(0, ge=0),
     show_hidden: str = Query("false", pattern="^(true|false)$"),
     current_user: TokenData = Depends(require_permission_with_scope(Permission.READ_RULES, "alertmanager")),
-) -> List[AlertRule]:
+) -> list[AlertRule]:
     if request is not None:
         reject_unknown_query_params(request, {"limit", "offset", "show_hidden"})
     tenant_id, user_id, group_ids = alertmanager_service.user_scope(current_user)
@@ -150,7 +150,7 @@ async def list_rules(
     rules_with_owner = await run_in_threadpool(
         storage_service.get_alert_rules_with_owner, tenant_id, user_id, group_ids, limit, offset
     )
-    result: List[AlertRule] = []
+    result: list[AlertRule] = []
     for rule, owner in rules_with_owner:
         rule.is_hidden = bool(rule.id and rule.id in hidden_ids)
         if rule.is_hidden and not parse_show_hidden(show_hidden):
@@ -163,13 +163,13 @@ async def list_rules(
 
 @router.get(
     "/public/rules",
-    response_model=List[AlertRule],
+    response_model=list[AlertRule],
     summary="List Public Alert Rules",
     description="Lists public alert rules for the default tenant after public endpoint protections are enforced.",
     response_description="The public alert rules available for the default tenant.",
     responses=COMMON_ERRORS,
 )
-async def list_public_rules(request: Request) -> List[AlertRule]:
+async def list_public_rules(request: Request) -> list[AlertRule]:
     enforce_public_endpoint_security(
         request,
         scope="alertmanager_public_rules",
@@ -178,7 +178,7 @@ async def list_public_rules(request: Request) -> List[AlertRule]:
         allowlist=config.auth_public_ip_allowlist,
     )
 
-    def _resolve_default_tenant_id() -> Optional[str]:
+    def _resolve_default_tenant_id() -> str | None:
         with get_db_session() as db:
             tenant = db.query(Tenant).filter_by(name=config.default_admin_tenant).first()
             return tenant.id if tenant else None
@@ -198,7 +198,7 @@ async def list_public_rules(request: Request) -> List[AlertRule]:
 )
 @handle_route_errors(bad_gateway_detail="Failed to fetch metrics from Mimir")
 async def list_metric_names(
-    org_id: Optional[str] = Query(None, alias="orgId"),
+    org_id: str | None = Query(None, alias="orgId"),
     current_user: TokenData = Depends(
         require_any_permission_with_scope(
             [Permission.READ_METRICS, Permission.CREATE_RULES, Permission.UPDATE_RULES, Permission.WRITE_ALERTS],
@@ -225,7 +225,7 @@ async def list_metric_names(
 @handle_route_errors(bad_gateway_detail="Failed to evaluate PromQL against Mimir")
 async def query_metrics(
     query: str = Query(..., min_length=1),
-    org_id: Optional[str] = Query(None, alias="orgId"),
+    org_id: str | None = Query(None, alias="orgId"),
     sample_limit: int = Query(5, alias="sampleLimit", ge=1, le=20),
     current_user: TokenData = Depends(
         require_any_permission_with_scope(
@@ -253,7 +253,7 @@ async def query_metrics(
 )
 @handle_route_errors(bad_gateway_detail="Failed to fetch label names from Mimir")
 async def list_metric_labels(
-    org_id: Optional[str] = Query(None, alias="orgId"),
+    org_id: str | None = Query(None, alias="orgId"),
     current_user: TokenData = Depends(
         require_any_permission_with_scope(
             [Permission.READ_METRICS, Permission.CREATE_RULES, Permission.UPDATE_RULES, Permission.WRITE_ALERTS],
@@ -283,8 +283,8 @@ async def list_metric_labels(
 )
 async def list_metric_label_values(
     label: str,
-    org_id: Optional[str] = Query(None, alias="orgId"),
-    metric_name: Optional[str] = Query(None, alias="metricName"),
+    org_id: str | None = Query(None, alias="orgId"),
+    metric_name: str | None = Query(None, alias="metricName"),
     current_user: TokenData = Depends(
         require_any_permission_with_scope(
             [Permission.READ_METRICS, Permission.CREATE_RULES, Permission.UPDATE_RULES, Permission.WRITE_ALERTS],
@@ -509,7 +509,7 @@ async def test_rule(
                 ),
                 **(rule.annotations or {}),
             },
-            "startsAt": datetime.now(timezone.utc).isoformat(),
+            "startsAt": datetime.now(UTC).isoformat(),
             "endsAt": None,
             "generatorURL": None,
             "status": {"state": "active", "silencedBy": [], "inhibitedBy": []},
@@ -531,7 +531,7 @@ async def test_rule(
     for channel in channels:
         try:
             ok = await asyncio.wait_for(notification_service.send_notification(channel, alert, "test"), timeout=1.5)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             ok = False
         results.append({"channel": channel.name, "ok": ok})
         if ok:

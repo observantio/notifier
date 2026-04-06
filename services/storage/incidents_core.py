@@ -11,7 +11,7 @@ http://www.apache.org/licenses/LICENSE-2.0
 from __future__ import annotations
 
 import logging
-from typing import List, Mapping, Optional
+from collections.abc import Mapping
 
 from sqlalchemy.orm import Session
 
@@ -29,7 +29,7 @@ def _json_dict(value: object) -> JSONDict:
     return value if isinstance(value, dict) else {}
 
 
-def _shared_group_ids(db_obj: object) -> List[str]:
+def _shared_group_ids(db_obj: object) -> list[str]:
     rule = db_obj if isinstance(db_obj, AlertRuleDB) else None
     return [g.id for g in rule.shared_groups] if rule and rule.shared_groups else []
 
@@ -46,7 +46,7 @@ def incident_scope_hint_from_labels(labels: Mapping[str, object]) -> str:
     return ""
 
 
-def incident_key_from_labels(labels: Mapping[str, object]) -> Optional[str]:
+def incident_key_from_labels(labels: Mapping[str, object]) -> str | None:
     alert_name = str((labels or {}).get("alertname") or "").strip()
     if not alert_name:
         return None
@@ -54,7 +54,7 @@ def incident_key_from_labels(labels: Mapping[str, object]) -> Optional[str]:
     return f"rule:{alert_name}|scope:{scope_hint}"
 
 
-def incident_key_from_db_row(incident: AlertIncidentDB) -> Optional[str]:
+def incident_key_from_db_row(incident: AlertIncidentDB) -> str | None:
     annotations = incident.annotations if isinstance(incident.annotations, dict) else {}
     meta = parse_meta(annotations)
     key = str(meta.get(INCIDENT_META_KEY_IDENTITY) or "").strip()
@@ -76,19 +76,19 @@ def incident_activity_token_from_row(incident: AlertIncidentDB) -> str:
     key = incident_key_from_db_row(incident)
     if key:
         return f"k:{key}"
-    return f"fp:{str(getattr(incident, 'fingerprint', '') or '')}"
+    return f"fp:{getattr(incident, 'fingerprint', '') or ''!s}"
 
 
 def _extract_metric_state(labels: Mapping[str, object]) -> str:
     return str(labels.get("state") or labels.get("metric_state") or labels.get("mem_state") or "").strip()
 
 
-def _parse_metric_states(value: object) -> List[str]:
+def _parse_metric_states(value: object) -> list[str]:
     raw = str(value or "").strip()
     if not raw:
         return []
     seen: set[str] = set()
-    out: List[str] = []
+    out: list[str] = []
     for part in raw.split(","):
         state = str(part or "").strip()
         if not state or state in seen:
@@ -120,10 +120,10 @@ def _is_alert_suppressed(alert: JSONDict) -> bool:
 def _incident_access_allowed(
     *,
     visibility: str,
-    creator_id: Optional[str],
+    creator_id: str | None,
     user_id: str,
-    shared_group_ids: List[str],
-    user_group_ids: List[str],
+    shared_group_ids: list[str],
+    user_group_ids: list[str],
     require_write: bool = False,
 ) -> bool:
     _ = require_write
@@ -139,7 +139,7 @@ def _incident_access_allowed(
     )
 
 
-def _resolve_rule_by_alertname(db: Session, tenant_id: str, labels: Mapping[str, object]) -> Optional[AlertRuleDB]:
+def _resolve_rule_by_alertname(db: Session, tenant_id: str, labels: Mapping[str, object]) -> AlertRuleDB | None:
     alertname = labels.get("alertname")
     if not alertname:
         return None

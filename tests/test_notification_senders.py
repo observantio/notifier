@@ -13,10 +13,11 @@ except ImportError:
 ensure_test_env()
 
 import asyncio
+
 import httpx
 
-from services.notification import senders, transport
 from models.alerting.alerts import Alert, AlertStatus
+from services.notification import senders, transport
 
 
 def _make_alert():

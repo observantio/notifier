@@ -13,12 +13,13 @@ except ImportError:
 ensure_test_env()
 
 from cryptography.fernet import Fernet
+
 from config import config
-from services.common import encryption as encryption_module
-from services.storage.channels import ChannelStorageService
-from models.alerting.channels import NotificationChannelCreate, ChannelType
 from database import get_db_session
 from db_models import NotificationChannel as NotificationChannelDB
+from models.alerting.channels import ChannelType, NotificationChannelCreate
+from services.common import encryption as encryption_module
+from services.storage.channels import ChannelStorageService
 
 
 def test_encrypt_decrypt_config_roundtrip(monkeypatch):

@@ -12,8 +12,8 @@ from __future__ import annotations
 
 import logging
 
-from starlette.types import ASGIApp, Message, Receive, Scope, Send
 from starlette.responses import PlainTextResponse
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 logger = logging.getLogger(__name__)
 

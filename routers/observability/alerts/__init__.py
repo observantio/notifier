@@ -4,8 +4,8 @@ Alertmanager routers split by resource domain.
 
 from fastapi import APIRouter
 
-from .alerts_routes import router as alerts_router
 from .access import router as access_router
+from .alerts_routes import router as alerts_router
 from .channels import router as channels_router
 from .integrations import router as integrations_router
 from .rules import router as rules_router

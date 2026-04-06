@@ -12,11 +12,10 @@ License. You may obtain a copy of the License at
 http://www.apache.org/licenses/LICENSE-2.0
 """
 
-from typing import Optional
 from config import config as app_config
 
 
-def cap_pagination(limit: Optional[int], offset: int) -> tuple[int, int]:
+def cap_pagination(limit: int | None, offset: int) -> tuple[int, int]:
     default = int(app_config.default_query_limit)
     maximum = int(app_config.max_query_limit)
     resolved_limit = int(limit) if limit is not None else default

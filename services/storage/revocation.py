@@ -5,10 +5,8 @@ Group-share revocation helpers for Notifier resources.
 from __future__ import annotations
 
 import json
-from typing import Dict, List, Set
 
-from sqlalchemy.orm import Session
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy.orm.attributes import flag_modified
 
 from custom_types.json import JSONDict
@@ -16,9 +14,9 @@ from db_models import AlertIncident, AlertRule, Group, NotificationChannel, Tena
 from services.common.meta import INCIDENT_META_KEY, _safe_group_ids, parse_meta
 
 
-def _normalize_ids(values: List[str] | None) -> List[str]:
-    seen: Set[str] = set()
-    out: List[str] = []
+def _normalize_ids(values: list[str] | None) -> list[str]:
+    seen: set[str] = set()
+    out: list[str] = []
     for value in values or []:
         normalized = str(value or "").strip()
         if not normalized or normalized in seen:
@@ -33,9 +31,9 @@ def prune_removed_member_group_shares(
     *,
     tenant_id: str,
     group_id: str,
-    removed_user_ids: List[str] | None,
-    removed_usernames: List[str] | None = None,
-) -> Dict[str, int]:
+    removed_user_ids: list[str] | None,
+    removed_usernames: list[str] | None = None,
+) -> dict[str, int]:
     target_group_id = str(group_id or "").strip()
     removed_ids = set(_normalize_ids(removed_user_ids))
     removed_names = {name.lower() for name in _normalize_ids(removed_usernames)}

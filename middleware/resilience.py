@@ -11,8 +11,10 @@ http://www.apache.org/licenses/LICENSE-2.0
 import asyncio
 import logging
 import random
+from collections.abc import Awaitable, Callable
 from functools import wraps
-from typing import Awaitable, Callable, ParamSpec, TypeVar
+from typing import ParamSpec, TypeVar
+
 import httpx
 
 from config import config
@@ -62,7 +64,7 @@ def with_retry(
                             func.__name__,
                             exc,
                         )
-                except (httpx.RequestError, asyncio.TimeoutError) as exc:
+                except (TimeoutError, httpx.RequestError) as exc:
                     last_exception = exc
                     if attempt < max_retries:
                         wait_time = min(config.retry_max_backoff, backoff * (2**attempt))
@@ -100,7 +102,7 @@ def with_timeout(timeout: float = config.default_timeout) -> Callable[[AsyncFunc
         async def wrapper(*args: P.args, **kwargs: P.kwargs) -> T:
             try:
                 return await asyncio.wait_for(func(*args, **kwargs), timeout=timeout)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 logger.error("Timeout after %ss for %s", timeout, func.__name__)
                 raise
 

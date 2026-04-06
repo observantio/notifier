@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import threading
 import time
-from typing import Dict
 
 from .models import RateLimitHitResult, RateLimitState
 
@@ -26,7 +25,7 @@ class InMemoryRateLimiter:
         max_states: int = 200_000,
     ) -> None:
         self._lock = threading.Lock()
-        self._states: Dict[str, RateLimitState] = {}
+        self._states: dict[str, RateLimitState] = {}
         self._gc_every = max(100, int(gc_every))
         self._stale_after_seconds = max(60, int(stale_after_seconds))
         self._max_states = max(10_000, int(max_states))

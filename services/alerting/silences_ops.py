@@ -14,10 +14,11 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections.abc import Sequence
-from typing import TYPE_CHECKING, Dict, List, Optional
+from typing import TYPE_CHECKING
 
 import httpx
 from sqlalchemy.exc import SQLAlchemyError
+
 from database import get_db_session
 from db_models import PurgedSilence
 from models.access.auth_models import TokenData
@@ -79,8 +80,8 @@ async def prune_removed_member_group_silences(
     service: AlertManagerService,
     *,
     group_id: str,
-    removed_user_ids: Optional[List[str]] = None,
-    removed_usernames: Optional[List[str]] = None,
+    removed_user_ids: list[str] | None = None,
+    removed_usernames: list[str] | None = None,
 ) -> int:
     target_group_id = str(group_id or "").strip()
     if not target_group_id:
@@ -129,8 +130,8 @@ async def prune_removed_member_group_silences(
     return updated
 
 
-async def get_silences(service: AlertManagerService, filter_labels: Optional[Dict[str, str]] = None) -> List[Silence]:
-    params: Dict[str, QueryParamValue | Sequence[QueryParamValue]] = {}
+async def get_silences(service: AlertManagerService, filter_labels: dict[str, str] | None = None) -> list[Silence]:
+    params: dict[str, QueryParamValue | Sequence[QueryParamValue]] = {}
     if filter_labels:
         params["filter"] = [f'{k}="{v}"' for k, v in filter_labels.items()]
 
@@ -160,7 +161,7 @@ async def get_silences(service: AlertManagerService, filter_labels: Optional[Dic
         return []
 
 
-async def get_silence(service: AlertManagerService, silence_id: str) -> Optional[Silence]:
+async def get_silence(service: AlertManagerService, silence_id: str) -> Silence | None:
     try:
         response = await service.alertmanager_http_client.get(f"{service.alertmanager_url}/api/v2/silence/{silence_id}")
         response.raise_for_status()
@@ -170,7 +171,7 @@ async def get_silence(service: AlertManagerService, silence_id: str) -> Optional
         return None
 
 
-async def create_silence(service: AlertManagerService, silence: SilenceCreate) -> Optional[str]:
+async def create_silence(service: AlertManagerService, silence: SilenceCreate) -> str | None:
     try:
         response = await service.alertmanager_http_client.post(
             f"{service.alertmanager_url}/api/v2/silences",
@@ -208,6 +209,6 @@ async def delete_silence(service: AlertManagerService, silence_id: str) -> bool:
         return False
 
 
-async def update_silence(service: AlertManagerService, silence_id: str, silence: SilenceCreate) -> Optional[str]:
+async def update_silence(service: AlertManagerService, silence_id: str, silence: SilenceCreate) -> str | None:
     await delete_silence(service, silence_id)
     return await create_silence(service, silence)

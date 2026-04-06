@@ -13,8 +13,9 @@ except ImportError:
 ensure_test_env()
 
 import asyncio
-import httpx
 from email.message import EmailMessage
+
+import httpx
 
 from services.notification import email_providers, transport
 

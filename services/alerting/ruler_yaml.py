@@ -9,8 +9,6 @@ License. You may obtain a copy of the License at
 http://www.apache.org/licenses/LICENSE-2.0
 """
 
-from typing import Dict, List
-
 from config import config
 from models.alerting.rules import AlertRule
 
@@ -21,8 +19,8 @@ def yaml_quote(value: object) -> str:
     return f'"{escaped}"'
 
 
-def group_enabled_rules(rules: List[AlertRule]) -> Dict[str, List[AlertRule]]:
-    grouped: Dict[str, List[AlertRule]] = {}
+def group_enabled_rules(rules: list[AlertRule]) -> dict[str, list[AlertRule]]:
+    grouped: dict[str, list[AlertRule]] = {}
     for rule in rules:
         if not rule.enabled:
             continue
@@ -31,7 +29,7 @@ def group_enabled_rules(rules: List[AlertRule]) -> Dict[str, List[AlertRule]]:
     return grouped
 
 
-def build_ruler_group_yaml(group_name: str, rules: List[AlertRule]) -> str:
+def build_ruler_group_yaml(group_name: str, rules: list[AlertRule]) -> str:
     lines = [f"name: {yaml_quote(group_name)}", "rules:"]
     for rule in sorted(rules, key=lambda entry: entry.name.lower()):
         lines.append(f"  - alert: {yaml_quote(rule.name)}")
@@ -53,11 +51,11 @@ def build_ruler_group_yaml(group_name: str, rules: List[AlertRule]) -> str:
     return "\n".join(lines) + "\n"
 
 
-def extract_mimir_group_names(namespace_yaml: str) -> List[str]:
+def extract_mimir_group_names(namespace_yaml: str) -> list[str]:
     if not namespace_yaml:
         return []
 
-    names: List[str] = []
+    names: list[str] = []
     for line in namespace_yaml.splitlines():
         stripped = line.strip()
         if not stripped.startswith("- name:"):

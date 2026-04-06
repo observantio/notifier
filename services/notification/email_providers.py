@@ -15,14 +15,56 @@ http://www.apache.org/licenses/LICENSE-2.0
 import logging
 from email.message import EmailMessage
 from email.utils import parseaddr
+from typing import cast
 
 import aiosmtplib
 import httpx
 
 from custom_types.json import JSONDict
+
 from . import transport
 
 logger = logging.getLogger(__name__)
+
+
+def _coerce_smtp_delivery_config(
+    smtp: transport.SmtpDeliveryConfig | object | None,
+    legacy_args: tuple[object, ...],
+    legacy_kwargs: dict[str, object],
+) -> transport.SmtpDeliveryConfig:
+    if isinstance(smtp, transport.SmtpDeliveryConfig):
+        return smtp
+
+    values: list[object] = []
+    if smtp is not None:
+        values.append(smtp)
+    values.extend(legacy_args)
+
+    hostname_value = values[0] if values else legacy_kwargs.pop("hostname", "")
+    port_value = values[1] if len(values) > 1 else legacy_kwargs.pop("port", 0)
+    username_value = values[2] if len(values) > 2 else legacy_kwargs.pop("username", None)
+    password_value = values[3] if len(values) > 3 else legacy_kwargs.pop("password", None)
+    start_tls_value = values[4] if len(values) > 4 else legacy_kwargs.pop("start_tls", False)
+    use_tls_value = values[5] if len(values) > 5 else legacy_kwargs.pop("use_tls", False)
+
+    hostname = str(hostname_value or "").strip()
+    if not hostname:
+        raise ValueError("SMTP hostname is required")
+    try:
+        port = int(cast(int | str | bytes | bytearray, port_value))
+    except (TypeError, ValueError) as exc:
+        raise ValueError("SMTP port must be an integer") from exc
+
+    username = str(username_value).strip() if username_value is not None else ""
+
+    return transport.SmtpDeliveryConfig(
+        hostname=hostname,
+        port=port,
+        username=username or None,
+        password=str(password_value) if password_value is not None else None,
+        start_tls=bool(start_tls_value),
+        use_tls=bool(use_tls_value),
+    )
 
 
 def _is_valid_email(addr: str) -> bool:
@@ -130,25 +172,24 @@ async def send_via_resend(
 
 async def send_via_smtp(
     message: EmailMessage,
-    hostname: str,
-    port: int,
-    username: str | None,
-    password: str | None,
-    start_tls: bool,
-    use_tls: bool,
+    *legacy_args: object,
+    smtp: transport.SmtpDeliveryConfig | object | None = None,
+    **legacy_kwargs: object,
 ) -> bool:
-    if (username or password) and not (start_tls or use_tls):
+    smtp_config = _coerce_smtp_delivery_config(smtp, legacy_args, dict(legacy_kwargs))
+
+    if (smtp_config.username or smtp_config.password) and not (smtp_config.start_tls or smtp_config.use_tls):
         raise ValueError("SMTP authentication without TLS is insecure")
 
     try:
         await transport.send_smtp_with_retry(
             message,
-            hostname=hostname,
-            port=port,
-            username=username,
-            password=password,
-            start_tls=start_tls,
-            use_tls=use_tls,
+            smtp_config.hostname,
+            smtp_config.port,
+            smtp_config.username,
+            smtp_config.password,
+            smtp_config.start_tls,
+            smtp_config.use_tls,
         )
         return True
     except (aiosmtplib.errors.SMTPException, OSError, TimeoutError, ValueError) as exc:

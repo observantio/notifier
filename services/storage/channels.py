@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import logging
 import uuid
-from typing import List, Optional
 
 from sqlalchemy.orm import joinedload
 
@@ -23,7 +22,7 @@ from database import get_db_session
 from db_models import AlertRule as AlertRuleDB
 from db_models import NotificationChannel as NotificationChannelDB
 from models.alerting.channels import NotificationChannel, NotificationChannelCreate
-from services.common.access import has_access, assign_shared_groups
+from services.common.access import assign_shared_groups, has_access
 from services.common.encryption import decrypt_config, encrypt_config
 from services.common.pagination import cap_pagination
 from services.common.tenants import ensure_tenant_exists
@@ -33,7 +32,7 @@ from services.storage.serializers import channel_to_pydantic, channel_to_pydanti
 logger = logging.getLogger(__name__)
 
 
-def _shared_group_ids(db_obj: NotificationChannelDB) -> List[str]:
+def _shared_group_ids(db_obj: NotificationChannelDB) -> list[str]:
     return [g.id for g in db_obj.shared_groups] if db_obj.shared_groups else []
 
 
@@ -81,10 +80,10 @@ class ChannelStorageService:
         self,
         tenant_id: str,
         user_id: str,
-        group_ids: Optional[List[str]] = None,
-        limit: Optional[int] = None,
+        group_ids: list[str] | None = None,
+        limit: int | None = None,
         offset: int = 0,
-    ) -> List[NotificationChannel]:
+    ) -> list[NotificationChannel]:
         group_ids = group_ids or []
         capped_limit, capped_offset = cap_pagination(limit, offset)
 
@@ -98,7 +97,7 @@ class ChannelStorageService:
                 .all()
             )
 
-            results: List[NotificationChannel] = []
+            results: list[NotificationChannel] = []
             for ch in channels:
                 if not has_access(
                     _visibility_of(ch),
@@ -109,7 +108,7 @@ class ChannelStorageService:
                 ):
                     continue
                 raw_cfg = decrypt_config(_config_dict(ch))
-                setattr(ch, "config", raw_cfg)
+                ch.config = raw_cfg
                 results.append(channel_to_pydantic_for_viewer(ch, user_id))
             return results
 
@@ -118,8 +117,8 @@ class ChannelStorageService:
         channel_id: str,
         tenant_id: str,
         user_id: str,
-        group_ids: Optional[List[str]] = None,
-    ) -> Optional[NotificationChannel]:
+        group_ids: list[str] | None = None,
+    ) -> NotificationChannel | None:
         group_ids = group_ids or []
         with get_db_session() as db:
             ch = (
@@ -139,7 +138,7 @@ class ChannelStorageService:
             ):
                 return None
             raw_cfg = decrypt_config(_config_dict(ch))
-            setattr(ch, "config", raw_cfg)
+            ch.config = raw_cfg
             return channel_to_pydantic_for_viewer(ch, user_id)
 
     def create_notification_channel(
@@ -147,7 +146,7 @@ class ChannelStorageService:
         channel_create: NotificationChannelCreate,
         tenant_id: str,
         user_id: str,
-        group_ids: Optional[List[str]] = None,
+        group_ids: list[str] | None = None,
     ) -> NotificationChannel:
         with get_db_session() as db:
             ensure_tenant_exists(db, tenant_id)
@@ -174,7 +173,7 @@ class ChannelStorageService:
             logger.info("Created channel %s (%s) visibility=%s", ch.name, ch.id, ch.visibility)
 
             cfg = decrypt_config(_config_dict(ch))
-            setattr(ch, "config", cfg)
+            ch.config = cfg
             return channel_to_pydantic_for_viewer(ch, user_id)
 
     def update_notification_channel(
@@ -183,8 +182,8 @@ class ChannelStorageService:
         channel_update: NotificationChannelCreate,
         tenant_id: str,
         user_id: str,
-        group_ids: Optional[List[str]] = None,
-    ) -> Optional[NotificationChannel]:
+        group_ids: list[str] | None = None,
+    ) -> NotificationChannel | None:
         group_ids = group_ids or []
         with get_db_session() as db:
             ch = (
@@ -214,7 +213,7 @@ class ChannelStorageService:
             logger.info("Updated channel %s (%s)", ch.name, channel_id)
 
             cfg = decrypt_config(_config_dict(ch))
-            setattr(ch, "config", cfg)
+            ch.config = cfg
             return channel_to_pydantic_for_viewer(ch, user_id)
 
     def delete_notification_channel(self, channel_id: str, tenant_id: str, user_id: str) -> bool:
@@ -248,7 +247,7 @@ class ChannelStorageService:
         channel_id: str,
         tenant_id: str,
         user_id: str,
-        group_ids: Optional[List[str]] = None,
+        group_ids: list[str] | None = None,
     ) -> dict[str, object]:
         channel = self.get_notification_channel(channel_id, tenant_id, user_id, group_ids)
         if not channel:
@@ -263,8 +262,8 @@ class ChannelStorageService:
         self,
         tenant_id: str,
         rule_name: str,
-        org_id: Optional[str] = None,
-    ) -> List[NotificationChannel]:
+        org_id: str | None = None,
+    ) -> list[NotificationChannel]:
         with get_db_session() as db:
             rules = (
                 db.query(AlertRuleDB)
@@ -295,9 +294,9 @@ class ChannelStorageService:
             )
             channel_by_id = {str(ch.id): ch for ch in tenant_channels}
 
-            results: List[NotificationChannel] = []
+            results: list[NotificationChannel] = []
             seen_ids: set[str] = set()
-            debug_notes: List[str] = []
+            debug_notes: list[str] = []
             for r in rules:
                 configured_ids = [str(cid) for cid in (r.notification_channels or []) if str(cid).strip()]
                 if configured_ids:
@@ -321,7 +320,7 @@ class ChannelStorageService:
                         compatible_skipped += 1
                         continue
                     raw_cfg = decrypt_config(_config_dict(ch))
-                    setattr(ch, "config", raw_cfg)
+                    ch.config = raw_cfg
                     results.append(channel_to_pydantic(ch))
                     seen_ids.add(str(ch.id))
                 if compatible_skipped:

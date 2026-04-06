@@ -7,6 +7,7 @@ http://www.apache.org/licenses/LICENSE-2.0
 """
 
 import unittest
+
 from config import config
 
 try:

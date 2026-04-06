@@ -15,13 +15,12 @@ ensure_test_env()
 import asyncio
 
 from config import config
-
-from services.notification import senders as notification_senders
+from models.alerting.alerts import Alert, AlertStatus
+from models.alerting.channels import ChannelType, NotificationChannel
 from services.notification import email_providers as notification_email
 from services.notification import payloads as notification_payloads
+from services.notification import senders as notification_senders
 from services.notification_service import NotificationService
-from models.alerting.channels import NotificationChannel, ChannelType
-from models.alerting.alerts import Alert, AlertStatus
 
 
 def _make_alert():

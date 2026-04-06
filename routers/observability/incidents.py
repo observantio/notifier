@@ -10,7 +10,7 @@ http://www.apache.org/licenses/LICENSE-2.0
 """
 
 import logging
-from typing import List, Optional, cast
+from typing import cast
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -30,9 +30,9 @@ from services.incidents.helpers import (
     move_incident_ticket_to_todo,
     sync_note_to_jira_comment,
 )
-from services.storage_db_service import DatabaseStorageService
 from services.notification_service import NotificationService
 from services.storage.incidents import incident_key_from_labels
+from services.storage_db_service import DatabaseStorageService
 
 logger = logging.getLogger(__name__)
 
@@ -45,22 +45,22 @@ notification_service = NotificationService()
 
 @router.get(
     "/incidents",
-    response_model=List[AlertIncident],
+    response_model=list[AlertIncident],
     summary="List Incidents",
     description=(
-        "Lists alert incidents visible to the current user with optional status, visibility, " "and group filters."
+        "Lists alert incidents visible to the current user with optional status, visibility, and group filters."
     ),
     response_description="The incidents visible to the current caller.",
     responses=BAD_REQUEST_ERRORS,
 )
 async def list_incidents(
-    status_filter: Optional[str] = Query(None, alias="status"),
-    visibility_filter: Optional[str] = Query(None, alias="visibility"),
-    group_id_filter: Optional[str] = Query(None, alias="group_id"),
+    status_filter: str | None = Query(None, alias="status"),
+    visibility_filter: str | None = Query(None, alias="visibility"),
+    group_id_filter: str | None = Query(None, alias="group_id"),
     limit: int = Query(100, ge=1, le=500),
     offset: int = Query(0, ge=0),
     current_user: TokenData = Depends(require_permission_with_scope(Permission.READ_INCIDENTS, "alertmanager")),
-) -> List[AlertIncident]:
+) -> list[AlertIncident]:
     return await run_in_threadpool(
         storage_service.list_incidents,
         tenant_id=current_user.tenant_id,

@@ -8,7 +8,6 @@ http://www.apache.org/licenses/LICENSE-2.0
 
 from __future__ import annotations
 
-import inspect
 import json
 from contextlib import contextmanager
 from types import SimpleNamespace
@@ -24,8 +23,8 @@ except ImportError:
 
 ensure_test_env()
 
-from config import config
 import db_models as db_models_mod
+from config import config
 from models.access.auth_models import Role, TokenData
 from services import alertmanager_service as alert_mod
 from services.storage_db_service import DatabaseStorageService
@@ -164,7 +163,7 @@ def test_storage_service_delegates_to_subservices(monkeypatch):
 def test_alertmanager_service_getattr_rejects_unknown_async_op_name() -> None:
     svc = alert_mod.AlertManagerService("http://alertmanager/")
     with pytest.raises(AttributeError, match="AlertManagerService"):
-        getattr(svc, "not_a_registered_watchdog_async_op")
+        svc.not_a_registered_watchdog_async_op
 
 
 def test_storage_service_hidden_resource_helpers(monkeypatch):

@@ -9,7 +9,6 @@ http://www.apache.org/licenses/LICENSE-2.0
 """
 
 from enum import Enum
-from typing import Dict, List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, StrictBool
 
@@ -45,8 +44,8 @@ class Matcher(BaseModel):
 
 
 class Silence(BaseModel):
-    id: Optional[str] = Field(None, description=DESC_UNIQUE_IDENTIFIER_SILENCE, examples=["silence-123"])
-    matchers: List[Matcher] = Field(
+    id: str | None = Field(None, description=DESC_UNIQUE_IDENTIFIER_SILENCE, examples=["silence-123"])
+    matchers: list[Matcher] = Field(
         ...,
         description=DESC_MATCHERS_DEFINE_SILENCE,
         examples=[[{"name": "alertname", "value": "HighCpuUsage", "isRegex": False, "isEqual": True}]],
@@ -61,11 +60,9 @@ class Silence(BaseModel):
         description=DESC_COMMENT_EXPLAINING_SILENCE,
         examples=["Suppress noisy deploy alert while maintenance is in progress"],
     )
-    status: Optional[Dict[str, str]] = Field(
-        None, description=DESC_CURRENT_STATUS_SILENCE, examples=[{"state": "active"}]
-    )
-    visibility: Optional[Visibility] = Field(None, description=DESC_VISIBILITY_SCOPE, examples=["private"])
-    shared_group_ids: List[str] = Field(
+    status: dict[str, str] | None = Field(None, description=DESC_CURRENT_STATUS_SILENCE, examples=[{"state": "active"}])
+    visibility: Visibility | None = Field(None, description=DESC_VISIBILITY_SCOPE, examples=["private"])
+    shared_group_ids: list[str] = Field(
         default_factory=list,
         alias="sharedGroupIds",
         description=DESC_GROUP_IDS_SILENCE_SHARED_WITH,
@@ -78,7 +75,7 @@ class Silence(BaseModel):
 
 
 class SilenceCreate(BaseModel):
-    matchers: List[Matcher] = Field(
+    matchers: list[Matcher] = Field(
         ...,
         description=DESC_MATCHERS_DEFINE_SILENCE,
         examples=[[{"name": "alertname", "value": "HighCpuUsage", "isRegex": False, "isEqual": True}]],
@@ -97,7 +94,7 @@ class SilenceCreate(BaseModel):
 
 
 class SilenceCreateRequest(BaseModel):
-    matchers: List[Matcher] = Field(
+    matchers: list[Matcher] = Field(
         ...,
         min_length=1,
         description=DESC_MATCHERS_DEFINE_SILENCE,
@@ -113,7 +110,7 @@ class SilenceCreateRequest(BaseModel):
         examples=["Suppress noisy deploy alert while maintenance is in progress"],
     )
     visibility: Visibility = Field(Visibility.PRIVATE, description=DESC_VISIBILITY_SCOPE, examples=["private"])
-    shared_group_ids: List[str] = Field(
+    shared_group_ids: list[str] = Field(
         default_factory=list, alias="sharedGroupIds", description=DESC_GROUP_IDS_SHARE_WITH, examples=[["group-ops"]]
     )
     model_config = ConfigDict(populate_by_name=True, use_enum_values=True, extra="forbid")

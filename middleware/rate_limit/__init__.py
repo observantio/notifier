@@ -71,7 +71,7 @@ def enforce_rate_limit(
     key: str,
     limit: int,
     window_seconds: int,
-    fallback_mode: Optional[str] = None,
+    fallback_mode: str | None = None,
 ) -> None:
     result = rate_limiter.hit(
         key,
@@ -94,7 +94,7 @@ def enforce_ip_rate_limit(
     scope: str,
     limit: int,
     window_seconds: int,
-    fallback_mode: Optional[str] = None,
+    fallback_mode: str | None = None,
 ) -> None:
     ip = client_ip(request)
     if ip == "unknown":
@@ -120,13 +120,13 @@ def enforce_ip_rate_limit(
 
 
 __all__ = [
-    "RateLimitState",
-    "RateLimitHitResult",
-    "InMemoryRateLimiter",
-    "RedisFixedWindowRateLimiter",
     "HybridRateLimiter",
+    "InMemoryRateLimiter",
+    "RateLimitHitResult",
+    "RateLimitState",
+    "RedisFixedWindowRateLimiter",
     "client_ip",
-    "enforce_rate_limit",
     "enforce_ip_rate_limit",
+    "enforce_rate_limit",
     "rate_limiter",
 ]

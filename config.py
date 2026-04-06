@@ -15,7 +15,8 @@ http://www.apache.org/licenses/LICENSE-2.0
 import importlib
 import logging
 import os
-from typing import Any, Callable, List, Optional, cast
+from collections.abc import Callable
+from typing import Any, cast
 
 from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import serialization
@@ -26,24 +27,24 @@ from services.secrets.provider import EnvSecretProvider, SecretProvider
 logger = logging.getLogger(__name__)
 
 
-def _to_bool(value: Optional[str], default: bool = False) -> bool:
+def _to_bool(value: str | None, default: bool = False) -> bool:
     if value is None:
         return default
     return str(value).strip().lower() in ("1", "true", "yes", "on")
 
 
-def _to_list(value: Optional[str], default: Optional[List[str]] = None) -> List[str]:
+def _to_list(value: str | None, default: list[str] | None = None) -> list[str]:
     if value is None:
         return default or []
     parsed = [item.strip() for item in value.split(",") if item.strip()]
     return parsed if parsed else (default or [])
 
 
-def _normalized_secret(value: Optional[str]) -> str:
+def _normalized_secret(value: str | None) -> str:
     return str(value or "").strip().lower()
 
 
-def _is_weak_secret(value: Optional[str]) -> bool:
+def _is_weak_secret(value: str | None) -> bool:
     normalized = _normalized_secret(value)
     if not normalized:
         return True
@@ -247,9 +248,7 @@ def _config_tokens_block() -> dict[str, Any]:
 
 def _config_notifier_context_block() -> dict[str, Any]:
     ctx_algo = (
-        (os.getenv("NOTIFIER_CONTEXT_ALGORITHM") or os.getenv("NOTIFIER_CONTEXT_ALGORITHMS") or "HS256")
-        .strip()
-        .upper()
+        (os.getenv("NOTIFIER_CONTEXT_ALGORITHM") or os.getenv("NOTIFIER_CONTEXT_ALGORITHMS") or "HS256").strip().upper()
     )
     return {
         "notifier_context_issuer": os.getenv("NOTIFIER_CONTEXT_ISSUER", "watchdog-main"),
@@ -440,12 +439,12 @@ class Config:
                 vals[key.lower()] = val
                 logger.info("Loaded secret %s from Vault", key)
 
-    def get_secret(self, key: str) -> Optional[str]:
+    def get_secret(self, key: str) -> str | None:
         val = getattr(self, key.lower(), None)
         if isinstance(val, str) and val:
             return val
         try:
-            return cast(Optional[str], object.__getattribute__(self, "_secret_provider").get(key))
+            return cast(str | None, object.__getattribute__(self, "_secret_provider").get(key))
         except (OSError, RuntimeError, TypeError, ValueError):
             return None
 

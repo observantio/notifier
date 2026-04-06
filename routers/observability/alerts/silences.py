@@ -8,8 +8,6 @@ License. You may obtain a copy of the License at
 http://www.apache.org/licenses/LICENSE-2.0
 """
 
-from typing import Dict, List, Optional
-
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
 from fastapi.concurrency import run_in_threadpool
 
@@ -35,7 +33,7 @@ router = APIRouter(tags=["alertmanager-silences"])
 
 @router.get(
     "/silences",
-    response_model=List[Silence],
+    response_model=list[Silence],
     summary="List Silences",
     description="Lists silences visible to the current user with optional label and expiration filtering.",
     response_description="The silences visible to the current caller.",
@@ -47,11 +45,11 @@ router = APIRouter(tags=["alertmanager-silences"])
 )
 async def list_silences(
     request: Request,
-    filter_labels: Optional[str] = Query(None),
+    filter_labels: str | None = Query(None),
     include_expired: bool = Query(False),
     show_hidden: str = Query("false", pattern="^(true|false)$"),
     current_user: TokenData = Depends(require_permission_with_scope(Permission.READ_SILENCES, "alertmanager")),
-) -> List[Silence]:
+) -> list[Silence]:
     if request is not None:
         reject_unknown_query_params(request, {"filter_labels", "include_expired", "show_hidden"})
     silences = await alertmanager_service.get_silences(
@@ -121,7 +119,7 @@ async def get_silence(
 
 @router.post(
     "/silences",
-    response_model=Dict[str, str],
+    response_model=dict[str, str],
     summary="Create Silence",
     description="Creates a new silence in alertmanager for the current user scope.",
     response_description="The created silence identifier and operation result.",
@@ -133,7 +131,7 @@ async def create_silence(
     current_user: TokenData = Depends(
         require_any_permission_with_scope([Permission.CREATE_SILENCES, Permission.WRITE_ALERTS], "alertmanager")
     ),
-) -> Dict[str, str]:
+) -> dict[str, str]:
     silence_id = await alertmanager_service.create_silence(build_silence_payload(silence, current_user))
     if not silence_id:
         raise HTTPException(status_code=500, detail="Failed to create silence")
@@ -142,7 +140,7 @@ async def create_silence(
 
 @router.put(
     "/silences/{silence_id}",
-    response_model=Dict[str, str],
+    response_model=dict[str, str],
     summary="Update Silence",
     description="Updates an existing silence when the caller owns it and still has access.",
     response_description="The updated silence identifier and operation result.",
@@ -155,7 +153,7 @@ async def update_silence(
     current_user: TokenData = Depends(
         require_any_permission_with_scope([Permission.UPDATE_SILENCES, Permission.WRITE_ALERTS], "alertmanager")
     ),
-) -> Dict[str, str]:
+) -> dict[str, str]:
     existing = await alertmanager_service.get_silence(silence_id)
     if not existing:
         raise HTTPException(status_code=404, detail=f"Silence {silence_id} not found")

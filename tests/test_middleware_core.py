@@ -266,7 +266,7 @@ async def test_concurrency_limit_middleware_paths(monkeypatch):
 
     async def timeout_wait_for(awaitable, timeout):
         awaitable.close()
-        raise asyncio.TimeoutError()
+        raise TimeoutError()
 
     monkeypatch.setattr(asyncio, "wait_for", timeout_wait_for)
     await middleware({"type": "http", "headers": []}, receive, send)

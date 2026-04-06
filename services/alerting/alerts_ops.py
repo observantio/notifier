@@ -11,9 +11,9 @@ http://www.apache.org/licenses/LICENSE-2.0
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
 from collections.abc import Mapping, Sequence
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from datetime import UTC, datetime, timedelta
+from typing import TYPE_CHECKING, Any
 
 import httpx
 
@@ -28,7 +28,7 @@ QueryParamValue = str | int | float | bool | None
 QueryParamMapping = Mapping[str, QueryParamValue | Sequence[QueryParamValue]]
 
 
-async def list_metric_names(service: AlertManagerService, org_id: str) -> List[str]:
+async def list_metric_names(service: AlertManagerService, org_id: str) -> list[str]:
     response = await service.mimir_http_client.get(
         f"{config.mimir_url.rstrip('/')}/prometheus/api/v1/label/__name__/values",
         headers={"X-Scope-OrgID": org_id},
@@ -45,7 +45,7 @@ async def list_metric_names(service: AlertManagerService, org_id: str) -> List[s
     return metrics if isinstance(metrics, list) else []
 
 
-async def list_label_names(service: AlertManagerService, org_id: str) -> List[str]:
+async def list_label_names(service: AlertManagerService, org_id: str) -> list[str]:
     response = await service.mimir_http_client.get(
         f"{config.mimir_url.rstrip('/')}/prometheus/api/v1/labels",
         headers={"X-Scope-OrgID": org_id},
@@ -66,9 +66,9 @@ async def list_label_values(
     service: AlertManagerService,
     org_id: str,
     label: str,
-    metric_name: Optional[str] = None,
-) -> List[str]:
-    params: Dict[str, str] = {}
+    metric_name: str | None = None,
+) -> list[str]:
+    params: dict[str, str] = {}
     if metric_name:
         metric = str(metric_name).strip()
         if metric:
@@ -95,7 +95,7 @@ async def evaluate_promql(
     org_id: str,
     query: str,
     sample_limit: int = 5,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     response = await service.mimir_http_client.get(
         f"{config.mimir_url.rstrip('/')}/prometheus/api/v1/query",
         headers={"X-Scope-OrgID": org_id},
@@ -129,8 +129,8 @@ async def evaluate_promql(
     result_type = data.get("resultType")
     result = data.get("result") or []
     capped_limit = max(1, min(int(sample_limit or 5), 20))
-    samples: List[Dict[str, Any]] = []
-    current_value: Optional[str] = None
+    samples: list[dict[str, Any]] = []
+    current_value: str | None = None
 
     if result_type == "vector" and isinstance(result, list):
         for item in result[:capped_limit]:
@@ -162,12 +162,12 @@ async def evaluate_promql(
 
 async def get_alerts(
     service: AlertManagerService,
-    filter_labels: Optional[Dict[str, str]] = None,
-    active: Optional[bool] = None,
-    silenced: Optional[bool] = None,
-    inhibited: Optional[bool] = None,
-) -> List[Alert]:
-    params: Dict[str, QueryParamValue | Sequence[QueryParamValue]] = {}
+    filter_labels: dict[str, str] | None = None,
+    active: bool | None = None,
+    silenced: bool | None = None,
+    inhibited: bool | None = None,
+) -> list[Alert]:
+    params: dict[str, QueryParamValue | Sequence[QueryParamValue]] = {}
 
     if filter_labels:
         params["filter"] = [f'{k}="{v}"' for k, v in filter_labels.items()]
@@ -191,9 +191,9 @@ async def get_alerts(
 
 
 async def get_alert_groups(
-    service: AlertManagerService, filter_labels: Optional[Dict[str, str]] = None
-) -> List[AlertGroup]:
-    params: Dict[str, QueryParamValue | Sequence[QueryParamValue]] = {}
+    service: AlertManagerService, filter_labels: dict[str, str] | None = None
+) -> list[AlertGroup]:
+    params: dict[str, QueryParamValue | Sequence[QueryParamValue]] = {}
     if filter_labels:
         params["filter"] = [f'{k}="{v}"' for k, v in filter_labels.items()]
 
@@ -209,7 +209,7 @@ async def get_alert_groups(
         return []
 
 
-async def post_alerts(service: AlertManagerService, alerts: List[Alert]) -> bool:
+async def post_alerts(service: AlertManagerService, alerts: list[Alert]) -> bool:
     try:
         response = await service.alertmanager_http_client.post(
             f"{service.alertmanager_url}/api/v2/alerts",
@@ -222,14 +222,14 @@ async def post_alerts(service: AlertManagerService, alerts: List[Alert]) -> bool
         return False
 
 
-async def delete_alerts(service: AlertManagerService, filter_labels: Optional[Dict[str, str]] = None) -> bool:
+async def delete_alerts(service: AlertManagerService, filter_labels: dict[str, str] | None = None) -> bool:
     if not filter_labels:
         service.logger.warning("Cannot delete all alerts without filter")
         return False
 
     matchers = [Matcher(name=key, value=value, isRegex=False, isEqual=True) for key, value in filter_labels.items()]
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     end = now + timedelta(seconds=60)
     silence = SilenceCreate(
         matchers=matchers,

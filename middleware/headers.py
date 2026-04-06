@@ -11,6 +11,7 @@ http://www.apache.org/licenses/LICENSE-2.0
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
+
 from fastapi import Request
 from starlette.responses import Response
 

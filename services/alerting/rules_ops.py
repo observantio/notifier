@@ -12,7 +12,7 @@ http://www.apache.org/licenses/LICENSE-2.0
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, List, Optional
+from typing import TYPE_CHECKING
 from urllib.parse import quote
 
 import httpx
@@ -28,23 +28,23 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def resolve_rule_org_id(rule_org_id: Optional[str], current_user: TokenData) -> str:
+def resolve_rule_org_id(rule_org_id: str | None, current_user: TokenData) -> str:
     return rule_org_id or getattr(current_user, "org_id", None) or config.default_org_id
 
 
-async def sync_mimir_rules_for_org(service: AlertManagerService, org_id: str, rules: List[AlertRule]) -> None:
+async def sync_mimir_rules_for_org(service: AlertManagerService, org_id: str, rules: list[AlertRule]) -> None:
     desired_groups = group_enabled_rules(rules)
     base_url = config.mimir_url.rstrip("/")
-    namespace = quote(getattr(service, "mimir_rules_namespace", getattr(service, "MIMIR_RULES_NAMESPACE")), safe="")
+    namespace = quote(getattr(service, "mimir_rules_namespace", service.MIMIR_RULES_NAMESPACE), safe="")
     ruler_basepath = getattr(
         service,
         "mimir_ruler_config_basepath",
-        getattr(service, "MIMIR_RULER_CONFIG_BASEPATH"),
+        service.MIMIR_RULER_CONFIG_BASEPATH,
     )
     namespace_url = f"{base_url}{ruler_basepath}/{namespace}"
     org_header = {"X-Scope-OrgID": org_id}
 
-    existing_group_names: List[str] = []
+    existing_group_names: list[str] = []
     try:
         response = await service.mimir_http_client.get(namespace_url, headers=org_header)
         if response.status_code == 200:

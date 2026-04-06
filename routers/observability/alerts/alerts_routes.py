@@ -1,14 +1,14 @@
-from typing import List, Optional, cast
+from typing import cast
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from fastapi.concurrency import run_in_threadpool
 
+from custom_types.json import JSONDict
 from middleware.dependencies import require_any_permission_with_scope, require_permission_with_scope
 from middleware.error_handlers import handle_route_errors
 from middleware.openapi import BAD_REQUEST_ERRORS
 from models.access.auth_models import Permission, TokenData
 from models.alerting.alerts import Alert, AlertGroup
-from custom_types.json import JSONDict
 
 from .shared import INVALID_FILTER_LABELS_JSON, alertmanager_service, storage_service, sync_incidents
 
@@ -21,7 +21,7 @@ def _json_dict(value: object) -> dict[str, object]:
 
 @router.get(
     "/alerts",
-    response_model=List[Alert],
+    response_model=list[Alert],
     summary="List Alerts",
     description="Lists alertmanager alerts with optional state and label filtering for the current user scope.",
     response_description="The alerts visible to the current caller.",
@@ -29,13 +29,13 @@ def _json_dict(value: object) -> dict[str, object]:
 )
 @handle_route_errors(bad_request_detail=INVALID_FILTER_LABELS_JSON)
 async def list_alerts(
-    active: Optional[bool] = Query(None),
-    silenced: Optional[bool] = Query(None),
-    inhibited: Optional[bool] = Query(None),
-    filter_labels: Optional[str] = Query(None),
+    active: bool | None = Query(None),
+    silenced: bool | None = Query(None),
+    inhibited: bool | None = Query(None),
+    filter_labels: str | None = Query(None),
     show_hidden: bool = Query(False),
     current_user: TokenData = Depends(require_permission_with_scope(Permission.READ_ALERTS, "alertmanager")),
-) -> List[Alert]:
+) -> list[Alert]:
     labels = alertmanager_service.parse_filter_labels(filter_labels)
     alerts = await alertmanager_service.get_alerts(
         filter_labels=labels, active=active, silenced=silenced, inhibited=inhibited
@@ -63,8 +63,7 @@ async def list_alerts(
                 alert
                 for alert in filtered
                 if str(
-                    _json_dict(alert).get("labels")
-                    and _json_dict(_json_dict(alert).get("labels")).get("alertname")
+                    (_json_dict(alert).get("labels") and _json_dict(_json_dict(alert).get("labels")).get("alertname"))
                     or ""
                 )
                 not in hidden_rule_names
@@ -74,7 +73,7 @@ async def list_alerts(
 
 @router.get(
     "/alerts/groups",
-    response_model=List[AlertGroup],
+    response_model=list[AlertGroup],
     summary="List Alert Groups",
     description="Lists grouped alerts from alertmanager with optional label filtering.",
     response_description="Grouped alerts returned by alertmanager.",
@@ -82,12 +81,12 @@ async def list_alerts(
 )
 @handle_route_errors(bad_request_detail=INVALID_FILTER_LABELS_JSON)
 async def list_alert_groups(
-    filter_labels: Optional[str] = Query(None),
+    filter_labels: str | None = Query(None),
     current_user: TokenData = Depends(require_permission_with_scope(Permission.READ_ALERTS, "alertmanager")),
-) -> List[AlertGroup]:
+) -> list[AlertGroup]:
     _ = current_user
     return cast(
-        List[AlertGroup],
+        list[AlertGroup],
         await alertmanager_service.get_alert_groups(
             filter_labels=alertmanager_service.parse_filter_labels(filter_labels)
         ),
@@ -102,7 +101,7 @@ async def list_alert_groups(
     responses=BAD_REQUEST_ERRORS,
 )
 async def create_alerts(
-    alerts: List[Alert] = Body(...),
+    alerts: list[Alert] = Body(...),
     current_user: TokenData = Depends(
         require_any_permission_with_scope([Permission.CREATE_ALERTS, Permission.WRITE_ALERTS], "alertmanager")
     ),

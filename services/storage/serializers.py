@@ -12,15 +12,16 @@ http://www.apache.org/licenses/LICENSE-2.0
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from db_models import AlertIncident as AlertIncidentDB
 from db_models import AlertRule as AlertRuleDB
 from db_models import NotificationChannel as NotificationChannelDB
 from models.alerting.channels import NotificationChannel as NotificationChannelPydantic
-from models.alerting.incidents import AlertIncident as AlertIncidentPydantic, IncidentStatus
+from models.alerting.incidents import AlertIncident as AlertIncidentPydantic
+from models.alerting.incidents import IncidentStatus
 from models.alerting.rules import AlertRule as AlertRulePydantic
-from services.common.meta import INCIDENT_META_KEY, parse_meta, _safe_group_ids
+from services.common.meta import INCIDENT_META_KEY, _safe_group_ids, parse_meta
 
 logger = logging.getLogger(__name__)
 
@@ -74,7 +75,7 @@ def incident_to_pydantic(incident: AlertIncidentDB) -> AlertIncidentPydantic:
         {
             "author": n.get("author", "system"),
             "text": n.get("text", ""),
-            "createdAt": n.get("createdAt") or datetime.now(timezone.utc),
+            "createdAt": n.get("createdAt") or datetime.now(UTC),
         }
         for n in (incident.notes or [])
         if isinstance(n, dict)

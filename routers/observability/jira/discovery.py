@@ -1,5 +1,3 @@
-from typing import Optional
-
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from custom_types.json import JSONDict
@@ -24,7 +22,7 @@ router = APIRouter(tags=["alertmanager-jira"])
     responses=BAD_REQUEST_NOT_FOUND_ERRORS,
 )
 async def list_jira_projects(
-    integration_id: Optional[str] = Query(None, alias="integrationId"),
+    integration_id: str | None = Query(None, alias="integrationId"),
     current_user: TokenData = Depends(require_permission_with_scope(Permission.UPDATE_INCIDENTS, "alertmanager")),
 ) -> JSONDict:
     if integration_id:
@@ -47,7 +45,7 @@ async def list_jira_projects(
 )
 async def list_jira_issue_types(
     project_key: str,
-    integration_id: Optional[str] = Query(None, alias="integrationId"),
+    integration_id: str | None = Query(None, alias="integrationId"),
     current_user: TokenData = Depends(require_permission_with_scope(Permission.UPDATE_INCIDENTS, "alertmanager")),
 ) -> JSONDict:
     if integration_id:

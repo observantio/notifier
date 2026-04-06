@@ -12,10 +12,12 @@ http://www.apache.org/licenses/LICENSE-2.0
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
-from typing import List, Optional
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
+from typing import cast
 
-from fastapi import HTTPException, status as http_status
+from fastapi import HTTPException
+from fastapi import status as http_status
 from sqlalchemy.orm import joinedload
 
 from config import config as app_config
@@ -25,7 +27,7 @@ from db_models import AlertIncident as AlertIncidentDB
 from db_models import AlertRule as AlertRuleDB
 from models.alerting.incidents import AlertIncident, AlertIncidentUpdateRequest
 from services.common.access import has_access
-from services.common.meta import INCIDENT_META_KEY, parse_meta, _safe_group_ids
+from services.common.meta import INCIDENT_META_KEY, _safe_group_ids, parse_meta
 from services.common.pagination import cap_pagination
 from services.common.tenants import ensure_tenant_exists
 from services.common.visibility import normalize_storage_visibility
@@ -47,6 +49,58 @@ incident_activity_token_from_row = _incidents_core.incident_activity_token_from_
 incident_key_from_db_row = _incidents_core.incident_key_from_db_row
 incident_key_from_labels = _incidents_core.incident_key_from_labels
 incident_scope_hint_from_labels = _incidents_core.incident_scope_hint_from_labels
+
+
+@dataclass(frozen=True)
+class IncidentListFilters:
+    group_ids: list[str] = field(default_factory=list)
+    status: str | None = None
+    visibility: str | None = None
+    group_id: str | None = None
+    limit: int | None = None
+    offset: int = 0
+
+
+def _coerce_incident_list_filters(
+    filters_or_group_ids: IncidentListFilters | list[str] | None,
+    legacy_kwargs: dict[str, object],
+) -> IncidentListFilters:
+    if isinstance(filters_or_group_ids, IncidentListFilters):
+        filters = filters_or_group_ids
+    else:
+        filters = IncidentListFilters(group_ids=filters_or_group_ids or [])
+
+    group_ids_raw = legacy_kwargs.pop("group_ids", filters.group_ids)
+    group_ids = [str(group_id).strip() for group_id in cast(list[object], group_ids_raw or []) if str(group_id).strip()]
+
+    status = legacy_kwargs.pop("status", filters.status)
+    visibility = legacy_kwargs.pop("visibility", filters.visibility)
+    group_id = legacy_kwargs.pop("group_id", filters.group_id)
+    limit_raw = legacy_kwargs.pop("limit", filters.limit)
+    offset_raw = legacy_kwargs.pop("offset", filters.offset)
+
+    limit: int | None
+    if limit_raw is None:
+        limit = None
+    else:
+        try:
+            limit = int(cast(int | str | bytes | bytearray, limit_raw))
+        except (TypeError, ValueError):
+            limit = filters.limit
+
+    try:
+        offset = int(cast(int | str | bytes | bytearray, offset_raw))
+    except (TypeError, ValueError):
+        offset = filters.offset
+
+    return IncidentListFilters(
+        group_ids=group_ids,
+        status=cast(str | None, str(status) if isinstance(status, str) else status),
+        visibility=cast(str | None, str(visibility) if isinstance(visibility, str) else visibility),
+        group_id=cast(str | None, str(group_id) if isinstance(group_id, str) else group_id),
+        limit=limit,
+        offset=offset,
+    )
 
 
 class IncidentStorageService:
@@ -84,7 +138,7 @@ class IncidentStorageService:
         self,
         tenant_id: str,
         user_id: str,
-        group_ids: Optional[List[str]] = None,
+        group_ids: list[str] | None = None,
     ) -> JSONDict:
         group_ids = group_ids or []
         open_total = 0
@@ -134,8 +188,8 @@ class IncidentStorageService:
             "by_visibility": by_visibility,
         }
 
-    def sync_incidents_from_alerts(self, tenant_id: str, alerts: List[JSONDict], resolve_missing: bool = True) -> None:
-        now = datetime.now(timezone.utc)
+    def sync_incidents_from_alerts(self, tenant_id: str, alerts: list[JSONDict], resolve_missing: bool = True) -> None:
+        now = datetime.now(UTC)
         active_incident_tokens: set[str] = set()
 
         with get_db_session() as db:
@@ -149,40 +203,41 @@ class IncidentStorageService:
         self,
         tenant_id: str,
         user_id: str,
-        group_ids: Optional[List[str]] = None,
-        status: Optional[str] = None,
-        visibility: Optional[str] = None,
-        group_id: Optional[str] = None,
-        limit: Optional[int] = None,
-        offset: int = 0,
-    ) -> List[AlertIncident]:
-        group_ids = group_ids or []
-        capped_limit, capped_offset = cap_pagination(limit, offset)
+        filters_or_group_ids: IncidentListFilters | list[str] | None = None,
+        **legacy_kwargs: object,
+    ) -> list[AlertIncident]:
+        filters = _coerce_incident_list_filters(filters_or_group_ids, dict(legacy_kwargs))
+        group_ids = filters.group_ids
+        capped_limit, capped_offset = cap_pagination(filters.limit, filters.offset)
 
         with get_db_session() as db:
             q = db.query(AlertIncidentDB).filter(AlertIncidentDB.tenant_id == tenant_id)
-            if status:
-                q = q.filter(AlertIncidentDB.status == status)
+            if filters.status:
+                q = q.filter(AlertIncidentDB.status == filters.status)
 
             incidents = q.order_by(AlertIncidentDB.updated_at.desc()).offset(capped_offset).limit(capped_limit).all()
 
-            result: List[AlertIncident] = []
+            result: list[AlertIncident] = []
             for incident in incidents:
                 meta = parse_meta(incident.annotations or {})
                 inc_visibility = str(meta.get("visibility") or "public").lower()
                 if inc_visibility not in {"public", "private", "group"}:
                     inc_visibility = "public"
 
-                if incident.status == "resolved" and meta.get("hide_when_resolved") and not status:
+                if incident.status == "resolved" and meta.get("hide_when_resolved") and not filters.status:
                     continue
-                if visibility and inc_visibility != visibility:
+                if filters.visibility and inc_visibility != filters.visibility:
                     continue
 
                 creator_id = meta.get("created_by")
                 shared_group_ids = _safe_group_ids(meta)
 
-                if group_id:
-                    if group_id not in group_ids or inc_visibility != "group" or group_id not in shared_group_ids:
+                if filters.group_id:
+                    if (
+                        filters.group_id not in group_ids
+                        or inc_visibility != "group"
+                        or filters.group_id not in shared_group_ids
+                    ):
                         continue
 
                 if not _incident_access_allowed(
@@ -202,10 +257,10 @@ class IncidentStorageService:
         self,
         incident_id: str,
         tenant_id: str,
-        user_id: Optional[str] = None,
-        group_ids: Optional[List[str]] = None,
+        user_id: str | None = None,
+        group_ids: list[str] | None = None,
         require_write: bool = False,
-    ) -> Optional[AlertIncident]:
+    ) -> AlertIncident | None:
         group_ids = group_ids or []
         with get_db_session() as db:
             incident = (
@@ -238,8 +293,8 @@ class IncidentStorageService:
         tenant_id: str,
         user_id: str,
         payload: AlertIncidentUpdateRequest,
-        group_ids: Optional[List[str]] = None,
-    ) -> Optional[AlertIncident]:
+        group_ids: list[str] | None = None,
+    ) -> AlertIncident | None:
         user_group_ids = [str(g).strip() for g in (group_ids or []) if str(g).strip()]
         with get_db_session() as db:
             incident = (
@@ -251,7 +306,7 @@ class IncidentStorageService:
                 return None
 
             previous_status = str(incident.status or "")
-            resolved_note_text: Optional[str] = None
+            resolved_note_text: str | None = None
 
             meta = parse_meta(incident.annotations or {})
             visibility = normalize_storage_visibility(str(meta.get("visibility") or "public"))
@@ -276,14 +331,14 @@ class IncidentStorageService:
                     )
                 incident.assignee = requested_assignee
 
-            manual_manage_flag: Optional[bool] = None
+            manual_manage_flag: bool | None = None
             if payload.status is not None:
                 status_value = payload.status.value if hasattr(payload.status, "value") else str(payload.status)
                 if status_value.startswith("IncidentStatus."):
                     status_value = status_value.split(".", 1)[1].lower()
                 incident.status = status_value
                 if incident.status == "resolved":
-                    incident.resolved_at = datetime.now(timezone.utc)
+                    incident.resolved_at = datetime.now(UTC)
                     manual_manage_flag = False
                     if previous_status.lower() != "resolved":
                         actor_name = getattr(payload, "actor_username", None) or user_id
@@ -325,7 +380,7 @@ class IncidentStorageService:
             meta["updated_by"] = user_id
             incident.annotations = {**annotations, INCIDENT_META_KEY: json.dumps(meta)}
 
-            now_iso = datetime.now(timezone.utc).isoformat()
+            now_iso = datetime.now(UTC).isoformat()
             notes = list(incident.notes or [])
             if payload.note:
                 notes.append({"author": user_id, "text": payload.note, "createdAt": now_iso})
@@ -341,15 +396,15 @@ class IncidentStorageService:
         self,
         tenant_id: str,
         user_id: str,
-        group_ids: Optional[List[str]],
-        alerts: List[JSONDict],
-    ) -> List[JSONDict]:
+        group_ids: list[str] | None,
+        alerts: list[JSONDict],
+    ) -> list[JSONDict]:
         user_group_ids = [str(g) for g in (group_ids or []) if str(g).strip()]
         if not alerts:
             return []
 
         with get_db_session() as db:
-            visible: List[JSONDict] = []
+            visible: list[JSONDict] = []
             for alert in alerts:
                 labels = _json_dict(alert.get("labels"))
                 alertname = str(labels.get("alertname") or "").strip()
