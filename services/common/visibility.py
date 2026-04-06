@@ -9,18 +9,17 @@ http://www.apache.org/licenses/LICENSE-2.0
 """
 
 from __future__ import annotations
-from typing import Optional
 
 DEFAULT_ALLOWED: frozenset[str] = frozenset({"tenant", "group", "private"})
 STORAGE_ALLOWED: frozenset[str] = frozenset({"public", "private", "group"})
 
 
 def normalize_visibility(
-    value: Optional[str],
+    value: str | None,
     *,
     default_value: str = "private",
     public_alias: str = "tenant",
-    allowed: Optional[frozenset[str]] = None,
+    allowed: frozenset[str] | None = None,
 ) -> str:
     allowed_values = allowed if allowed is not None else DEFAULT_ALLOWED
 
@@ -38,7 +37,7 @@ def normalize_visibility(
     return default_value
 
 
-def normalize_storage_visibility(value: Optional[str]) -> str:
+def normalize_storage_visibility(value: str | None) -> str:
     normalized = (value or "").strip().lower()
     if normalized in STORAGE_ALLOWED:
         return normalized

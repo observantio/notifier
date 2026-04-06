@@ -15,11 +15,11 @@ http://www.apache.org/licenses/LICENSE-2.0
 
 from __future__ import annotations
 
-from importlib import import_module
 import threading
 import time
+from collections.abc import Callable
+from importlib import import_module
 from types import ModuleType
-from typing import Callable, Optional
 
 
 class _VaultForbiddenFallback(Exception):
@@ -75,13 +75,13 @@ class VaultSecretProvider:
     def __init__(
         self,
         address: str,
-        token: Optional[str] = None,
-        role_id: Optional[str] = None,
-        secret_id_fn: Optional[Callable[[], str]] = None,
+        token: str | None = None,
+        role_id: str | None = None,
+        secret_id_fn: Callable[[], str] | None = None,
         prefix: str = "secret",
         kv_version: int = 2,
         timeout: float = 2.0,
-        cacert: Optional[str] = None,
+        cacert: str | None = None,
         cache_ttl: float = 30.0,
     ) -> None:
         if hvac is None:
@@ -149,11 +149,11 @@ class VaultSecretProvider:
                 return SENTINEL
             return value
 
-    def _to_cache(self, key: str, value: Optional[str]) -> None:
+    def _to_cache(self, key: str, value: str | None) -> None:
         with self._lock:
             self._cache[key] = (time.monotonic(), value)
 
-    def get(self, key: str) -> Optional[str]:
+    def get(self, key: str) -> str | None:
         cached = self._from_cache(key)
         if cached is not SENTINEL:
             return cached if isinstance(cached, str) or cached is None else None
@@ -195,5 +195,5 @@ class VaultSecretProvider:
         self._to_cache(key, val)
         return val
 
-    def get_many(self, keys: list[str]) -> dict[str, Optional[str]]:
+    def get_many(self, keys: list[str]) -> dict[str, str | None]:
         return {k: self.get(k) for k in keys}

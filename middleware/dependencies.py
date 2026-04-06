@@ -18,14 +18,13 @@ import time
 from collections.abc import Callable
 from functools import lru_cache
 from ipaddress import IPv4Network, IPv6Network, ip_address, ip_network
-from typing import Optional
 
 import jwt
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from config import config
-from middleware.rate_limit import enforce_ip_rate_limit, client_ip
+from middleware.rate_limit import client_ip, enforce_ip_rate_limit
 from models.access.auth_models import Permission, Role, TokenData
 
 logger = logging.getLogger(__name__)
@@ -36,7 +35,7 @@ _jti_lock = threading.Lock()
 _jti_cache: dict[str, float] = {}
 
 
-def _extract_bearer_token(request: Request, credentials: HTTPAuthorizationCredentials | None) -> Optional[str]:
+def _extract_bearer_token(request: Request, credentials: HTTPAuthorizationCredentials | None) -> str | None:
     if credentials and getattr(credentials, "credentials", None):
         return credentials.credentials
     auth_header = request.headers.get("Authorization", "")

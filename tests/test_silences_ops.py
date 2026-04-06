@@ -223,7 +223,9 @@ async def test_silence_error_and_delete_paths(monkeypatch):
     assert await sil_mod.get_silences(service) == []
     assert await sil_mod.get_silence(service, "missing") is None
 
-    service = SimpleNamespace(alertmanager_http_client=_Client(get_payload=[], delete_status=200), alertmanager_url="https://am")
+    service = SimpleNamespace(
+        alertmanager_http_client=_Client(get_payload=[], delete_status=200), alertmanager_url="https://am"
+    )
 
     states = iter(
         [
@@ -255,7 +257,9 @@ async def test_silence_error_and_delete_paths(monkeypatch):
 @pytest.mark.asyncio
 async def test_prune_removed_member_group_silences(monkeypatch):
     service = SimpleNamespace(
-        encode_silence_comment=lambda comment, visibility, shared_group_ids: f"{comment}|{visibility}|{','.join(shared_group_ids)}",
+        encode_silence_comment=lambda comment, visibility, shared_group_ids: (
+            f"{comment}|{visibility}|{','.join(shared_group_ids)}"
+        ),
         decode_silence_comment=lambda comment: {
             "comment": "decoded",
             "visibility": "group",

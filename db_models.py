@@ -12,10 +12,10 @@ http://www.apache.org/licenses/LICENSE-2.0
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
-from typing import List, Optional
+from datetime import UTC, datetime
 
 from sqlalchemy import (
+    JSON,
     Boolean,
     Column,
     DateTime,
@@ -24,7 +24,6 @@ from sqlalchemy import (
     String,
     Table,
     Text,
-    JSON,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
@@ -46,7 +45,7 @@ def _uuid() -> str:
 
 
 def _now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 rule_groups = Table(
@@ -73,18 +72,18 @@ class Tenant(Base):
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
     name: Mapped[str] = mapped_column(String(100), unique=True, nullable=False, index=True)
-    display_name: Mapped[Optional[str]] = mapped_column(String(200))
+    display_name: Mapped[str | None] = mapped_column(String(200))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     settings: Mapped[JSONDict] = mapped_column(JSON, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=_now, onupdate=_now, nullable=False)
 
-    groups: Mapped[List["Group"]] = relationship("Group", back_populates="tenant", cascade=CASCADE)
-    alert_rules: Mapped[List["AlertRule"]] = relationship("AlertRule", back_populates="tenant", cascade=CASCADE)
-    alert_incidents: Mapped[List["AlertIncident"]] = relationship(
+    groups: Mapped[list[Group]] = relationship("Group", back_populates="tenant", cascade=CASCADE)
+    alert_rules: Mapped[list[AlertRule]] = relationship("AlertRule", back_populates="tenant", cascade=CASCADE)
+    alert_incidents: Mapped[list[AlertIncident]] = relationship(
         "AlertIncident", back_populates="tenant", cascade=CASCADE
     )
-    notification_channels: Mapped[List["NotificationChannel"]] = relationship(
+    notification_channels: Mapped[list[NotificationChannel]] = relationship(
         "NotificationChannel", back_populates="tenant", cascade=CASCADE
     )
 
@@ -99,16 +98,16 @@ class Group(Base):
         String, ForeignKey(FK_TENANTS, ondelete="CASCADE"), nullable=False, index=True
     )
     name: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
-    description: Mapped[Optional[str]] = mapped_column(Text)
+    description: Mapped[str | None] = mapped_column(Text)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=_now, onupdate=_now, nullable=False)
 
-    tenant: Mapped["Tenant"] = relationship("Tenant", back_populates="groups")
-    shared_channels: Mapped[List["NotificationChannel"]] = relationship(
+    tenant: Mapped[Tenant] = relationship("Tenant", back_populates="groups")
+    shared_channels: Mapped[list[NotificationChannel]] = relationship(
         "NotificationChannel", secondary=channel_groups, back_populates="shared_groups"
     )
-    shared_rules: Mapped[List["AlertRule"]] = relationship(
+    shared_rules: Mapped[list[AlertRule]] = relationship(
         "AlertRule", secondary=rule_groups, back_populates="shared_groups"
     )
 
@@ -125,8 +124,8 @@ class AlertRule(Base):
     tenant_id: Mapped[str] = mapped_column(
         String, ForeignKey(FK_TENANTS, ondelete="CASCADE"), nullable=False, index=True
     )
-    created_by: Mapped[Optional[str]] = mapped_column(String, index=True)
-    org_id: Mapped[Optional[str]] = mapped_column(String, index=True)
+    created_by: Mapped[str | None] = mapped_column(String, index=True)
+    org_id: Mapped[str | None] = mapped_column(String, index=True)
     name: Mapped[str] = mapped_column(String(200), nullable=False, index=True)
     group: Mapped[str] = mapped_column(String(100), nullable=False, default=config.default_rule_group)
     expr: Mapped[str] = mapped_column(Text, nullable=False)
@@ -140,8 +139,8 @@ class AlertRule(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=_now, onupdate=_now, nullable=False)
 
-    tenant: Mapped["Tenant"] = relationship("Tenant", back_populates="alert_rules")
-    shared_groups: Mapped[List["Group"]] = relationship("Group", secondary=rule_groups, back_populates="shared_rules")
+    tenant: Mapped[Tenant] = relationship("Tenant", back_populates="alert_rules")
+    shared_groups: Mapped[list[Group]] = relationship("Group", secondary=rule_groups, back_populates="shared_rules")
 
     __table_args__ = (
         Index("idx_alert_rules_tenant_enabled", "tenant_id", "enabled"),
@@ -161,17 +160,17 @@ class AlertIncident(Base):
     alert_name: Mapped[str] = mapped_column(String(200), nullable=False, index=True)
     severity: Mapped[str] = mapped_column(String(20), nullable=False, default="warning", index=True)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="open", index=True)
-    assignee: Mapped[Optional[str]] = mapped_column(String(200))
+    assignee: Mapped[str | None] = mapped_column(String(200))
     notes: Mapped[JSONList] = mapped_column(JSON, default=list)
     labels: Mapped[JSONDict] = mapped_column(JSON, default=dict)
     annotations: Mapped[JSONDict] = mapped_column(JSON, default=dict)
-    starts_at: Mapped[Optional[datetime]] = mapped_column(DateTime, index=True)
+    starts_at: Mapped[datetime | None] = mapped_column(DateTime, index=True)
     last_seen_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_now, index=True)
-    resolved_at: Mapped[Optional[datetime]] = mapped_column(DateTime, index=True)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=_now, onupdate=_now, nullable=False)
 
-    tenant: Mapped["Tenant"] = relationship("Tenant", back_populates="alert_incidents")
+    tenant: Mapped[Tenant] = relationship("Tenant", back_populates="alert_incidents")
 
     __table_args__ = (
         Index("idx_alert_incidents_tenant_status", "tenant_id", "status"),
@@ -186,7 +185,7 @@ class NotificationChannel(Base):
     tenant_id: Mapped[str] = mapped_column(
         String, ForeignKey(FK_TENANTS, ondelete="CASCADE"), nullable=False, index=True
     )
-    created_by: Mapped[Optional[str]] = mapped_column(String, index=True)
+    created_by: Mapped[str | None] = mapped_column(String, index=True)
     name: Mapped[str] = mapped_column(String(200), nullable=False, index=True)
     type: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
     config: Mapped[JSONDict] = mapped_column(JSON, nullable=False, default=dict)
@@ -195,8 +194,8 @@ class NotificationChannel(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=_now, onupdate=_now, nullable=False)
 
-    tenant: Mapped["Tenant"] = relationship("Tenant", back_populates="notification_channels")
-    shared_groups: Mapped[List["Group"]] = relationship(
+    tenant: Mapped[Tenant] = relationship("Tenant", back_populates="notification_channels")
+    shared_groups: Mapped[list[Group]] = relationship(
         "Group", secondary=channel_groups, back_populates="shared_channels"
     )
 
@@ -211,7 +210,7 @@ class PurgedSilence(Base):
     __tablename__ = "purged_silences"
 
     id: Mapped[str] = mapped_column(String, primary_key=True)
-    tenant_id: Mapped[Optional[str]] = mapped_column(String, ForeignKey(FK_TENANTS, ondelete="CASCADE"), index=True)
+    tenant_id: Mapped[str | None] = mapped_column(String, ForeignKey(FK_TENANTS, ondelete="CASCADE"), index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now, nullable=False)
 
 

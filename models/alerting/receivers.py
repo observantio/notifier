@@ -8,7 +8,6 @@ License. You may obtain a copy of the License at
 http://www.apache.org/licenses/LICENSE-2.0
 """
 
-from typing import List
 from pydantic import BaseModel, ConfigDict, Field
 
 from custom_types.json import JSONDict
@@ -27,31 +26,31 @@ DESC_ALERTMANAGER_CLUSTER_STATUS = "Cluster status information"
 
 class Receiver(BaseModel):
     name: str = Field(..., description=DESC_RECEIVER_NAME, examples=["primary-oncall"])
-    email_configs: List[JSONDict] = Field(
+    email_configs: list[JSONDict] = Field(
         default_factory=list,
         alias="emailConfigs",
         description=DESC_RECEIVER_EMAIL_CONFIGS,
         examples=[[{"to": "oncall@example.com"}]],
     )
-    slack_configs: List[JSONDict] = Field(
+    slack_configs: list[JSONDict] = Field(
         default_factory=list,
         alias="slackConfigs",
         description=DESC_RECEIVER_SLACK_CONFIGS,
         examples=[[{"channel": "#alerts"}]],
     )
-    webhook_configs: List[JSONDict] = Field(
+    webhook_configs: list[JSONDict] = Field(
         default_factory=list,
         alias="webhookConfigs",
         description=DESC_RECEIVER_WEBHOOK_CONFIGS,
         examples=[[{"url": "https://hooks.example.internal/alerts"}]],
     )
-    pagerduty_configs: List[JSONDict] = Field(
+    pagerduty_configs: list[JSONDict] = Field(
         default_factory=list,
         alias="pagerdutyConfigs",
         description=DESC_RECEIVER_PAGERDUTY_CONFIGS,
         examples=[[{"routing_key": "pd-key"}]],
     )
-    msteams_configs: List[JSONDict] = Field(
+    msteams_configs: list[JSONDict] = Field(
         default_factory=list,
         alias="msteamsConfigs",
         description=DESC_RECEIVER_TEAMS_CONFIGS,

@@ -479,7 +479,9 @@ async def test_silences_ops_uncovered_paths(monkeypatch):
         ),
         alertmanager_url="https://am.local",
         decode_silence_comment=decode_comment,
-        encode_silence_comment=lambda comment, visibility, shared_group_ids: f"{comment}|{visibility}|{','.join(shared_group_ids)}",
+        encode_silence_comment=lambda comment, visibility, shared_group_ids: (
+            f"{comment}|{visibility}|{','.join(shared_group_ids)}"
+        ),
     )
 
     original_get_silences = sil_mod.get_silences

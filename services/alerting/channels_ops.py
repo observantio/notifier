@@ -12,8 +12,7 @@ http://www.apache.org/licenses/LICENSE-2.0
 from __future__ import annotations
 
 import logging
-
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 import httpx
@@ -21,9 +20,9 @@ import httpx
 from custom_types.json import JSONDict
 from models.alerting.alerts import Alert, AlertState, AlertStatus
 from models.alerting.receivers import AlertManagerStatus
+from services.alerting.suppression import is_suppressed_status
 from services.notification_service import NotificationService
 from services.storage_db_service import DatabaseStorageService
-from services.alerting.suppression import is_suppressed_status
 
 if TYPE_CHECKING:
     from services.alertmanager_service import AlertManagerService
@@ -144,7 +143,7 @@ async def notify_for_alerts(
             labels=labels,
             annotations=annotations,
             startsAt=_optional_string(incoming_alert.get("startsAt") or incoming_alert.get("starts_at"))
-            or datetime.now(timezone.utc).isoformat(),
+            or datetime.now(UTC).isoformat(),
             endsAt=_optional_string(incoming_alert.get("endsAt") or incoming_alert.get("ends_at")),
             generatorURL=_optional_string(incoming_alert.get("generatorURL")),
             status=status_obj,

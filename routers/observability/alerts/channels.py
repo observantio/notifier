@@ -9,8 +9,8 @@ License. You may obtain a copy of the License at
 http://www.apache.org/licenses/LICENSE-2.0
 """
 
-from datetime import datetime, timezone
-from typing import List, cast
+from datetime import UTC, datetime
+from typing import cast
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, status
 from fastapi.concurrency import run_in_threadpool
@@ -39,7 +39,7 @@ router = APIRouter(tags=["alertmanager-channels"])
 
 @router.get(
     "/channels",
-    response_model=List[NotificationChannel],
+    response_model=list[NotificationChannel],
     summary="List Notification Channels",
     description="Lists notification channels visible to the current user.",
     response_description="The notification channels visible to the current caller.",
@@ -51,7 +51,7 @@ async def list_channels(
     offset: int = Query(0, ge=0),
     show_hidden: str = Query("false", pattern="^(true|false)$"),
     current_user: TokenData = Depends(require_permission_with_scope(Permission.READ_CHANNELS, "alertmanager")),
-) -> List[NotificationChannel]:
+) -> list[NotificationChannel]:
     if request is not None:
         reject_unknown_query_params(request, {"limit", "offset", "show_hidden"})
     tenant_id, user_id, group_ids = alertmanager_service.user_scope(current_user)
@@ -68,7 +68,7 @@ async def list_channels(
         channel.is_hidden = bool(channel.id and channel.id in hidden_ids)
     if not parse_show_hidden(show_hidden):
         channels = [channel for channel in channels if not channel.is_hidden]
-    return cast(List[NotificationChannel], channels)
+    return cast(list[NotificationChannel], channels)
 
 
 @router.get(
@@ -224,10 +224,10 @@ async def test_channel(
             "annotations": {
                 "summary": "You have invoked a test alert",
                 "description": (
-                    "This is a test notification from Watchdog. " "Please ignore this alert if you didn't expect it."
+                    "This is a test notification from Watchdog. Please ignore this alert if you didn't expect it."
                 ),
             },
-            "startsAt": datetime.now(timezone.utc).isoformat(),
+            "startsAt": datetime.now(UTC).isoformat(),
             "endsAt": None,
             "generatorURL": None,
             "status": {"state": "active", "silencedBy": [], "inhibitedBy": []},

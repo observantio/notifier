@@ -11,8 +11,8 @@ License. You may obtain a copy of the License at
 http://www.apache.org/licenses/LICENSE-2.0
 """
 
-from collections.abc import Mapping
 import json
+from collections.abc import Mapping
 from json import JSONDecodeError
 
 from custom_types.json import JSONDict, is_json_object

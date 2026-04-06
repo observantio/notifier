@@ -14,12 +14,13 @@ http://www.apache.org/licenses/LICENSE-2.0
 
 import logging
 import os
+from collections.abc import Generator, Iterator
 from contextlib import contextmanager
-from typing import Generator, Iterator, Optional, Protocol
+from typing import Protocol
 
 from sqlalchemy import create_engine, text
-from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.engine import Engine, make_url
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, sessionmaker
 
 from db_models import Base
@@ -35,8 +36,8 @@ def _new_session(factory: _SessionFactory) -> Session:
     return factory()
 
 
-_ENGINE: Optional[Engine] = None
-_SESSION_LOCAL: Optional[_SessionFactory] = None
+_ENGINE: Engine | None = None
+_SESSION_LOCAL: _SessionFactory | None = None
 
 
 def ensure_database_exists(database_url: str) -> None:
@@ -64,7 +65,7 @@ def ensure_database_exists(database_url: str) -> None:
 def init_database(
     database_url: str,
     echo: bool = False,
-    pool_size: Optional[int] = None,
+    pool_size: int | None = None,
 ) -> None:
     if _ENGINE is not None and _SESSION_LOCAL is not None:
         logger.debug("Database already initialized; skipping re-init.")

@@ -9,7 +9,6 @@ http://www.apache.org/licenses/LICENSE-2.0
 """
 
 from enum import Enum
-from typing import List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, StrictBool
 
@@ -36,7 +35,7 @@ class ChannelType(str, Enum):
 
 
 class NotificationChannel(BaseModel):
-    id: Optional[str] = Field(None, description=DESC_UNIQUE_IDENTIFIER, examples=["channel-123"])
+    id: str | None = Field(None, description=DESC_UNIQUE_IDENTIFIER, examples=["channel-123"])
     name: str = Field(..., description=DESC_CHANNEL_NAME, examples=["Primary Slack"])
     type: ChannelType = Field(..., description=DESC_CHANNEL_TYPE, examples=["slack"])
     enabled: bool = Field(True, description=DESC_CHANNEL_ENABLED, examples=[True])
@@ -45,9 +44,9 @@ class NotificationChannel(BaseModel):
         description=DESC_CHANNEL_SPECIFIC_CONFIG,
         examples=[{"webhookUrl": "https://hooks.slack.com/services/T000/B000/XXX"}],
     )
-    created_by: Optional[str] = Field(None, alias="createdBy", description="Owner user id", examples=["user-42"])
+    created_by: str | None = Field(None, alias="createdBy", description="Owner user id", examples=["user-42"])
     visibility: Visibility = Field(Visibility.PRIVATE, description=DESC_VISIBILITY_SCOPE, examples=["private"])
-    shared_group_ids: List[str] = Field(
+    shared_group_ids: list[str] = Field(
         default_factory=list,
         alias="sharedGroupIds",
         description=DESC_GROUP_IDS_CHANNEL_SHARED_WITH,
@@ -69,7 +68,7 @@ class NotificationChannelCreate(BaseModel):
         examples=[{"webhookUrl": "https://hooks.slack.com/services/T000/B000/XXX"}],
     )
     visibility: Visibility = Field(Visibility.PRIVATE, description=DESC_VISIBILITY_SCOPE, examples=["private"])
-    shared_group_ids: List[str] = Field(
+    shared_group_ids: list[str] = Field(
         default_factory=list, alias="sharedGroupIds", description=DESC_GROUP_IDS_SHARE_WITH, examples=[["group-ops"]]
     )
     model_config = ConfigDict(use_enum_values=True, populate_by_name=True, extra="forbid")

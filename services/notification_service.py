@@ -13,7 +13,7 @@ import logging
 import re
 from datetime import UTC, datetime
 from email.message import EmailMessage
-
+from typing import cast
 
 from config import config
 from custom_types.json import JSONDict
@@ -30,7 +30,6 @@ logger = logging.getLogger(__name__)
 
 
 class NotificationService:
-
     def __init__(self) -> None:
         self.timeout = config.default_timeout
         self._client = create_async_client(self.timeout)
@@ -54,21 +53,43 @@ class NotificationService:
     async def _send_smtp_with_retry(
         self,
         message: EmailMessage,
-        hostname: str,
-        port: int,
-        username: str | None = None,
-        password: str | None = None,
-        start_tls: bool = False,
-        use_tls: bool = False,
+        *legacy_args: object,
+        smtp: notification_transport.SmtpDeliveryConfig | None = None,
+        **legacy_kwargs: object,
     ) -> object:
+        smtp_config = smtp
+        if smtp_config is None:
+            values = list(legacy_args)
+            hostname = str(values[0] if values else legacy_kwargs.get("hostname") or "").strip()
+            if not hostname:
+                raise ValueError("SMTP hostname is required")
+            try:
+                port_value = values[1] if len(values) > 1 else legacy_kwargs.get("port") or 0
+                port = int(cast(int | str | bytes | bytearray, port_value))
+            except (TypeError, ValueError) as exc:
+                raise ValueError("SMTP port must be an integer") from exc
+            smtp_config = notification_transport.SmtpDeliveryConfig(
+                hostname=hostname,
+                port=port,
+                username=(str(values[2] if len(values) > 2 else legacy_kwargs.get("username") or "").strip() or None),
+                password=(
+                    str(values[3])
+                    if len(values) > 3 and values[3] is not None
+                    else str(legacy_kwargs.get("password"))
+                    if legacy_kwargs.get("password") is not None
+                    else None
+                ),
+                start_tls=bool(values[4] if len(values) > 4 else legacy_kwargs.get("start_tls", False)),
+                use_tls=bool(values[5] if len(values) > 5 else legacy_kwargs.get("use_tls", False)),
+            )
         return await notification_transport.send_smtp_with_retry(
             message,
-            hostname=hostname,
-            port=port,
-            username=username,
-            password=password,
-            start_tls=start_tls,
-            use_tls=use_tls,
+            hostname=smtp_config.hostname,
+            port=smtp_config.port,
+            username=smtp_config.username,
+            password=smtp_config.password,
+            start_tls=smtp_config.start_tls,
+            use_tls=smtp_config.use_tls,
         )
 
     async def send_notification(self, channel: NotificationChannel, alert: Alert, action: str = "firing") -> bool:
@@ -235,7 +256,13 @@ class NotificationService:
         msg = notification_email.build_smtp_message(subject, body, smtp_from, recipients)
         logger.info("Sending email to %s via %s:%s (channel=%s)", recipients, smtp_host, smtp_port, channel.name)
         sent = await notification_email.send_via_smtp(
-            msg, smtp_host, smtp_port, smtp_user, smtp_pass, use_starttls, use_ssl
+            msg,
+            smtp_host,
+            smtp_port,
+            smtp_user,
+            smtp_pass,
+            use_starttls,
+            use_ssl,
         )
         if sent:
             logger.info("Email notification sent (channel=%s)", channel.name)

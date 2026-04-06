@@ -22,8 +22,8 @@ ensure_test_env()
 
 from models.alerting.alerts import Alert, AlertState, AlertStatus
 from models.alerting.channels import ChannelType, NotificationChannel
-from services.common import encryption as enc_mod
 from services import notification_service as notif_mod
+from services.common import encryption as enc_mod
 
 
 def _alert() -> Alert:

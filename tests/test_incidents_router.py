@@ -12,17 +12,16 @@ from tests._env import ensure_test_env
 
 ensure_test_env()
 
+import importlib.util
+import sys
+from pathlib import Path
+
 from models.access.auth_models import TokenData
 from models.alerting.incidents import (
     AlertIncident,
     AlertIncidentUpdateRequest,
     IncidentStatus,
 )
-
-
-import importlib.util
-import sys
-from pathlib import Path
 
 incidents_path = Path(__file__).resolve().parents[1] / "routers" / "observability" / "incidents.py"
 spec = importlib.util.spec_from_file_location("incidents_module", incidents_path)

@@ -8,7 +8,7 @@ License. You may obtain a copy of the License at
 http://www.apache.org/licenses/LICENSE-2.0
 """
 
-from typing import List, cast
+from typing import cast
 
 from fastapi import APIRouter, Depends, HTTPException
 
@@ -42,7 +42,7 @@ async def get_alertmanager_status(
 
 @router.get(
     "/receivers",
-    response_model=List[str],
+    response_model=list[str],
     summary="List Receivers",
     description="Lists alertmanager receiver names available for routing and inspection.",
     response_description="The configured alertmanager receiver names.",
@@ -50,6 +50,6 @@ async def get_alertmanager_status(
 )
 async def list_receivers(
     current_user: TokenData = Depends(require_permission_with_scope(Permission.READ_ALERTS, "alertmanager")),
-) -> List[str]:
+) -> list[str]:
     _ = current_user
-    return cast(List[str], await alertmanager_service.get_receivers())
+    return cast(list[str], await alertmanager_service.get_receivers())

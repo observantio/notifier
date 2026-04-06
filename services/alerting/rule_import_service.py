@@ -11,8 +11,6 @@ http://www.apache.org/licenses/LICENSE-2.0
 
 from __future__ import annotations
 
-from typing import List, Optional
-
 import yaml
 
 from custom_types.json import JSONDict
@@ -93,7 +91,7 @@ def _normalize_rule_entry(
     )
 
 
-def parse_rules_yaml(yaml_content: str, defaults: Optional[JSONDict] = None) -> List[AlertRuleCreate]:
+def parse_rules_yaml(yaml_content: str, defaults: JSONDict | None = None) -> list[AlertRuleCreate]:
     if not (yaml_content or "").strip():
         raise RuleImportError("YAML content is required")
 
@@ -118,7 +116,7 @@ def parse_rules_yaml(yaml_content: str, defaults: Optional[JSONDict] = None) -> 
         raise RuleImportError("Unsupported YAML structure for rules import")
 
     defaults = defaults or {}
-    results: List[AlertRuleCreate] = []
+    results: list[AlertRuleCreate] = []
 
     for idx, group in enumerate(groups):
         if not isinstance(group, dict):

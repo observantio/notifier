@@ -18,6 +18,7 @@ ensure_test_env()
 
 from fastapi import HTTPException
 
+from models.access.auth_models import TokenData
 from services.alerting.integration_security_service import (
     infer_tenant_id_from_alerts,
     is_jira_sso_available,
@@ -26,7 +27,6 @@ from services.alerting.integration_security_service import (
     normalize_visibility,
     validate_jira_credentials,
 )
-from models.access.auth_models import TokenData
 
 
 class IntegrationSecurityServiceTests(unittest.TestCase):

@@ -12,14 +12,14 @@ from __future__ import annotations
 
 import logging
 import uuid
-from typing import List, Optional, Tuple
 
 from sqlalchemy.orm import joinedload
 
 from database import get_db_session
-from db_models import AlertRule as AlertRuleDB, HiddenAlertRule
+from db_models import AlertRule as AlertRuleDB
+from db_models import HiddenAlertRule
 from models.alerting.rules import AlertRule, AlertRuleCreate
-from services.common.access import has_access, assign_shared_groups
+from services.common.access import assign_shared_groups, has_access
 from services.common.pagination import cap_pagination
 from services.common.tenants import ensure_tenant_exists
 from services.storage.serializers import rule_to_pydantic
@@ -27,7 +27,7 @@ from services.storage.serializers import rule_to_pydantic
 logger = logging.getLogger(__name__)
 
 
-def _shared_group_ids(db_obj: AlertRuleDB) -> List[str]:
+def _shared_group_ids(db_obj: AlertRuleDB) -> list[str]:
     return [g.id for g in db_obj.shared_groups] if db_obj.shared_groups else []
 
 
@@ -44,8 +44,8 @@ class RuleStorageService:
         self,
         tenant_id: str,
         rule_name: str,
-        org_id: Optional[str] = None,
-    ) -> Optional[AlertRule]:
+        org_id: str | None = None,
+    ) -> AlertRule | None:
         target_name = str(rule_name or "").strip()
         if not target_name:
             return None
@@ -63,7 +63,7 @@ class RuleStorageService:
                 rules = org_matched or [r for r in rules if not getattr(r, "org_id", None)] or rules
             return rule_to_pydantic(rules[0])
 
-    def get_hidden_rule_ids(self, tenant_id: str, user_id: str) -> List[str]:
+    def get_hidden_rule_ids(self, tenant_id: str, user_id: str) -> list[str]:
         with get_db_session() as db:
             rows = (
                 db.query(HiddenAlertRule.rule_id)
@@ -75,7 +75,7 @@ class RuleStorageService:
             )
             return [str(rule_id) for (rule_id,) in rows]
 
-    def get_hidden_rule_names(self, tenant_id: str, user_id: str) -> List[str]:
+    def get_hidden_rule_names(self, tenant_id: str, user_id: str) -> list[str]:
         with get_db_session() as db:
             rows = (
                 db.query(AlertRuleDB.name)
@@ -126,7 +126,7 @@ class RuleStorageService:
                     db.delete(existing)
             return True
 
-    def get_public_alert_rules(self, tenant_id: str) -> List[AlertRule]:
+    def get_public_alert_rules(self, tenant_id: str) -> list[AlertRule]:
         with get_db_session() as db:
             rules = (
                 db.query(AlertRuleDB)
@@ -144,10 +144,10 @@ class RuleStorageService:
         self,
         tenant_id: str,
         user_id: str,
-        group_ids: Optional[List[str]] = None,
-        limit: Optional[int] = None,
+        group_ids: list[str] | None = None,
+        limit: int | None = None,
         offset: int = 0,
-    ) -> List[AlertRule]:
+    ) -> list[AlertRule]:
         group_ids = group_ids or []
         capped_limit, capped_offset = cap_pagination(limit, offset)
 
@@ -160,13 +160,13 @@ class RuleStorageService:
                 .limit(capped_limit)
                 .all()
             )
-            out: List[AlertRule] = []
+            out: list[AlertRule] = []
             for r in rules:
                 if has_access(_visibility_of(r), _creator_of(r), user_id, _shared_group_ids(r), group_ids):
                     out.append(rule_to_pydantic(r))
             return out
 
-    def get_alert_rules_for_org(self, tenant_id: str, org_id: str) -> List[AlertRule]:
+    def get_alert_rules_for_org(self, tenant_id: str, org_id: str) -> list[AlertRule]:
         with get_db_session() as db:
             rules = (
                 db.query(AlertRuleDB)
@@ -180,10 +180,10 @@ class RuleStorageService:
         self,
         tenant_id: str,
         user_id: str,
-        group_ids: Optional[List[str]] = None,
-        limit: Optional[int] = None,
+        group_ids: list[str] | None = None,
+        limit: int | None = None,
         offset: int = 0,
-    ) -> List[Tuple[AlertRule, str]]:
+    ) -> list[tuple[AlertRule, str]]:
         group_ids = group_ids or []
         capped_limit, capped_offset = cap_pagination(limit, offset)
 
@@ -197,13 +197,13 @@ class RuleStorageService:
                 .all()
             )
 
-            out: List[Tuple[AlertRule, str]] = []
+            out: list[tuple[AlertRule, str]] = []
             for r in rules:
                 if has_access(_visibility_of(r), _creator_of(r), user_id, _shared_group_ids(r), group_ids):
                     out.append((rule_to_pydantic(r), _creator_of(r)))
             return out
 
-    def get_alert_rule_raw(self, rule_id: str, tenant_id: str) -> Optional[AlertRuleDB]:
+    def get_alert_rule_raw(self, rule_id: str, tenant_id: str) -> AlertRuleDB | None:
         with get_db_session() as db:
             return (
                 db.query(AlertRuleDB)
@@ -217,8 +217,8 @@ class RuleStorageService:
         rule_id: str,
         tenant_id: str,
         user_id: str,
-        group_ids: Optional[List[str]] = None,
-    ) -> Optional[AlertRule]:
+        group_ids: list[str] | None = None,
+    ) -> AlertRule | None:
         group_ids = group_ids or []
         with get_db_session() as db:
             r = (
@@ -238,7 +238,7 @@ class RuleStorageService:
         rule_create: AlertRuleCreate,
         tenant_id: str,
         user_id: str,
-        group_ids: Optional[List[str]] = None,
+        group_ids: list[str] | None = None,
     ) -> AlertRule:
         with get_db_session() as db:
             ensure_tenant_exists(db, tenant_id)
@@ -279,8 +279,8 @@ class RuleStorageService:
         rule_update: AlertRuleCreate,
         tenant_id: str,
         user_id: str,
-        group_ids: Optional[List[str]] = None,
-    ) -> Optional[AlertRule]:
+        group_ids: list[str] | None = None,
+    ) -> AlertRule | None:
         group_ids = group_ids or []
         with get_db_session() as db:
             r = (
@@ -332,7 +332,7 @@ class RuleStorageService:
         rule_id: str,
         tenant_id: str,
         user_id: str,
-        group_ids: Optional[List[str]] = None,
+        group_ids: list[str] | None = None,
     ) -> bool:
         group_ids = group_ids or []
         with get_db_session() as db:

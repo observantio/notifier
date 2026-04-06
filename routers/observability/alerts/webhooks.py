@@ -48,7 +48,7 @@ async def receive_alert_webhook(request: Request, payload: AlertWebhookRequest =
     "/alerts/critical",
     summary="Receive Critical Alert Webhook",
     description=(
-        "Receives critical alert webhook payloads and dispatches critical notifications " "for the inferred tenant."
+        "Receives critical alert webhook payloads and dispatches critical notifications for the inferred tenant."
     ),
     response_description="The webhook processing result for the submitted critical alerts.",
     responses=BAD_REQUEST_ERRORS,

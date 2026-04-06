@@ -14,7 +14,6 @@ http://www.apache.org/licenses/LICENSE-2.0
 """
 
 import re
-from typing import List
 
 from custom_types.json import JSONDict
 from services.common.url_utils import is_safe_http_url
@@ -46,10 +45,10 @@ def _as_int(value: object) -> int | None:
         return None
 
 
-def validate_channel_config(channel_type: str, channel_config: JSONDict | None) -> List[str]:
+def validate_channel_config(channel_type: str, channel_config: JSONDict | None) -> list[str]:
     cfg = channel_config or {}
     normalized_type = str(channel_type or "").strip().lower()
-    errors: List[str] = []
+    errors: list[str] = []
 
     if normalized_type == "email":
         to_field = cfg.get("to") or cfg.get("recipient")

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import json
 from contextlib import contextmanager
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from types import SimpleNamespace
 
 import pytest
@@ -54,7 +54,7 @@ def _incident_row(
         meta["hide_when_resolved"] = True
     merged_annotations = dict(annotations or {})
     merged_annotations[incidents_mod.INCIDENT_META_KEY] = json.dumps(meta)
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     return SimpleNamespace(
         id=incident_id,
         tenant_id="tenant-a",
@@ -269,14 +269,14 @@ def test_resolve_rule_by_alertname_and_jira_side_effect_error_paths(monkeypatch)
         "tenant-a",
         incident,
         note_text="reopened",
-        created_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
     )
     assert len(warnings) == 2
 
 
 def test_sync_incidents_from_alerts_dedupe_reopen_and_resolve_missing(monkeypatch):
     service = incidents_mod.IncidentStorageService()
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     class _RuleObj:
         def __init__(self):
@@ -363,7 +363,9 @@ def test_sync_incidents_from_alerts_dedupe_reopen_and_resolve_missing(monkeypatc
     monkeypatch.setattr(incidents_mod, "ensure_tenant_exists", lambda *_args: None)
     monkeypatch.setattr(incidents_sync_mod, "_is_alert_suppressed", lambda alert: False)
     monkeypatch.setattr(incidents_sync_mod, "_resolve_rule_by_alertname", lambda *_args: db.rule)
-    monkeypatch.setattr(incidents_sync_mod, "_move_reopened_incident_jira_ticket_to_todo", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        incidents_sync_mod, "_move_reopened_incident_jira_ticket_to_todo", lambda *_args, **_kwargs: None
+    )
     monkeypatch.setattr(incidents_sync_mod, "_sync_reopened_incident_note_to_jira", lambda *_args, **_kwargs: None)
 
     alerts = [
@@ -432,9 +434,9 @@ def test_incident_service_summary_list_get_update_and_filter(monkeypatch):
     monkeypatch.setattr(
         incidents_mod,
         "has_access",
-        lambda visibility, creator_id, user_id, shared_group_ids, user_group_ids, require_write=False: visibility
-        != "private"
-        or creator_id == user_id,
+        lambda visibility, creator_id, user_id, shared_group_ids, user_group_ids, require_write=False: (
+            visibility != "private" or creator_id == user_id
+        ),
     )
 
     summary = service.get_incident_summary("tenant-a", "user-1", ["g1"])
@@ -640,7 +642,7 @@ def test_incident_list_and_filter_additional_edges(monkeypatch):
 
 def test_sync_incidents_from_alerts_additional_branch_edges(monkeypatch):
     service = incidents_mod.IncidentStorageService()
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     canonical = _incident_row(
         "inc-canon",
@@ -767,7 +769,7 @@ def test_incident_get_update_filter_remaining_branches(monkeypatch):
     resolved_row = _incident_row(
         "inc-resolved", status="resolved", visibility="public", created_by="u1", annotations={}
     )
-    resolved_row.notes = [{"author": "u1", "text": "existing", "createdAt": datetime.now(timezone.utc).isoformat()}]
+    resolved_row.notes = [{"author": "u1", "text": "existing", "createdAt": datetime.now(UTC).isoformat()}]
     db = _FakeDB([resolved_row])
     monkeypatch.setattr(incidents_mod, "get_db_session", lambda: _db_session(db))
     monkeypatch.setattr(incidents_mod, "normalize_storage_visibility", lambda value: value)

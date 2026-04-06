@@ -9,10 +9,11 @@ http://www.apache.org/licenses/LICENSE-2.0
 """
 
 import logging
-from typing import List, Optional
+
 from fastapi import HTTPException, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
+
 from db_models import AlertRule, Group, NotificationChannel
 
 logger = logging.getLogger(__name__)
@@ -21,11 +22,11 @@ logger = logging.getLogger(__name__)
 def _resolve_groups(
     db: Session,
     tenant_id: str,
-    group_ids: List[str],
+    group_ids: list[str],
     *,
-    actor_group_ids: Optional[List[str]] = None,
+    actor_group_ids: list[str] | None = None,
     enforce_membership: bool = True,
-) -> List[Group]:
+) -> list[Group]:
     normalized = [s for gid in (group_ids or []) if gid is not None and (s := str(gid).strip())]
     if not normalized:
         return []
@@ -69,9 +70,9 @@ def assign_shared_groups(
     db: Session,
     tenant_id: str,
     visibility: str,
-    group_ids: Optional[List[str]],
+    group_ids: list[str] | None,
     *,
-    actor_group_ids: Optional[List[str]],
+    actor_group_ids: list[str] | None,
 ) -> None:
     if visibility != "group":
         db_obj.shared_groups = []
@@ -88,10 +89,10 @@ def assign_shared_groups(
 
 def has_access(
     visibility: str,
-    created_by: Optional[str],
+    created_by: str | None,
     user_id: str,
-    shared_group_ids: List[str],
-    user_group_ids: List[str],
+    shared_group_ids: list[str],
+    user_group_ids: list[str],
     require_write: bool = False,
 ) -> bool:
     if created_by == user_id:

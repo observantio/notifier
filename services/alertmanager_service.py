@@ -13,10 +13,9 @@ import json
 import logging
 from collections.abc import Awaitable, Callable
 from hmac import compare_digest
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import httpx
-
 from fastapi import HTTPException, Request, status
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -31,17 +30,35 @@ from models.alerting.rules import AlertRule
 from models.alerting.silences import Silence
 from services.alerting.alerts_ops import (
     delete_alerts as delete_alerts_ops,
+)
+from services.alerting.alerts_ops import (
     evaluate_promql as evaluate_promql_ops,
+)
+from services.alerting.alerts_ops import (
     get_alert_groups as get_alert_groups_ops,
+)
+from services.alerting.alerts_ops import (
     get_alerts as get_alerts_ops,
+)
+from services.alerting.alerts_ops import (
     list_label_names as list_label_names_ops,
+)
+from services.alerting.alerts_ops import (
     list_label_values as list_label_values_ops,
+)
+from services.alerting.alerts_ops import (
     list_metric_names as list_metric_names_ops,
+)
+from services.alerting.alerts_ops import (
     post_alerts as post_alerts_ops,
 )
 from services.alerting.channels_ops import (
     get_receivers as get_receivers_ops,
+)
+from services.alerting.channels_ops import (
     get_status as get_status_ops,
+)
+from services.alerting.channels_ops import (
     notify_for_alerts as notify_for_alerts_ops,
 )
 from services.alerting.ruler_yaml import (
@@ -52,22 +69,44 @@ from services.alerting.ruler_yaml import (
 )
 from services.alerting.rules_ops import (
     resolve_rule_org_id as resolve_rule_org_id_ops,
+)
+from services.alerting.rules_ops import (
     sync_mimir_rules_for_org as sync_mimir_rules_for_org_ops,
 )
 from services.alerting.silence_metadata import (
     decode_silence_comment as decode_silence_comment_ops,
+)
+from services.alerting.silence_metadata import (
     encode_silence_comment as encode_silence_comment_ops,
+)
+from services.alerting.silence_metadata import (
     normalize_visibility as normalize_visibility_ops,
 )
 from services.alerting.silences_ops import (
     apply_silence_metadata as apply_silence_metadata_ops,
+)
+from services.alerting.silences_ops import (
     create_silence as create_silence_ops,
+)
+from services.alerting.silences_ops import (
     delete_silence as delete_silence_ops,
+)
+from services.alerting.silences_ops import (
     get_silence as get_silence_ops,
+)
+from services.alerting.silences_ops import (
     get_silences as get_silences_ops,
+)
+from services.alerting.silences_ops import (
     prune_removed_member_group_silences as prune_removed_member_group_silences_ops,
+)
+from services.alerting.silences_ops import (
     silence_accessible as silence_accessible_ops,
+)
+from services.alerting.silences_ops import (
     silence_owned_by as silence_owned_by_ops,
+)
+from services.alerting.silences_ops import (
     update_silence as update_silence_ops,
 )
 from services.common.http_client import create_async_client
@@ -118,7 +157,7 @@ class AlertManagerService:
     def mimir_http_client(self) -> httpx.AsyncClient:
         return self._mimir_client
 
-    def parse_filter_labels(self, filter_labels: Optional[str]) -> Optional[Dict[str, str]]:
+    def parse_filter_labels(self, filter_labels: str | None) -> dict[str, str] | None:
         if not filter_labels:
             return None
         try:
@@ -129,7 +168,7 @@ class AlertManagerService:
             raise ValueError(LABELS_JSON_ERROR)
         return {str(k): str(v) for k, v in parsed.items()}
 
-    def user_scope(self, current_user: TokenData) -> tuple[str, str, List[str]]:
+    def user_scope(self, current_user: TokenData) -> tuple[str, str, list[str]]:
         return (
             current_user.tenant_id,
             current_user.user_id,
@@ -162,13 +201,13 @@ class AlertManagerService:
                 return
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid webhook token")
 
-    def normalize_visibility(self, value: Optional[str]) -> str:
+    def normalize_visibility(self, value: str | None) -> str:
         return normalize_visibility_ops(value)
 
-    def encode_silence_comment(self, comment: str, visibility: str, shared_group_ids: List[str]) -> str:
+    def encode_silence_comment(self, comment: str, visibility: str, shared_group_ids: list[str]) -> str:
         return encode_silence_comment_ops(comment, visibility, shared_group_ids)
 
-    def decode_silence_comment(self, comment: Optional[str]) -> Dict[str, object]:
+    def decode_silence_comment(self, comment: str | None) -> dict[str, object]:
         return decode_silence_comment_ops(comment)
 
     def apply_silence_metadata(self, silence: Silence) -> Silence:
@@ -180,19 +219,19 @@ class AlertManagerService:
     def silence_owned_by(self, silence: Silence, current_user: TokenData) -> bool:
         return silence_owned_by_ops(silence, current_user)
 
-    def resolve_rule_org_id(self, rule_org_id: Optional[str], current_user: TokenData) -> str:
+    def resolve_rule_org_id(self, rule_org_id: str | None, current_user: TokenData) -> str:
         return resolve_rule_org_id_ops(rule_org_id, current_user)
 
     def _yaml_quote(self, value: object) -> str:
         return yaml_quote(value)
 
-    def _group_enabled_rules(self, rules: List[AlertRule]) -> Dict[str, List[AlertRule]]:
+    def _group_enabled_rules(self, rules: list[AlertRule]) -> dict[str, list[AlertRule]]:
         return group_enabled_rules(rules)
 
-    def _build_ruler_group_yaml(self, group_name: str, rules: List[AlertRule]) -> str:
+    def _build_ruler_group_yaml(self, group_name: str, rules: list[AlertRule]) -> str:
         return build_ruler_group_yaml(group_name, rules)
 
-    def _extract_mimir_group_names(self, namespace_yaml: str) -> List[str]:
+    def _extract_mimir_group_names(self, namespace_yaml: str) -> list[str]:
         return extract_mimir_group_names(namespace_yaml)
 
     def __getattr__(self, name: str) -> Any:
@@ -209,11 +248,11 @@ class AlertManagerService:
     @with_timeout()
     async def get_alerts(
         self,
-        filter_labels: Optional[Dict[str, str]] = None,
-        active: Optional[bool] = None,
-        silenced: Optional[bool] = None,
-        inhibited: Optional[bool] = None,
-    ) -> List[Alert]:
+        filter_labels: dict[str, str] | None = None,
+        active: bool | None = None,
+        silenced: bool | None = None,
+        inhibited: bool | None = None,
+    ) -> list[Alert]:
         return await get_alerts_ops(self, filter_labels, active, silenced, inhibited)
 
     async def delete_silence(self, silence_id: str) -> bool:

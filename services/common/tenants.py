@@ -11,15 +11,13 @@ http://www.apache.org/licenses/LICENSE-2.0
 
 from __future__ import annotations
 
-from typing import Optional
-
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from db_models import Tenant
 
 
-def ensure_tenant_exists(db: Session, tenant_id: Optional[str]) -> str:
+def ensure_tenant_exists(db: Session, tenant_id: str | None) -> str:
     normalized = str(tenant_id or "").strip()
     if not normalized:
         raise ValueError("tenant_id is required")

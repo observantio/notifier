@@ -4,7 +4,6 @@ High-coverage router tests for observability endpoints.
 
 from __future__ import annotations
 
-import asyncio
 from types import SimpleNamespace
 from typing import Any, cast
 
@@ -21,7 +20,7 @@ ensure_test_env()
 
 from models.access.auth_models import Role, TokenData
 from models.alerting.alerts import Alert, AlertGroup
-from models.alerting.channels import ChannelType, NotificationChannel, NotificationChannelCreate
+from models.alerting.channels import NotificationChannel, NotificationChannelCreate
 from models.alerting.incidents import AlertIncident, AlertIncidentUpdateRequest, IncidentStatus
 from models.alerting.requests import (
     AlertWebhookRequest,
@@ -1522,6 +1521,7 @@ async def test_rules_and_silences_additional_branch_paths(monkeypatch):
 @pytest.mark.asyncio
 async def test_incidents_jira_links_and_integrations_additional_branches(monkeypatch):
     from sqlalchemy.exc import SQLAlchemyError
+
     from routers.observability import incidents as incidents_router
 
     monkeypatch.setattr(jira_integrations_router, "run_in_threadpool", _run_in_threadpool)
@@ -2155,7 +2155,7 @@ async def test_router_query_param_and_test_rule_remaining_branches(monkeypatch):
             close = getattr(maybe_coro, "close", None)
             if callable(close):
                 close()
-        raise asyncio.TimeoutError()
+        raise TimeoutError()
 
     monkeypatch.setattr(rules_router.asyncio, "wait_for", _timeout_wait_for)
     timed_out = await rules_router.test_rule("r-time", _request(), _user())

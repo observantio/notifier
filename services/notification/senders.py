@@ -149,7 +149,7 @@ async def send_webhook(
     action: str,
 ) -> bool:
     url = _string_value(
-        (channel_config.get("url") or channel_config.get("webhook_url") or channel_config.get("webhookUrl"))
+        channel_config.get("url") or channel_config.get("webhook_url") or channel_config.get("webhookUrl")
     )
     if not url:
         return False
@@ -170,7 +170,7 @@ async def send_pagerduty(
     alert: object,
     action: str,
 ) -> bool:
-    routing_key = _string_value((channel_config.get("routing_key") or channel_config.get("integrationKey")))
+    routing_key = _string_value(channel_config.get("routing_key") or channel_config.get("integrationKey"))
     if not routing_key:
         logger.warning("PagerDuty routing key missing")
         return False

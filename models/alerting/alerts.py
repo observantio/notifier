@@ -9,7 +9,6 @@ http://www.apache.org/licenses/LICENSE-2.0
 """
 
 from enum import Enum
-from typing import Dict, List, Optional, Union
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -39,13 +38,13 @@ class AlertState(str, Enum):
 
 class AlertStatus(BaseModel):
     state: AlertState = Field(..., description=DESC_CURRENT_STATE_ALERT, examples=["active"])
-    silenced_by: List[str] = Field(
+    silenced_by: list[str] = Field(
         default_factory=list,
         alias="silencedBy",
         description=DESC_LIST_SILENCES_SILENCE_ALERT,
         examples=[["silence-123"]],
     )
-    inhibited_by: List[str] = Field(
+    inhibited_by: list[str] = Field(
         default_factory=list,
         alias="inhibitedBy",
         description=DESC_LIST_ALERTS_INHIBIT_ALERT,
@@ -55,12 +54,12 @@ class AlertStatus(BaseModel):
 
 
 class Alert(BaseModel):
-    labels: Dict[str, str] = Field(
+    labels: dict[str, str] = Field(
         ...,
         description=DESC_KEY_VALUE_PAIRS_IDENTIFY_ALERT,
         examples=[{"alertname": "HighCpuUsage", "severity": "critical"}],
     )
-    annotations: Dict[str, str] = Field(
+    annotations: dict[str, str] = Field(
         default_factory=dict,
         description=DESC_ADDITIONAL_INFO_ALERT,
         examples=[{"summary": "CPU usage above 95%", "description": "Node cpu is saturated"}],
@@ -71,31 +70,31 @@ class Alert(BaseModel):
         description=DESC_TIME_ALERT_STARTED_FIRING,
         examples=["2026-04-03T12:00:00Z"],
     )
-    ends_at: Optional[str] = Field(
+    ends_at: str | None = Field(
         None,
         alias="endsAt",
         description=DESC_TIME_ALERT_STOPPED_FIRING,
         examples=["2026-04-03T12:15:00Z"],
     )
-    generator_url: Optional[str] = Field(
+    generator_url: str | None = Field(
         None,
         alias="generatorURL",
         description=DESC_URL_ALERT_GENERATOR,
         examples=["https://grafana.example.internal/alerting/grafana/high-cpu"],
     )
     status: AlertStatus = Field(..., description=DESC_CURRENT_STATUS_ALERT)
-    receivers: Optional[List[Union[str, JSONDict]]] = Field(
+    receivers: list[str | JSONDict] | None = Field(
         default_factory=list,
         description=DESC_LIST_RECEIVERS_ALERT,
         examples=[["primary-oncall", {"type": "slack", "channel": "#alerts"}]],
     )
-    fingerprint: Optional[str] = Field(
+    fingerprint: str | None = Field(
         None, description=DESC_UNIQUE_IDENTIFIER_ALERT, examples=["01ARZ3NDEKTSV4RRFFQ69G5FAV"]
     )
     model_config = ConfigDict(populate_by_name=True)
 
 
 class AlertGroup(BaseModel):
-    labels: Dict[str, str] = Field(..., description=DESC_COMMON_LABELS_GROUP, examples=[{"team": "platform"}])
+    labels: dict[str, str] = Field(..., description=DESC_COMMON_LABELS_GROUP, examples=[{"team": "platform"}])
     receiver: str = Field(..., description=DESC_RECEIVER_HANDLE_ALERTS, examples=["primary-oncall"])
-    alerts: List[Alert] = Field(..., description=DESC_LIST_ALERTS_GROUP)
+    alerts: list[Alert] = Field(..., description=DESC_LIST_ALERTS_GROUP)

@@ -2,18 +2,15 @@
 
 from __future__ import annotations
 
-from typing import List, Optional
-
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from database import get_db_session
 from db_models import HiddenJiraIntegration, HiddenNotificationChannel, HiddenSilence
-
 from services.storage.revocation import prune_removed_member_group_shares
 
 
 class HiddenEntityStorageService:
-    def get_hidden_silence_ids(self, tenant_id: str, user_id: str) -> List[str]:
+    def get_hidden_silence_ids(self, tenant_id: str, user_id: str) -> list[str]:
         with get_db_session() as db:
             rows = (
                 db.query(HiddenSilence.silence_id)
@@ -51,7 +48,7 @@ class HiddenEntityStorageService:
                     db.delete(existing)
             return True
 
-    def get_hidden_channel_ids(self, tenant_id: str, user_id: str) -> List[str]:
+    def get_hidden_channel_ids(self, tenant_id: str, user_id: str) -> list[str]:
         with get_db_session() as db:
             rows = (
                 db.query(HiddenNotificationChannel.channel_id)
@@ -92,8 +89,8 @@ class HiddenEntityStorageService:
         self,
         tenant_id: str,
         group_id: str,
-        removed_user_ids: Optional[List[str]] = None,
-        removed_usernames: Optional[List[str]] = None,
+        removed_user_ids: list[str] | None = None,
+        removed_usernames: list[str] | None = None,
     ) -> dict[str, int]:
         with get_db_session() as db:
             return prune_removed_member_group_shares(
@@ -104,7 +101,7 @@ class HiddenEntityStorageService:
                 removed_usernames=removed_usernames or [],
             )
 
-    def get_hidden_jira_integration_ids(self, tenant_id: str, user_id: str) -> List[str]:
+    def get_hidden_jira_integration_ids(self, tenant_id: str, user_id: str) -> list[str]:
         with get_db_session() as db:
             rows = (
                 db.query(HiddenJiraIntegration.integration_id)

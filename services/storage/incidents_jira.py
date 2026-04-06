@@ -13,8 +13,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections.abc import Coroutine
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 
 from custom_types.json import JSONDict
 from db_models import AlertIncident as AlertIncidentDB
@@ -41,7 +40,7 @@ def _run_async(coro: Coroutine[object, object, object]) -> None:
             loop.close()
 
 
-def _resolve_incident_jira_credentials(tenant_id: str, integration_id: Optional[str]) -> Optional[JSONDict]:
+def _resolve_incident_jira_credentials(tenant_id: str, integration_id: str | None) -> JSONDict | None:
     integration_id = str(integration_id or "").strip()
     if integration_id:
         for item in load_tenant_jira_integrations(tenant_id):
@@ -88,7 +87,7 @@ def _sync_reopened_incident_note_to_jira(
     credentials = _resolve_incident_jira_credentials(tenant_id, integration_id)
     if not credentials:
         return
-    when_label = created_at.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+    when_label = created_at.astimezone(UTC).strftime("%Y-%m-%d %H:%M:%S UTC")
     body = f"System · {when_label}\n{note_text}"
     try:
         _run_async(jira_service.add_comment(issue_key=issue_key, text=body, credentials=credentials))

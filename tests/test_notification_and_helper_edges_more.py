@@ -8,7 +8,7 @@ http://www.apache.org/licenses/LICENSE-2.0
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from types import SimpleNamespace
 
 import httpx
@@ -26,13 +26,12 @@ ensure_test_env()
 from models.access.auth_models import Role, TokenData
 from models.alerting.alerts import Alert, AlertState, AlertStatus
 from models.alerting.incidents import AlertIncident, IncidentStatus, IncidentVisibility
-from services.alerting import rule_import_service, rules_ops, ruler_yaml, silence_metadata, suppression
-from services.incidents import helpers as incident_helpers
+from services.alerting import rule_import_service, ruler_yaml, rules_ops, silence_metadata, suppression
 from services.common import encryption, meta, url_utils
+from services.incidents import helpers as incident_helpers
 from services.jira import helpers as jira_helpers
 from services.jira_service import JiraError
-from services.notification import email_providers, payloads
-from services.notification import senders, transport, validators
+from services.notification import email_providers, payloads, senders, transport, validators
 
 
 def _token_data() -> TokenData:
@@ -60,7 +59,7 @@ def _alert() -> Alert:
 
 
 def _incident(jira_integration_id: str | None = None) -> AlertIncident:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     return AlertIncident(
         id="inc-1",
         fingerprint="fp-1",
@@ -735,7 +734,7 @@ async def test_notification_provider_sender_validator_transport_more_edges(monke
 
 def test_payloads_remaining_line_paths():
     alert = _alert()
-    assert payloads._fmt(datetime(2026, 1, 1, tzinfo=timezone.utc)).startswith("2026-01-01T")
+    assert payloads._fmt(datetime(2026, 1, 1, tzinfo=UTC)).startswith("2026-01-01T")
 
     no_start = alert.model_copy(update={"starts_at": ""})
     assert payloads._alert_start_timestamp(no_start) is None

@@ -22,10 +22,10 @@ from models.alerting.channels import NotificationChannel, NotificationChannelCre
 from models.alerting.requests import AlertWebhookRequest
 from models.alerting.rules import AlertRule, AlertRuleCreate
 from routers.observability.alerts import channels as channels_router
-from routers.observability.alerts import rules as rules_router
-from routers.observability.alerts import webhooks as webhooks_router
 from routers.observability.alerts import router as alerts_router
+from routers.observability.alerts import rules as rules_router
 from routers.observability.alerts import webhook_router
+from routers.observability.alerts import webhooks as webhooks_router
 from routers.observability.incidents import router as incidents_router
 from routers.observability.jira import router as jira_router
 from services.storage.channels import ChannelStorageService

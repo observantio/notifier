@@ -9,7 +9,7 @@ http://www.apache.org/licenses/LICENSE-2.0
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from typing import Any, cast
 
@@ -27,16 +27,15 @@ except ImportError:
 
 ensure_test_env()
 
-from config import config
 import database as db_mod
-from middleware import dependencies
 import middleware.rate_limit as rate_mod
+from config import config
+from middleware import dependencies, resilience
 from middleware.rate_limit.hybrid import HybridRateLimiter
 from middleware.rate_limit.in_memory import InMemoryRateLimiter
 from middleware.rate_limit.ip import _valid_ip, client_ip
 from middleware.rate_limit.models import RateLimitHitResult, RateLimitState
 from middleware.rate_limit.redis_fixed_window import RedisFixedWindowRateLimiter, _sanitize_redis_url
-from middleware import resilience
 from models.access.auth_models import Permission, Role, TokenData
 
 
@@ -143,16 +142,15 @@ def test_database_module_paths(monkeypatch):
     db_mod.dispose_database()
     engine = _FakeEngine(_FakeConn())
     monkeypatch.setattr(db_mod, "create_engine", lambda *_args, **_kwargs: engine)
-    monkeypatch.setattr(db_mod, "sessionmaker", lambda **_kwargs: (lambda: _FakeSession()))
+    monkeypatch.setattr(db_mod, "sessionmaker", lambda **_kwargs: lambda: _FakeSession())
     db_mod.init_database("postgresql://user:pass@localhost:5432/appdb")
     db_mod.init_database("postgresql://user:pass@localhost:5432/appdb")
 
     with db_mod.get_db_session() as session:
         assert isinstance(session, _FakeSession)
 
-    with pytest.raises(RuntimeError):
-        with db_mod.get_db_session() as _session:
-            raise RuntimeError("boom")
+    with pytest.raises(RuntimeError), db_mod.get_db_session() as _session:
+        raise RuntimeError("boom")
 
     gen = db_mod.get_db()
     session = next(gen)
@@ -175,9 +173,8 @@ def test_database_module_paths(monkeypatch):
     # Cover guard paths where one side of initialization is missing.
     db_mod._ENGINE = object()
     db_mod._SESSION_LOCAL = None
-    with pytest.raises(RuntimeError):
-        with db_mod.get_db_session():
-            pass
+    with pytest.raises(RuntimeError), db_mod.get_db_session():
+        pass
 
     db_mod._ENGINE = object()
     db_mod._SESSION_LOCAL = None
@@ -462,8 +459,8 @@ def test_dependencies_rate_limit_and_allowlist_remaining_edges(monkeypatch):
         jwt,
         "decode",
         lambda *_args, **_kwargs: {
-            "iat": int((datetime.now(timezone.utc) - timedelta(seconds=10)).timestamp()),
-            "exp": int((datetime.now(timezone.utc) + timedelta(seconds=60)).timestamp()),
+            "iat": int((datetime.now(UTC) - timedelta(seconds=10)).timestamp()),
+            "exp": int((datetime.now(UTC) + timedelta(seconds=60)).timestamp()),
             "jti": "edge-jti",
             "user_id": "u1",
             "tenant_id": "t1",
@@ -573,7 +570,7 @@ def test_verify_context_token_and_get_current_user(monkeypatch):
     monkeypatch.setattr(config, "notifier_context_audience", "notifier")
     monkeypatch.setattr(config, "notifier_context_issuer", "watchdog-main")
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     token = jwt.encode(
         {
             "iss": "watchdog-main",

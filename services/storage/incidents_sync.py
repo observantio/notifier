@@ -14,8 +14,8 @@ import hashlib
 import json
 import logging
 import uuid
+from dataclasses import dataclass
 from datetime import datetime
-from typing import Optional
 
 from sqlalchemy.orm import Session
 
@@ -26,15 +26,15 @@ from services.common.meta import INCIDENT_META_KEY, parse_meta
 from services.storage.incidents_core import (
     INCIDENT_META_KEY_IDENTITY,
     METRIC_STATES_ANNOTATION_KEY,
-    incident_activity_token_from_row,
-    incident_key_from_db_row,
-    incident_key_from_labels,
     _extract_metric_state,
     _is_alert_suppressed,
     _json_dict,
     _merge_metric_states,
     _resolve_rule_by_alertname,
     _shared_group_ids,
+    incident_activity_token_from_row,
+    incident_key_from_db_row,
+    incident_key_from_labels,
 )
 from services.storage.incidents_jira import (
     _move_reopened_incident_jira_ticket_to_todo,
@@ -42,6 +42,19 @@ from services.storage.incidents_jira import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class AlertSyncPayload:
+    tenant_id: str
+    fingerprint: str
+    labels: JSONDict
+    annotations: JSONDict
+    metric_state: str
+    incident_key: str | None
+    parsed_starts: datetime | None
+    now: datetime
+    rule: AlertRuleDB | None
 
 
 def _derive_fingerprint(alert_data: JSONDict, labels: JSONDict, annotations: JSONDict) -> str:
@@ -61,7 +74,7 @@ def _derive_fingerprint(alert_data: JSONDict, labels: JSONDict, annotations: JSO
     return f"derived-{hashlib.sha256(stable_blob.encode()).hexdigest()}"
 
 
-def _parse_starts_at_from_alert(alert_data: JSONDict) -> Optional[datetime]:
+def _parse_starts_at_from_alert(alert_data: JSONDict) -> datetime | None:
     starts_at_value = alert_data.get("startsAt") or alert_data.get("starts_at")
     starts_at = starts_at_value if isinstance(starts_at_value, str) else None
     if not starts_at:
@@ -75,9 +88,7 @@ def _parse_starts_at_from_alert(alert_data: JSONDict) -> Optional[datetime]:
 def _duplicate_state_label(labels_obj: object) -> str:
     if not isinstance(labels_obj, dict):
         return ""
-    return str(
-        labels_obj.get("state") or labels_obj.get("metric_state") or labels_obj.get("mem_state") or ""
-    ).strip()
+    return str(labels_obj.get("state") or labels_obj.get("metric_state") or labels_obj.get("mem_state") or "").strip()
 
 
 def _resolve_duplicate_incidents_for_key(
@@ -118,10 +129,7 @@ def _resolve_duplicate_incidents_for_key(
         duplicate.notes = dup_notes
     merged_states = _merge_metric_states(
         canonical.annotations if isinstance(canonical.annotations, dict) else {},
-        *[
-            _extract_metric_state(item.labels if isinstance(item.labels, dict) else {})
-            for item in matching_candidates
-        ],
+        *[_extract_metric_state(item.labels if isinstance(item.labels, dict) else {}) for item in matching_candidates],
     )
     canonical_annotations = canonical.annotations if isinstance(canonical.annotations, dict) else {}
     canonical.annotations = {**canonical_annotations, METRIC_STATES_ANNOTATION_KEY: merged_states}
@@ -132,11 +140,11 @@ def _find_incident_by_key_or_fingerprint(
     db: Session,
     tenant_id: str,
     *,
-    incident_key: Optional[str],
+    incident_key: str | None,
     fingerprint: str,
     labels: JSONDict,
     now: datetime,
-) -> Optional[AlertIncidentDB]:
+) -> AlertIncidentDB | None:
     if incident_key:
         alert_name = str(labels.get("alertname") or "").strip()
         candidates = (
@@ -164,39 +172,30 @@ def _find_incident_by_key_or_fingerprint(
 
 
 def _incident_row_for_new_alert(
-    *,
-    tenant_id: str,
-    fingerprint: str,
-    labels: JSONDict,
-    annotations: JSONDict,
-    metric_state: str,
-    incident_key: Optional[str],
-    parsed_starts: Optional[datetime],
-    now: datetime,
-    rule: Optional[AlertRuleDB],
+    payload: AlertSyncPayload,
 ) -> AlertIncidentDB:
     metadata = {
-        "visibility": (rule.visibility or "public") if rule else "public",
-        "shared_group_ids": _shared_group_ids(rule) if rule else [],
-        "created_by": rule.created_by if rule else None,
-        "correlation_id": str(getattr(rule, "group", "") or "").strip() if rule else "",
-        INCIDENT_META_KEY_IDENTITY: incident_key,
+        "visibility": (payload.rule.visibility or "public") if payload.rule else "public",
+        "shared_group_ids": _shared_group_ids(payload.rule) if payload.rule else [],
+        "created_by": payload.rule.created_by if payload.rule else None,
+        "correlation_id": str(getattr(payload.rule, "group", "") or "").strip() if payload.rule else "",
+        INCIDENT_META_KEY_IDENTITY: payload.incident_key,
     }
-    merged_states = _merge_metric_states(annotations, metric_state)
+    merged_states = _merge_metric_states(payload.annotations, payload.metric_state)
     return AlertIncidentDB(
         id=str(uuid.uuid4()),
-        tenant_id=tenant_id,
-        fingerprint=fingerprint,
-        alert_name=str(labels.get("alertname") or "Unnamed alert"),
-        severity=str(labels.get("severity") or "warning"),
+        tenant_id=payload.tenant_id,
+        fingerprint=payload.fingerprint,
+        alert_name=str(payload.labels.get("alertname") or "Unnamed alert"),
+        severity=str(payload.labels.get("severity") or "warning"),
         status="open",
-        labels=labels,
-        starts_at=parsed_starts,
-        last_seen_at=now,
+        labels=payload.labels,
+        starts_at=payload.parsed_starts,
+        last_seen_at=payload.now,
         resolved_at=None,
         notes=[],
         annotations={
-            **annotations,
+            **payload.annotations,
             METRIC_STATES_ANNOTATION_KEY: merged_states,
             INCIDENT_META_KEY: json.dumps(metadata),
         },
@@ -204,52 +203,44 @@ def _incident_row_for_new_alert(
 
 
 def _apply_open_incident_update_from_alert(
-    *,
-    tenant_id: str,
     incident: AlertIncidentDB,
-    labels: JSONDict,
-    annotations: JSONDict,
-    metric_state: str,
-    incident_key: Optional[str],
-    parsed_starts: Optional[datetime],
-    now: datetime,
-    rule: Optional[AlertRuleDB],
+    payload: AlertSyncPayload,
 ) -> None:
     existing_meta = parse_meta(incident.annotations or {})
     previous_status = str(incident.status or "")
 
-    incident.alert_name = str(labels.get("alertname") or incident.alert_name)
-    incident.severity = str(labels.get("severity") or incident.severity)
-    incident.labels = labels
+    incident.alert_name = str(payload.labels.get("alertname") or incident.alert_name)
+    incident.severity = str(payload.labels.get("severity") or incident.severity)
+    incident.labels = payload.labels
 
     if previous_status == "resolved" or incident.resolved_at is not None:
         incident.assignee = None
         existing_meta.pop("user_managed", None)
 
-    if rule:
-        existing_meta["visibility"] = rule.visibility or existing_meta.get("visibility", "public")
-        existing_meta["shared_group_ids"] = _shared_group_ids(rule)
-        existing_meta["correlation_id"] = str(getattr(rule, "group", "") or "").strip()
-        if rule.created_by:
-            existing_meta["created_by"] = rule.created_by
-    if incident_key:
-        existing_meta[INCIDENT_META_KEY_IDENTITY] = incident_key
-    if not str(existing_meta.get("correlation_id") or "").strip() and incident_key:
-        existing_meta["correlation_id"] = incident_key
+    if payload.rule:
+        existing_meta["visibility"] = payload.rule.visibility or existing_meta.get("visibility", "public")
+        existing_meta["shared_group_ids"] = _shared_group_ids(payload.rule)
+        existing_meta["correlation_id"] = str(getattr(payload.rule, "group", "") or "").strip()
+        if payload.rule.created_by:
+            existing_meta["created_by"] = payload.rule.created_by
+    if payload.incident_key:
+        existing_meta[INCIDENT_META_KEY_IDENTITY] = payload.incident_key
+    if not str(existing_meta.get("correlation_id") or "").strip() and payload.incident_key:
+        existing_meta["correlation_id"] = payload.incident_key
 
     merged_states = _merge_metric_states(
         incident.annotations if isinstance(incident.annotations, dict) else {},
-        metric_state,
+        payload.metric_state,
     )
     incident.annotations = {
-        **annotations,
+        **payload.annotations,
         METRIC_STATES_ANNOTATION_KEY: merged_states,
         INCIDENT_META_KEY: json.dumps(existing_meta),
     }
-    if parsed_starts and not incident.starts_at:
-        incident.starts_at = parsed_starts
+    if payload.parsed_starts and not incident.starts_at:
+        incident.starts_at = payload.parsed_starts
     incident.status = "open"
-    incident.last_seen_at = now
+    incident.last_seen_at = payload.now
     incident.resolved_at = None
 
     if previous_status.lower() == "resolved":
@@ -259,16 +250,16 @@ def _apply_open_incident_update_from_alert(
             {
                 "author": "system",
                 "text": reopen_note,
-                "createdAt": now.isoformat(),
+                "createdAt": payload.now.isoformat(),
             }
         )
         incident.notes = reopen_notes
-        _move_reopened_incident_jira_ticket_to_todo(tenant_id, incident)
+        _move_reopened_incident_jira_ticket_to_todo(payload.tenant_id, incident)
         _sync_reopened_incident_note_to_jira(
-            tenant_id,
+            payload.tenant_id,
             incident,
             note_text=reopen_note,
-            created_at=now,
+            created_at=payload.now,
         )
 
 
@@ -298,24 +289,9 @@ def _sync_single_alert_into_incidents(
     )
     parsed_starts = _parse_starts_at_from_alert(alert_data)
     rule = _resolve_rule_by_alertname(db, tenant_id, labels)
-    if not incident:
-        db.add(
-            _incident_row_for_new_alert(
-                tenant_id=tenant_id,
-                fingerprint=fingerprint,
-                labels=labels,
-                annotations=annotations,
-                metric_state=metric_state,
-                incident_key=incident_key,
-                parsed_starts=parsed_starts,
-                now=now,
-                rule=rule,
-            )
-        )
-        return
-    _apply_open_incident_update_from_alert(
+    sync_payload = AlertSyncPayload(
         tenant_id=tenant_id,
-        incident=incident,
+        fingerprint=fingerprint,
         labels=labels,
         annotations=annotations,
         metric_state=metric_state,
@@ -324,6 +300,10 @@ def _sync_single_alert_into_incidents(
         now=now,
         rule=rule,
     )
+    if not incident:
+        db.add(_incident_row_for_new_alert(sync_payload))
+        return
+    _apply_open_incident_update_from_alert(incident, sync_payload)
 
 
 def _resolve_incidents_without_active_alerts(

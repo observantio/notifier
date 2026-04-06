@@ -9,7 +9,7 @@ http://www.apache.org/licenses/LICENSE-2.0
 """
 
 from enum import Enum
-from typing import List
+
 from pydantic import BaseModel, Field
 
 
@@ -54,6 +54,6 @@ class TokenData(BaseModel):
     org_id: str
     role: Role
     is_superuser: bool = False
-    permissions: List[str]
-    group_ids: List[str] = Field(default_factory=list)
+    permissions: list[str]
+    group_ids: list[str] = Field(default_factory=list)
     is_mfa_setup: bool = False

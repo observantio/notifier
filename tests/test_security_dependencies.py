@@ -6,7 +6,7 @@ License. You may obtain a copy of the License at
 http://www.apache.org/licenses/LICENSE-2.0
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import jwt
 import pytest
@@ -51,7 +51,7 @@ def test_verify_context_token_rejects_missing_jti(monkeypatch):
     monkeypatch.setattr(config, "notifier_context_audience", "notifier")
     monkeypatch.setattr(config, "notifier_context_issuer", "watchdog-main")
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     token = jwt.encode(
         {
             "iss": "watchdog-main",
@@ -79,10 +79,10 @@ def test_verify_context_token_replay_detection(monkeypatch):
     monkeypatch.setattr(config, "notifier_context_signing_key", key)
     monkeypatch.setattr(config, "notifier_context_algorithm", "HS256")
     monkeypatch.setattr(config, "notifier_context_audience", "notifier")
-    setattr(config, "NOTIFIER_CONTEXT_ISSUER", "watchdog-main")
+    config.NOTIFIER_CONTEXT_ISSUER = "watchdog-main"
     monkeypatch.setattr(config, "notifier_context_replay_ttl_seconds", 120)
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     payload = {
         "iss": "watchdog-main",
         "aud": "notifier",
@@ -110,10 +110,10 @@ def test_verify_context_token_schemathesis_jti_bypasses_replay(monkeypatch):
     monkeypatch.setattr(config, "notifier_context_signing_key", key)
     monkeypatch.setattr(config, "notifier_context_algorithm", "HS256")
     monkeypatch.setattr(config, "notifier_context_audience", "notifier")
-    setattr(config, "NOTIFIER_CONTEXT_ISSUER", "watchdog-main")
+    config.NOTIFIER_CONTEXT_ISSUER = "watchdog-main"
     monkeypatch.setattr(config, "notifier_context_replay_ttl_seconds", 120)
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     payload = {
         "iss": "watchdog-main",
         "aud": "notifier",
@@ -138,9 +138,9 @@ def test_verify_context_token_unknown_role_falls_back_to_user(monkeypatch):
     monkeypatch.setattr(config, "notifier_context_signing_key", key)
     monkeypatch.setattr(config, "notifier_context_algorithm", "HS256")
     monkeypatch.setattr(config, "notifier_context_audience", "notifier")
-    setattr(config, "NOTIFIER_CONTEXT_ISSUER", "watchdog-main")
+    config.NOTIFIER_CONTEXT_ISSUER = "watchdog-main"
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     token = jwt.encode(
         {
             "iss": "watchdog-main",

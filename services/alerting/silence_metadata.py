@@ -10,7 +10,7 @@ http://www.apache.org/licenses/LICENSE-2.0
 """
 
 import json
-from typing import Dict, List, Optional
+
 from models.alerting.silences import Visibility
 from services.common.visibility import normalize_visibility as normalize_common_visibility
 
@@ -18,7 +18,7 @@ SILENCE_META_PREFIX = "[watchdog-meta]"
 VALID_VISIBILITIES = {v.value for v in Visibility}
 
 
-def normalize_visibility(value: Optional[str]) -> str:
+def normalize_visibility(value: str | None) -> str:
     raw = value.value if isinstance(value, Visibility) else (str(value).lower() if value else "")
     return normalize_common_visibility(
         raw,
@@ -28,12 +28,12 @@ def normalize_visibility(value: Optional[str]) -> str:
     )
 
 
-def encode_silence_comment(comment: str, visibility: str, shared_group_ids: List[str]) -> str:
+def encode_silence_comment(comment: str, visibility: str, shared_group_ids: list[str]) -> str:
     payload = json.dumps({"visibility": visibility, "shared_group_ids": shared_group_ids or []}, separators=(",", ":"))
     return f"{SILENCE_META_PREFIX}{payload}\n{comment}"
 
 
-def decode_silence_comment(comment: Optional[str]) -> Dict[str, object]:
+def decode_silence_comment(comment: str | None) -> dict[str, object]:
     _default_visibility = Visibility.TENANT.value
 
     if not comment or not comment.startswith(SILENCE_META_PREFIX):

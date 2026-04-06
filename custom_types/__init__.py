@@ -12,4 +12,4 @@ from __future__ import annotations
 
 from .json import JSONDict, JSONList, JSONScalar, JSONValue
 
-__all__ = ["JSONScalar", "JSONValue", "JSONDict", "JSONList"]
+__all__ = ["JSONDict", "JSONList", "JSONScalar", "JSONValue"]

@@ -22,8 +22,7 @@ from services.alerting.integration_security_service import (
     validate_shared_group_ids_for_user,
 )
 
-from ..alerts.shared import reject_unknown_query_params
-from ..alerts.shared import parse_show_hidden
+from ..alerts.shared import parse_show_hidden, reject_unknown_query_params
 from .shared import HideTogglePayload, storage_service
 
 router = APIRouter(tags=["alertmanager-jira"])

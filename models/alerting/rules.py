@@ -9,7 +9,6 @@ http://www.apache.org/licenses/LICENSE-2.0
 """
 
 from enum import Enum
-from typing import Dict, List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, StrictBool
 
@@ -40,11 +39,11 @@ class RuleSeverity(str, Enum):
 
 
 class AlertRule(BaseModel):
-    id: Optional[str] = Field(None, description=DESC_UNIQUE_IDENTIFIER, examples=["rule-123"])
-    created_by: Optional[str] = Field(
+    id: str | None = Field(None, description=DESC_UNIQUE_IDENTIFIER, examples=["rule-123"])
+    created_by: str | None = Field(
         None, alias="createdBy", description="User ID who created the rule", examples=["user-42"]
     )
-    org_id: Optional[str] = Field(
+    org_id: str | None = Field(
         None, alias="orgId", description="Organization ID / API key scoped to this rule", examples=["org-abc"]
     )
     name: str = Field(..., description=DESC_RULE_NAME, examples=["HighCpuUsage"])
@@ -55,27 +54,25 @@ class AlertRule(BaseModel):
         examples=['sum(rate(node_cpu_seconds_total{mode!="idle"}[5m])) > 0.95'],
     )
     severity: RuleSeverity = Field(..., description=DESC_RULE_SEVERITY, examples=["critical"])
-    description: Optional[str] = Field(
-        None, description=DESC_RULE_DESCRIPTION, examples=["CPU usage is critically high"]
-    )
+    description: str | None = Field(None, description=DESC_RULE_DESCRIPTION, examples=["CPU usage is critically high"])
     enabled: bool = Field(True, description=DESC_RULE_ENABLED, examples=[True])
-    labels: Dict[str, str] = Field(default_factory=dict, description=DESC_RULE_LABELS, examples=[{"service": "api"}])
-    annotations: Dict[str, str] = Field(
+    labels: dict[str, str] = Field(default_factory=dict, description=DESC_RULE_LABELS, examples=[{"service": "api"}])
+    annotations: dict[str, str] = Field(
         default_factory=dict, description=DESC_RULE_ANNOTATIONS, examples=[{"summary": "API CPU alert"}]
     )
-    duration: Optional[str] = Field(None, alias="for", description=DESC_RULE_FOR_DURATION, examples=["5m"])
+    duration: str | None = Field(None, alias="for", description=DESC_RULE_FOR_DURATION, examples=["5m"])
     group: str = Field(..., alias="groupName", description=DESC_RULE_GROUP_NAME, examples=["watchdog-default"])
-    group_interval: Optional[str] = Field(
+    group_interval: str | None = Field(
         None, alias="groupInterval", description=DESC_RULE_GROUP_INTERVAL, examples=["1m"]
     )
-    notification_channels: List[str] = Field(
+    notification_channels: list[str] = Field(
         default_factory=list,
         alias="notificationChannels",
         description="Notification channel IDs for this rule",
         examples=[["channel-1"]],
     )
     visibility: Visibility = Field(Visibility.PRIVATE, description=DESC_VISIBILITY_SCOPE, examples=["private"])
-    shared_group_ids: List[str] = Field(
+    shared_group_ids: list[str] = Field(
         default_factory=list,
         alias="sharedGroupIds",
         description=DESC_GROUP_IDS_RULE_SHARED_WITH,
@@ -88,7 +85,7 @@ class AlertRule(BaseModel):
 
 
 class AlertRuleCreate(BaseModel):
-    org_id: Optional[str] = Field(
+    org_id: str | None = Field(
         None, alias="orgId", description="Optional org_id (API key) to scope this rule to", examples=["org-abc"]
     )
     name: str = Field(..., min_length=1, max_length=100, description=DESC_RULE_NAME, examples=["HighCpuUsage"])
@@ -99,27 +96,25 @@ class AlertRuleCreate(BaseModel):
         examples=['sum(rate(node_cpu_seconds_total{mode!="idle"}[5m])) > 0.95'],
     )
     severity: RuleSeverity = Field(..., description=DESC_RULE_SEVERITY, examples=["critical"])
-    description: Optional[str] = Field(
-        None, description=DESC_RULE_DESCRIPTION, examples=["CPU usage is critically high"]
-    )
+    description: str | None = Field(None, description=DESC_RULE_DESCRIPTION, examples=["CPU usage is critically high"])
     enabled: StrictBool = Field(True, description=DESC_RULE_ENABLED, examples=[True])
-    labels: Dict[str, str] = Field(default_factory=dict, description=DESC_RULE_LABELS, examples=[{"service": "api"}])
-    annotations: Dict[str, str] = Field(
+    labels: dict[str, str] = Field(default_factory=dict, description=DESC_RULE_LABELS, examples=[{"service": "api"}])
+    annotations: dict[str, str] = Field(
         default_factory=dict, description=DESC_RULE_ANNOTATIONS, examples=[{"summary": "API CPU alert"}]
     )
-    duration: Optional[str] = Field(None, alias="for", description=DESC_RULE_FOR_DURATION, examples=["5m"])
+    duration: str | None = Field(None, alias="for", description=DESC_RULE_FOR_DURATION, examples=["5m"])
     group: str = Field(..., alias="groupName", description=DESC_RULE_GROUP_NAME, examples=["watchdog-default"])
-    group_interval: Optional[str] = Field(
+    group_interval: str | None = Field(
         None, alias="groupInterval", description=DESC_RULE_GROUP_INTERVAL, examples=["1m"]
     )
-    notification_channels: List[str] = Field(
+    notification_channels: list[str] = Field(
         default_factory=list,
         alias="notificationChannels",
         description="Notification channel IDs for this rule",
         examples=[["channel-1"]],
     )
     visibility: Visibility = Field(Visibility.PRIVATE, description=DESC_VISIBILITY_SCOPE, examples=["private"])
-    shared_group_ids: List[str] = Field(
+    shared_group_ids: list[str] = Field(
         default_factory=list, alias="sharedGroupIds", description=DESC_GROUP_IDS_SHARE_WITH, examples=[["group-ops"]]
     )
     model_config = ConfigDict(use_enum_values=True, populate_by_name=True, extra="forbid")
@@ -127,5 +122,5 @@ class AlertRuleCreate(BaseModel):
 
 class RuleGroup(BaseModel):
     name: str = Field(..., description=DESC_RULE_GROUP_NAME, examples=["watchdog-default"])
-    interval: Optional[str] = Field(None, description=DESC_RULE_GROUP_INTERVAL, examples=["1m"])
-    rules: List[AlertRule] = Field(default_factory=list, description=DESC_RULE_GROUP_RULES)
+    interval: str | None = Field(None, description=DESC_RULE_GROUP_INTERVAL, examples=["1m"])
+    rules: list[AlertRule] = Field(default_factory=list, description=DESC_RULE_GROUP_RULES)

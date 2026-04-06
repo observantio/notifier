@@ -15,9 +15,13 @@ http://www.apache.org/licenses/LICENSE-2.0
 import base64
 import logging
 import os
+from collections.abc import Mapping
+from dataclasses import dataclass
+from typing import Literal, Optional
 from urllib.parse import urlparse
-from typing import List, Literal, Mapping, Optional
+
 import httpx
+
 from config import config
 from custom_types.json import JSONDict, JSONValue
 from services.common.http_client import create_async_client
@@ -29,6 +33,13 @@ Credentials = Optional[Mapping[str, object]]
 QueryParams = Mapping[str, str | int | float | bool | None]
 
 
+@dataclass(frozen=True)
+class JiraIssueCreateOptions:
+    description: str | None = None
+    issue_type: str = "Task"
+    priority: str | None = None
+
+
 def _string_value(value: object) -> str:
     return value.strip() if isinstance(value, str) else ""
 
@@ -37,8 +48,41 @@ def _json_dict(value: object) -> JSONDict:
     return value if isinstance(value, dict) else {}
 
 
-def _json_dict_list(value: object) -> List[JSONDict]:
+def _json_dict_list(value: object) -> list[JSONDict]:
     return [item for item in value if isinstance(item, dict)] if isinstance(value, list) else []
+
+
+def _coerce_issue_options(
+    issue: JiraIssueCreateOptions | object | None,
+    legacy_kwargs: dict[str, object],
+) -> JiraIssueCreateOptions:
+    if isinstance(issue, JiraIssueCreateOptions):
+        description = issue.description
+        issue_type = issue.issue_type
+        priority = issue.priority
+    elif issue is not None:
+        description = str(issue)
+        issue_type = "Task"
+        priority = None
+    else:
+        description = None
+        issue_type = "Task"
+        priority = None
+
+    if "description" in legacy_kwargs:
+        raw = legacy_kwargs.pop("description")
+        description = str(raw) if raw is not None else None
+    if "issue_type" in legacy_kwargs:
+        issue_type = str(legacy_kwargs.pop("issue_type") or "Task")
+    if "priority" in legacy_kwargs:
+        raw = legacy_kwargs.pop("priority")
+        priority = str(raw) if raw is not None else None
+
+    return JiraIssueCreateOptions(
+        description=description,
+        issue_type=issue_type,
+        priority=priority,
+    )
 
 
 class JiraError(Exception):
@@ -46,7 +90,7 @@ class JiraError(Exception):
 
 
 class JiraService:
-    def __init__(self, timeout: Optional[float] = None) -> None:
+    def __init__(self, timeout: float | None = None) -> None:
         self.base_url = (os.getenv("JIRA_BASE_URL") or "").strip().rstrip("/")
         self.email = (os.getenv("JIRA_EMAIL") or "").strip() or None
         self.api_token = (os.getenv("JIRA_API_TOKEN") or "").strip() or None
@@ -105,8 +149,8 @@ class JiraService:
         method: Literal["GET", "POST"],
         path: str,
         credentials: Credentials = None,
-        params: Optional[QueryParams] = None,
-        payload: Optional[JSONDict] = None,
+        params: QueryParams | None = None,
+        payload: JSONDict | None = None,
     ) -> JSONValue:
         url = self._build_url(path, credentials)
         headers = self._headers(credentials)
@@ -142,7 +186,7 @@ class JiraService:
             logger.exception("Unexpected Jira %s error", method)
             raise JiraError("Failed to contact Jira API") from exc
 
-    async def _get(self, path: str, credentials: Credentials = None, params: Optional[QueryParams] = None) -> JSONValue:
+    async def _get(self, path: str, credentials: Credentials = None, params: QueryParams | None = None) -> JSONValue:
         return await self._request("GET", path, credentials, params=params)
 
     async def _post(self, path: str, payload: JSONDict, credentials: Credentials = None) -> JSONValue:
@@ -152,19 +196,19 @@ class JiraService:
         self,
         project_key: str,
         summary: str,
-        description: Optional[str] = None,
-        issue_type: str = "Task",
-        priority: Optional[str] = None,
+        issue: JiraIssueCreateOptions | str | None = None,
         credentials: Credentials = None,
+        **legacy_kwargs: object,
     ) -> JSONDict:
+        options = _coerce_issue_options(issue, dict(legacy_kwargs))
         fields: JSONDict = {
             "project": {"key": project_key},
             "summary": summary,
-            "description": description or "",
-            "issuetype": {"name": issue_type},
+            "description": options.description or "",
+            "issuetype": {"name": options.issue_type},
         }
-        if priority:
-            fields["priority"] = {"name": str(priority).strip()}
+        if options.priority:
+            fields["priority"] = {"name": str(options.priority).strip()}
         payload: JSONDict = {"fields": fields}
         data = await self._post("/rest/api/2/issue", payload, credentials)
         data_dict = _json_dict(data)
@@ -176,7 +220,7 @@ class JiraService:
             "raw": data_dict,
         }
 
-    async def list_projects(self, credentials: Credentials = None) -> List[dict[str, str]]:
+    async def list_projects(self, credentials: Credentials = None) -> list[dict[str, str]]:
         data = await self._get("/rest/api/2/project", credentials)
         return [
             {"key": key, "name": str(p.get("name") or key).strip()}
@@ -184,12 +228,12 @@ class JiraService:
             if (key := str(p.get("key") or "").strip())
         ]
 
-    async def list_issue_types(self, project_key: str, credentials: Credentials = None) -> List[str]:
+    async def list_issue_types(self, project_key: str, credentials: Credentials = None) -> list[str]:
         project = await self._get(f"/rest/api/2/project/{project_key}", credentials)
         issue_types = _json_dict(project).get("issueTypes")
         return [name for it in _json_dict_list(issue_types) if (name := str(it.get("name") or "").strip())]
 
-    async def list_transitions(self, issue_key: str, credentials: Credentials = None) -> List[JSONDict]:
+    async def list_transitions(self, issue_key: str, credentials: Credentials = None) -> list[JSONDict]:
         data = await self._get(f"/rest/api/2/issue/{issue_key}/transitions", credentials)
         transitions = data.get("transitions") if isinstance(data, dict) else []
         return [item for item in (transitions or []) if isinstance(item, dict)]
@@ -280,7 +324,7 @@ class JiraService:
     async def add_comment(self, issue_key: str, text: str, credentials: Credentials = None) -> JSONDict:
         return _json_dict(await self._post(f"/rest/api/2/issue/{issue_key}/comment", {"body": text}, credentials))
 
-    async def list_comments(self, issue_key: str, credentials: Credentials = None) -> List[JSONDict]:
+    async def list_comments(self, issue_key: str, credentials: Credentials = None) -> list[JSONDict]:
         data = await self._get(f"/rest/api/2/issue/{issue_key}/comment", credentials)
         comments = _json_dict(data).get("comments")
         return [
