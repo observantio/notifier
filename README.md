@@ -5,11 +5,6 @@
   <img src="assets/triangle.png" alt="Notifier triangle icon" width="150" />
 
   <p>
-    <img src="https://img.shields.io/badge/Domain-Alerting%20%7C%20Incidents%20%7C%20Jira-b91c1c?style=flat-square" alt="Domain" />
-    <img src="https://img.shields.io/badge/Service-Notifier-c2410c?style=flat-square" alt="Service" />
-    <img src="https://img.shields.io/badge/Scope-Internal%20Alert%20Workflows-0f766e?style=flat-square" alt="Scope" />
-  </p>
-  <p>
     <a href="https://github.com/observantio/watchdog/blob/main/README.md">
       <img src="https://img.shields.io/badge/Control%20Plane-Watchdog-0f766e?style=flat-square&logo=github&logoColor=white" alt="Watchdog" />
     </a>
