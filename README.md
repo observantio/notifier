@@ -12,6 +12,11 @@
       <img src="https://img.shields.io/badge/Operator%20Guide-Docs-16a34a?style=flat-square&logo=readthedocs&logoColor=white" alt="Docs" />
     </a>
   </p>
+  <p>
+    <a href="https://github.com/observantio/notifier/actions/workflows/ci.yml">
+      <img src="https://github.com/observantio/notifier/actions/workflows/ci.yml/badge.svg?branch=main" alt="Notifier CI" />
+    </a>
+  </p>
 </div>
 <div>
   <p>
