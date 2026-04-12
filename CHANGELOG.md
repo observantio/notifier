@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Added
+
+- Added strict notifier mutation testing support to improve coverage and validation for notification channel workflows.
+
+### Fixed
+
+- Fixed SendGrid and Resend email provider payload handling and JSON request typing for notification channels.
+- Fixed HTML body support and legacy email delivery compatibility in notifier email templates and channel workflows.
+
 ## [v0.0.3] - 2026-04-07
 
 ### Added
