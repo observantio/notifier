@@ -138,7 +138,7 @@ async def send_via_sendgrid(
     if email.html_body:
         content_items.append({"type": "text/html", "value": email.html_body})
 
-    payload: JSONDict = {
+    request_payload: JSONDict = {
         "personalizations": [{"to": [{"email": r} for r in recipients]}],
         "from": {"email": email.smtp_from},
         "subject": email.subject,
@@ -154,7 +154,7 @@ async def send_via_sendgrid(
         await transport.post_with_retry(
             client,
             "https://api.sendgrid.com/v3/mail/send",
-            json=payload,
+            json=request_payload,
             headers=headers,
             retry_on_status={429, 500, 502, 503, 504},
         )
@@ -179,14 +179,14 @@ async def send_via_resend(
     email = _coerce_email_delivery_payload(payload if isinstance(payload, EmailDeliveryPayload) else None, legacy_args)
     recipients = _sanitize_recipients(email.recipients)
 
-    payload: JSONDict = {
+    request_payload: JSONDict = {
         "from": email.smtp_from,
         "to": recipients,
         "subject": email.subject,
         "text": email.body,
     }
     if email.html_body:
-        payload["html"] = email.html_body
+        request_payload["html"] = email.html_body
 
     headers = {
         "Authorization": f"Bearer {api_key}",
@@ -197,7 +197,7 @@ async def send_via_resend(
         await transport.post_with_retry(
             client,
             "https://api.resend.com/emails",
-            json=payload,
+            json=request_payload,
             headers=headers,
             retry_on_status={429, 500, 502, 503, 504},
         )

@@ -16,6 +16,7 @@ import asyncio
 from email.message import EmailMessage
 
 import httpx
+import pytest
 
 from services.notification import email_providers, transport
 
@@ -103,3 +104,20 @@ def test_sendgrid_and_resend_include_html_payload_when_provided(monkeypatch):
         is True
     )
     assert captured["https://api.resend.com/emails"]["html"] == "<b>html</b>"
+
+
+def test_coerce_email_delivery_payload_accepts_payload_object():
+    payload = email_providers.EmailDeliveryPayload(
+        subject="subj",
+        body="body",
+        recipients=["a@example.com"],
+        smtp_from="from@example.com",
+        html_body="<p>hello</p>",
+    )
+    result = email_providers._coerce_email_delivery_payload(payload, ())
+    assert result is payload
+
+
+def test_coerce_email_delivery_payload_requires_legacy_arguments():
+    with pytest.raises(ValueError, match="subject, body, recipients, and smtp_from are required"):
+        email_providers._coerce_email_delivery_payload(None, ("subj", "body", ["a@example.com"]))

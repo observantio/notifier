@@ -308,6 +308,7 @@ class IncidentStorageService:
         *legacy_args: object,
         actor: IncidentActorContext | None = None,
     ) -> AlertIncident | None:
+        group_ids: list[str] | None
         if actor is not None:
             payload = cast(AlertIncidentUpdateRequest, payload_or_user_id)
             user_id = str(actor.user_id)

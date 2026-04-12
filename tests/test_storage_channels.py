@@ -14,8 +14,8 @@ ensure_test_env()
 
 import os
 
-import pytest
 from cryptography.fernet import Fernet
+import pytest
 
 from config import config
 from database import get_db_session
