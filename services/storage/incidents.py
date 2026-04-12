@@ -300,6 +300,120 @@ class IncidentStorageService:
                     return None
             return incident_to_pydantic(incident)
 
+    def _apply_incident_assignee(
+        self,
+        payload: AlertIncidentUpdateRequest,
+        incident: AlertIncidentDB,
+        visibility: str,
+        user_id: str,
+        user_email: str | None,
+    ) -> None:
+        fields_set = set(getattr(payload, "model_fields_set", set()) or [])
+        if "assignee" not in fields_set:
+            return
+
+        requested_assignee = str(payload.assignee or "").strip() or None
+        normalized_assignee = str(requested_assignee or "").strip().lower()
+        normalized_user_id = str(user_id or "").strip().lower()
+        normalized_user_email = str(user_email or "").strip().lower()
+        allowed_self_values = {v for v in (normalized_user_id, normalized_user_email) if v}
+        if requested_assignee and visibility == "private" and normalized_assignee not in allowed_self_values:
+            raise HTTPException(
+                status_code=http_status.HTTP_403_FORBIDDEN,
+                detail="Private incidents can only be assigned to yourself",
+            )
+        incident.assignee = requested_assignee
+
+    def _apply_incident_status(
+        self,
+        payload: AlertIncidentUpdateRequest,
+        incident: AlertIncidentDB,
+        previous_status: str,
+        user_id: str,
+    ) -> tuple[bool | None, str | None]:
+        manual_manage_flag: bool | None = None
+        resolved_note_text: str | None = None
+
+        if payload.status is None:
+            return manual_manage_flag, resolved_note_text
+
+        status_value = payload.status.value if hasattr(payload.status, "value") else str(payload.status)
+        if status_value.startswith("IncidentStatus."):
+            status_value = status_value.split(".", 1)[1].lower()
+
+        incident.status = status_value
+        if incident.status == "resolved":
+            incident.resolved_at = datetime.now(UTC)
+            manual_manage_flag = False
+            if previous_status.lower() != "resolved":
+                actor_name = getattr(payload, "actor_username", None) or user_id
+                resolved_note_text = f"{actor_name} marked this incident as resolved"
+        else:
+            incident.resolved_at = None
+            if incident.status == "open":
+                manual_manage_flag = True
+
+        return manual_manage_flag, resolved_note_text
+
+    def _apply_jira_meta_fields(self, payload: AlertIncidentUpdateRequest, meta: JSONDict) -> None:
+        for meta_key, payload_attr in [
+            ("jira_ticket_key", "jira_ticket_key"),
+            ("jira_ticket_url", "jira_ticket_url"),
+            ("jira_integration_id", "jira_integration_id"),
+        ]:
+            val = getattr(payload, payload_attr, None)
+            if val is None:
+                continue
+            stripped = val.strip()
+            if stripped:
+                meta[meta_key] = stripped
+            else:
+                meta.pop(meta_key, None)
+
+    def _apply_incident_metadata(
+        self,
+        payload: AlertIncidentUpdateRequest,
+        incident: AlertIncidentDB,
+        user_id: str,
+        manual_manage_flag: bool | None,
+    ) -> None:
+        annotations = incident.annotations if isinstance(incident.annotations, dict) else {}
+        meta = parse_meta(annotations)
+        if not meta.get("created_by"):
+            meta["created_by"] = user_id
+
+        if manual_manage_flag is True:
+            meta["user_managed"] = True
+        elif manual_manage_flag is False:
+            meta.pop("user_managed", None)
+
+        hide_flag = getattr(payload, "hide_when_resolved", None)
+        if hide_flag is True:
+            meta["hide_when_resolved"] = True
+        elif hide_flag is False:
+            meta.pop("hide_when_resolved", None)
+
+        self._apply_jira_meta_fields(payload, meta)
+
+        meta["updated_by"] = user_id
+        incident.annotations = {**annotations, INCIDENT_META_KEY: json.dumps(meta)}
+
+    def _apply_incident_notes(
+        self,
+        payload: AlertIncidentUpdateRequest,
+        incident: AlertIncidentDB,
+        user_id: str,
+        resolved_note_text: str | None,
+    ) -> None:
+        now_iso = datetime.now(UTC).isoformat()
+        notes = list(incident.notes or [])
+        if payload.note:
+            notes.append({"author": user_id, "text": payload.note, "createdAt": now_iso})
+        if resolved_note_text:
+            notes.append({"author": user_id, "text": resolved_note_text, "createdAt": now_iso})
+        if notes != list(incident.notes or []):
+            incident.notes = notes
+
     def update_incident(
         self,
         incident_id: str,
@@ -348,77 +462,12 @@ class IncidentStorageService:
             ):
                 return None
 
-            fields_set = set(getattr(payload, "model_fields_set", set()) or [])
-            if "assignee" in fields_set:
-                requested_assignee = str(payload.assignee or "").strip() or None
-                normalized_assignee = str(requested_assignee or "").strip().lower()
-                normalized_user_id = str(user_id or "").strip().lower()
-                normalized_user_email = str(user_email or "").strip().lower()
-                allowed_self_values = {v for v in (normalized_user_id, normalized_user_email) if v}
-                if requested_assignee and visibility == "private" and normalized_assignee not in allowed_self_values:
-                    raise HTTPException(
-                        status_code=http_status.HTTP_403_FORBIDDEN,
-                        detail="Private incidents can only be assigned to yourself",
-                    )
-                incident.assignee = requested_assignee
-
-            manual_manage_flag: bool | None = None
-            if payload.status is not None:
-                status_value = payload.status.value if hasattr(payload.status, "value") else str(payload.status)
-                if status_value.startswith("IncidentStatus."):
-                    status_value = status_value.split(".", 1)[1].lower()
-                incident.status = status_value
-                if incident.status == "resolved":
-                    incident.resolved_at = datetime.now(UTC)
-                    manual_manage_flag = False
-                    if previous_status.lower() != "resolved":
-                        actor_name = getattr(payload, "actor_username", None) or user_id
-                        resolved_note_text = f"{actor_name} marked this incident as resolved"
-                else:
-                    incident.resolved_at = None
-                    if incident.status == "open":
-                        manual_manage_flag = True
-
-            annotations = incident.annotations if isinstance(incident.annotations, dict) else {}
-            meta = parse_meta(annotations)
-            if not meta.get("created_by"):
-                meta["created_by"] = user_id
-
-            if manual_manage_flag is True:
-                meta["user_managed"] = True
-            elif manual_manage_flag is False:
-                meta.pop("user_managed", None)
-
-            hide_flag = getattr(payload, "hide_when_resolved", None)
-            if hide_flag is True:
-                meta["hide_when_resolved"] = True
-            elif hide_flag is False:
-                meta.pop("hide_when_resolved", None)
-
-            for meta_key, payload_attr in [
-                ("jira_ticket_key", "jira_ticket_key"),
-                ("jira_ticket_url", "jira_ticket_url"),
-                ("jira_integration_id", "jira_integration_id"),
-            ]:
-                val = getattr(payload, payload_attr, None)
-                if val is not None:
-                    stripped = val.strip()
-                    if stripped:
-                        meta[meta_key] = stripped
-                    else:
-                        meta.pop(meta_key, None)
-
-            meta["updated_by"] = user_id
-            incident.annotations = {**annotations, INCIDENT_META_KEY: json.dumps(meta)}
-
-            now_iso = datetime.now(UTC).isoformat()
-            notes = list(incident.notes or [])
-            if payload.note:
-                notes.append({"author": user_id, "text": payload.note, "createdAt": now_iso})
-            if resolved_note_text:
-                notes.append({"author": user_id, "text": resolved_note_text, "createdAt": now_iso})
-            if notes != list(incident.notes or []):
-                incident.notes = notes
+            self._apply_incident_assignee(payload, incident, visibility, user_id, user_email)
+            manual_manage_flag, resolved_note_text = self._apply_incident_status(
+                payload, incident, previous_status, user_id
+            )
+            self._apply_incident_metadata(payload, incident, user_id, manual_manage_flag)
+            self._apply_incident_notes(payload, incident, user_id, resolved_note_text)
 
             db.flush()
             return incident_to_pydantic(incident)
