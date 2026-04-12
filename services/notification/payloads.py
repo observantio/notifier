@@ -13,12 +13,18 @@ License. You may obtain a copy of the License at
 http://www.apache.org/licenses/LICENSE-2.0
 """
 
+import logging
 from datetime import datetime
+from html import escape as html_escape
+from pathlib import Path
+from string import Template
 
 from custom_types.json import JSONDict
 from models.alerting.alerts import Alert
 
 NO_VALUE = "(none)"
+logger = logging.getLogger(__name__)
+_EMAIL_TEMPLATE_ROOT = Path(__file__).resolve().parents[2] / "templates" / "emails"
 
 PD_SEVERITY_MAP = {
     "critical": "critical",
@@ -36,6 +42,32 @@ def _status_text(action: str) -> str:
     if normalized == "resolved":
         return "RESOLVED"
     return "FIRING"
+
+
+def _severity_color(action: str, severity: str) -> str:
+    normalized_action = str(action or "").strip().lower()
+    normalized_severity = str(severity or "").strip().lower()
+    if normalized_action in {"test", "resolved"}:
+        return "#16a34a"
+    if normalized_severity in {"critical", "high", "error"}:
+        return "#dc2626"
+    if normalized_severity == "warning":
+        return "#d97706"
+    return "#0ea5e9"
+
+
+def _render_email_template(template_name: str, values: dict[str, str]) -> str | None:
+    path = _EMAIL_TEMPLATE_ROOT / template_name
+    try:
+        raw = path.read_text(encoding="utf-8")
+    except OSError as exc:
+        logger.warning("Email template %s could not be loaded: %s", path, exc)
+        return None
+    safe_values = {
+        k: (str(v or "") if k.endswith("_html") else html_escape(str(v or "")))
+        for k, v in values.items()
+    }
+    return Template(raw).safe_substitute(safe_values)
 
 
 def _fmt(value: object) -> str:
@@ -138,6 +170,18 @@ def _important_labels(alert: Alert) -> list[tuple[str, str]]:
     return labels
 
 
+def _rows_html(rows: list[tuple[str, str]]) -> str:
+    html_rows: list[str] = []
+    for key, value in rows:
+        html_rows.append(
+            "<tr>"
+            f"<td class='k'>{html_escape(str(key))}</td>"
+            f"<td class='v'>{html_escape(str(value))}</td>"
+            "</tr>"
+        )
+    return "".join(html_rows)
+
+
 def format_alert_body(alert: Alert, action: str) -> str:
     summary = get_annotation(alert, "summary") or "No summary"
     description = get_annotation(alert, "description") or "No description"
@@ -173,6 +217,54 @@ def format_alert_body(alert: Alert, action: str) -> str:
             lines.append(f"  {key}: {value}")
 
     return "\n".join(lines)
+
+
+def format_alert_html(alert: Alert, action: str) -> str:
+    status_text = _status_text(action)
+    severity_text = get_label(alert, "severity", "unknown")
+    color = _severity_color(action, severity_text)
+    context = _human_context(alert)
+    labels = _important_labels(alert)
+
+    details = [
+        ("Status", status_text),
+        ("Severity", severity_text.upper() if severity_text else "UNKNOWN"),
+        ("Started at", _fmt(alert.starts_at)),
+    ]
+    details_html = _rows_html(details)
+    context_html = _rows_html(context)
+    labels_html = _rows_html(labels)
+
+    rendered = _render_email_template(
+        "alert_notification.html",
+        {
+            "alert_name": get_label(alert, "alertname", "Alert"),
+            "status_text": status_text,
+            "severity_text": severity_text.upper() if severity_text else "UNKNOWN",
+            "status_color": color,
+            "summary": get_annotation(alert, "summary") or "No summary",
+            "description": get_annotation(alert, "description") or "No description",
+            "details_rows_html": details_html,
+            "context_rows_html": context_html,
+            "labels_rows_html": labels_html,
+            "context_section_style": "" if context else "display:none;",
+            "labels_section_style": "" if labels else "display:none;",
+        },
+    )
+    if rendered:
+        return rendered
+
+    # Plain inline fallback in case template loading fails.
+    return (
+        "<html><body>"
+        f"<h2 style='margin:0 0 10px 0;color:{html_escape(color)}'>"
+        f"[{html_escape(status_text)}] {html_escape(get_label(alert, 'alertname', 'Alert'))}"
+        "</h2>"
+        f"<p><strong>Severity:</strong> {html_escape(severity_text.upper() if severity_text else 'UNKNOWN')}</p>"
+        f"<p><strong>Summary:</strong> {html_escape(get_annotation(alert, 'summary') or 'No summary')}</p>"
+        f"<p><strong>Description:</strong> {html_escape(get_annotation(alert, 'description') or 'No description')}</p>"
+        "</body></html>"
+    )
 
 
 def build_slack_payload(alert: Alert, action: str) -> JSONDict:

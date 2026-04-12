@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Incident Assigned</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 0;
+        background: #f6f8fb;
+        color: #172033;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      }
+      .container {
+        max-width: 560px;
+        margin: 32px auto;
+        background: #ffffff;
+        border: 1px solid #e6e9f1;
+        border-radius: 12px;
+        overflow: hidden;
+      }
+      .header {
+        padding: 16px 20px;
+        font-weight: 600;
+        font-size: 16px;
+      }
+      .content {
+        padding: 20px;
+      }
+      .lead {
+        margin: 0 0 14px 0;
+        line-height: 1.45;
+        font-size: 14px;
+      }
+      .grid {
+        margin: 14px 0 16px 0;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        overflow: hidden;
+      }
+      .row {
+        padding: 10px 12px;
+        border-bottom: 1px solid #e2e8f0;
+        font-size: 13px;
+        line-height: 1.4;
+      }
+      .row:last-child {
+        border-bottom: none;
+      }
+      .label {
+        display: block;
+        font-weight: 600;
+        color: #334155;
+        margin-bottom: 2px;
+      }
+      .value {
+        color: #0f172a;
+      }
+      .severity-pill {
+        display: inline-block;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+        padding: 2px 8px;
+        border-radius: 999px;
+      }
+      .note {
+        margin-top: 14px;
+        font-size: 12px;
+        color: #475569;
+        line-height: 1.45;
+      }
+      .footer {
+        border-top: 1px solid #e6e9f1;
+        padding: 12px 20px;
+        color: #64748b;
+        font-size: 11px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="header" style="background:$header_bg;color:$header_fg;">Incident Assigned</div>
+      <div class="content">
+        <p class="lead">You have been assigned an incident in Watchdog.</p>
+
+        <div class="grid">
+          <div class="row">
+            <span class="label">Title</span>
+            <span class="value">$incident_title</span>
+          </div>
+          <div class="row">
+            <span class="label">Status</span>
+            <span class="value">$incident_status</span>
+          </div>
+          <div class="row">
+            <span class="label">Severity</span>
+            <span class="value"><span class="severity-pill" style="background:$severity_bg;color:$severity_fg;">$incident_severity_upper</span></span>
+          </div>
+          <div class="row">
+            <span class="label">Updated by</span>
+            <span class="value">$actor</span>
+          </div>
+          <div class="row">
+            <span class="label">Timestamp (UTC)</span>
+            <span class="value">$timestamp</span>
+          </div>
+        </div>
+
+        <p class="note">Please review and take action according to your response process.</p>
+      </div>
+      <div class="footer">This is an automated message from Watchdog.</div>
+    </div>
+  </body>
+</html>

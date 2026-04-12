@@ -24,6 +24,28 @@ from models.alerting.rules import AlertRule as AlertRulePydantic
 from services.common.meta import INCIDENT_META_KEY, _safe_group_ids, parse_meta
 
 logger = logging.getLogger(__name__)
+_SENSITIVE_CONFIG_MARKERS = ("password", "token", "api_key", "apikey", "secret")
+_SENSITIVE_CONFIG_KEYS = {
+    "routing_key",
+    "routingkey",
+    "integrationkey",
+    "integration_key",
+}
+
+
+def _sanitize_channel_config_for_response(raw_config: object) -> dict[str, object]:
+    if not isinstance(raw_config, dict):
+        return {}
+    cleaned: dict[str, object] = {}
+    for key, value in raw_config.items():
+        key_text = str(key)
+        key_lower = key_text.lower()
+        if key_lower in _SENSITIVE_CONFIG_KEYS:
+            continue
+        if any(marker in key_lower for marker in _SENSITIVE_CONFIG_MARKERS):
+            continue
+        cleaned[key_text] = value
+    return cleaned
 
 
 def rule_to_pydantic(r: AlertRuleDB) -> AlertRulePydantic:
@@ -47,18 +69,30 @@ def rule_to_pydantic(r: AlertRuleDB) -> AlertRulePydantic:
     return AlertRulePydantic.model_validate(payload)
 
 
-def channel_to_pydantic(ch: NotificationChannelDB) -> NotificationChannelPydantic:
-    return channel_to_pydantic_for_viewer(ch, viewer_user_id=getattr(ch, "created_by", None))
+def channel_to_pydantic(
+    ch: NotificationChannelDB, *, include_sensitive: bool = True
+) -> NotificationChannelPydantic:
+    return channel_to_pydantic_for_viewer(
+        ch,
+        viewer_user_id=getattr(ch, "created_by", None),
+        include_sensitive=include_sensitive,
+    )
 
 
-def channel_to_pydantic_for_viewer(ch: NotificationChannelDB, viewer_user_id: object) -> NotificationChannelPydantic:
+def channel_to_pydantic_for_viewer(
+    ch: NotificationChannelDB,
+    viewer_user_id: object,
+    *,
+    include_sensitive: bool = False,
+) -> NotificationChannelPydantic:
     raw_config = getattr(ch, "config", None) or {}
+    visible_config = raw_config if include_sensitive else _sanitize_channel_config_for_response(raw_config)
     payload = {
         "id": ch.id,
         "name": ch.name,
         "type": ch.type,
         "enabled": ch.enabled,
-        "config": raw_config if (getattr(ch, "created_by", None) and ch.created_by == viewer_user_id) else {},
+        "config": visible_config if (getattr(ch, "created_by", None) and ch.created_by == viewer_user_id) else {},
         "createdBy": ch.created_by,
         "visibility": ch.visibility or "private",
         "sharedGroupIds": [g.id for g in ch.shared_groups] if getattr(ch, "shared_groups", None) else [],

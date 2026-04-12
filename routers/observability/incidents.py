@@ -10,10 +10,11 @@ http://www.apache.org/licenses/LICENSE-2.0
 """
 
 import logging
+from email.utils import parseaddr
 from typing import cast
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from fastapi.concurrency import run_in_threadpool
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -32,6 +33,7 @@ from services.incidents.helpers import (
 )
 from services.notification_service import NotificationService
 from services.storage.incidents import incident_key_from_labels
+from services.storage.incidents import IncidentActorContext
 from services.storage_db_service import DatabaseStorageService
 
 logger = logging.getLogger(__name__)
@@ -41,6 +43,16 @@ router = APIRouter(prefix="/api/alertmanager", tags=["alertmanager-incidents"])
 alertmanager_service = AlertManagerService()
 storage_service = DatabaseStorageService()
 notification_service = NotificationService()
+
+
+def _recipient_email(value: object) -> str | None:
+    if value is None:
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    parsed = parseaddr(text)[1].strip()
+    return parsed if "@" in parsed else None
 
 
 @router.get(
@@ -89,6 +101,7 @@ async def get_incident_summary(
         current_user.tenant_id,
         current_user.user_id,
         getattr(current_user, "group_ids", []) or [],
+        getattr(current_user, "email", None),
     )
 
 
@@ -104,6 +117,7 @@ async def get_incident_summary(
 async def update_incident(
     incident_id: str,
     payload: AlertIncidentUpdateRequest,
+    background_tasks: BackgroundTasks,
     current_user: TokenData = Depends(require_permission_with_scope(Permission.UPDATE_INCIDENTS, "alertmanager")),
 ) -> AlertIncident:
     group_ids = getattr(current_user, "group_ids", []) or []
@@ -148,9 +162,12 @@ async def update_incident(
         storage_service.update_incident,
         incident_id,
         current_user.tenant_id,
-        current_user.user_id,
         enriched_payload,
-        group_ids,
+        actor=IncidentActorContext(
+            user_id=current_user.user_id,
+            group_ids=group_ids,
+            user_email=getattr(current_user, "email", None),
+        ),
     )
     if not updated:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Incident not found")
@@ -170,9 +187,11 @@ async def update_incident(
                 storage_service.update_incident,
                 incident_id,
                 current_user.tenant_id,
-                current_user.user_id,
                 AlertIncidentUpdateRequest.model_validate({"note": assignment_note}),
-                group_ids,
+                actor=IncidentActorContext(
+                    user_id=current_user.user_id,
+                    group_ids=group_ids,
+                ),
             )
         except SQLAlchemyError:
             logger.exception("Failed to record assignment note for incident %s", incident_id)
@@ -189,13 +208,22 @@ async def update_incident(
                 current_user=current_user,
             )
 
-            await notification_service.send_incident_assignment_email(
-                recipient_email=next_assignee,
-                incident_title=updated.alert_name,
-                incident_status=updated.status,
-                incident_severity=updated.severity,
-                actor=current_user.username or current_user.user_id,
-            )
+            recipient_email = _recipient_email(next_assignee)
+            if recipient_email:
+                background_tasks.add_task(
+                    notification_service.send_incident_assignment_email,
+                    recipient_email=recipient_email,
+                    incident_title=updated.alert_name,
+                    incident_status=updated.status,
+                    incident_severity=updated.severity,
+                    actor=current_user.username or current_user.user_id,
+                )
+            else:
+                logger.warning(
+                    "Skipping assignment email for incident=%s because assignee is not an email address: %s",
+                    incident_id,
+                    next_assignee,
+                )
 
     if payload.note:
         await sync_note_to_jira_comment(

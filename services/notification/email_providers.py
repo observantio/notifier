@@ -13,6 +13,7 @@ http://www.apache.org/licenses/LICENSE-2.0
 """
 
 import logging
+from dataclasses import dataclass
 from email.message import EmailMessage
 from email.utils import parseaddr
 from typing import cast
@@ -25,6 +26,37 @@ from custom_types.json import JSONDict
 from . import transport
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class EmailDeliveryPayload:
+    subject: str
+    body: str
+    recipients: list[str]
+    smtp_from: str
+    html_body: str | None = None
+
+
+def _coerce_email_delivery_payload(
+    payload: EmailDeliveryPayload | None,
+    legacy_args: tuple[object, ...],
+) -> EmailDeliveryPayload:
+    if payload is not None:
+        return payload
+    if len(legacy_args) < 4:
+        raise ValueError("subject, body, recipients, and smtp_from are required")
+    subject = str(legacy_args[0])
+    body = str(legacy_args[1])
+    recipients = cast(list[str], legacy_args[2])
+    smtp_from = str(legacy_args[3])
+    html_body = str(legacy_args[4]) if len(legacy_args) > 4 and legacy_args[4] is not None else None
+    return EmailDeliveryPayload(
+        subject=subject,
+        body=body,
+        recipients=recipients,
+        smtp_from=smtp_from,
+        html_body=html_body,
+    )
 
 
 def _coerce_smtp_delivery_config(
@@ -78,31 +110,39 @@ def _sanitize_recipients(recipients: list[str]) -> list[str]:
     return valid
 
 
-def build_smtp_message(subject: str, body: str, smtp_from: str, recipients: list[str]) -> EmailMessage:
+def build_smtp_message(
+    subject: str, body: str, smtp_from: str, recipients: list[str], html_body: str | None = None
+) -> EmailMessage:
     recipients = _sanitize_recipients(recipients)
     msg = EmailMessage()
     msg["Subject"] = subject
     msg["From"] = smtp_from
     msg["To"] = ", ".join(recipients)
     msg.set_content(body)
+    if html_body:
+        msg.add_alternative(html_body, subtype="html")
     return msg
 
 
 async def send_via_sendgrid(
     client: httpx.AsyncClient,
     api_key: str,
-    subject: str,
-    body: str,
-    recipients: list[str],
-    smtp_from: str,
+    *delivery_args: object,
 ) -> bool:
-    recipients = _sanitize_recipients(recipients)
+    payload = delivery_args[0] if delivery_args else None
+    legacy_args = delivery_args[1:] if isinstance(payload, EmailDeliveryPayload) else delivery_args
+    email = _coerce_email_delivery_payload(payload if isinstance(payload, EmailDeliveryPayload) else None, legacy_args)
+    recipients = _sanitize_recipients(email.recipients)
+
+    content_items: list[JSONDict] = [{"type": "text/plain", "value": email.body}]
+    if email.html_body:
+        content_items.append({"type": "text/html", "value": email.html_body})
 
     payload: JSONDict = {
         "personalizations": [{"to": [{"email": r} for r in recipients]}],
-        "from": {"email": smtp_from},
-        "subject": subject,
-        "content": [{"type": "text/plain", "value": body}],
+        "from": {"email": email.smtp_from},
+        "subject": email.subject,
+        "content": content_items,
     }
 
     headers = {
@@ -132,19 +172,21 @@ async def send_via_sendgrid(
 async def send_via_resend(
     client: httpx.AsyncClient,
     api_key: str,
-    subject: str,
-    body: str,
-    recipients: list[str],
-    smtp_from: str,
+    *delivery_args: object,
 ) -> bool:
-    recipients = _sanitize_recipients(recipients)
+    payload = delivery_args[0] if delivery_args else None
+    legacy_args = delivery_args[1:] if isinstance(payload, EmailDeliveryPayload) else delivery_args
+    email = _coerce_email_delivery_payload(payload if isinstance(payload, EmailDeliveryPayload) else None, legacy_args)
+    recipients = _sanitize_recipients(email.recipients)
 
     payload: JSONDict = {
-        "from": smtp_from,
+        "from": email.smtp_from,
         "to": recipients,
-        "subject": subject,
-        "text": body,
+        "subject": email.subject,
+        "text": email.body,
     }
+    if email.html_body:
+        payload["html"] = email.html_body
 
     headers = {
         "Authorization": f"Bearer {api_key}",

@@ -33,6 +33,7 @@ COPY middleware/ ./middleware/
 COPY models/ ./models/
 COPY routers/ ./routers/
 COPY services/ ./services/
+COPY templates/ ./templates/
 
 COPY entrypoint.sh /entrypoint.sh
 

@@ -530,7 +530,7 @@ async def test_rule(
 
     for channel in channels:
         try:
-            ok = await asyncio.wait_for(notification_service.send_notification(channel, alert, "test"), timeout=1.5)
+            ok = await asyncio.wait_for(notification_service.send_notification(channel, alert, "test"), timeout=10.0)
         except TimeoutError:
             ok = False
         results.append({"channel": channel.name, "ok": ok})

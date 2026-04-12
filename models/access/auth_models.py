@@ -50,6 +50,7 @@ class Permission(str, Enum):
 class TokenData(BaseModel):
     user_id: str
     username: str
+    email: str | None = None
     tenant_id: str
     org_id: str
     role: Role

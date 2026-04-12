@@ -100,6 +100,7 @@ def _verify_context_token(token: str) -> TokenData:
         claims = TokenData(
             user_id=str(payload.get("user_id") or ""),
             username=str(payload.get("username") or ""),
+            email=(str(payload.get("email") or "").strip() or None),
             tenant_id=str(payload.get("tenant_id") or ""),
             org_id=str(payload.get("org_id") or payload.get("tenant_id") or ""),
             role=Role(role_text),

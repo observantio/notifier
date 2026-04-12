@@ -128,8 +128,8 @@ exclude = [
 [tool.pylint.main]
 jobs = 1
 extension-pkg-allow-list = ["sqlalchemy"]
-ignore = [".git", "__pycache__", ".mypy_cache", ".pytest_cache", ".ruff_cache", ".venv", "venv", "build", "dist", "tmp", "vendor", "tests"]
-ignore-paths = ["^tests/"]
+ignore = [".git", "__pycache__", ".mypy_cache", ".pytest_cache", ".ruff_cache", ".venv", "venv", "build", "dist", "tmp", "vendor", "tests", "mutants"]
+ignore-paths = ["^tests/", "^mutants/"]
 init-hook = "import os, sys; cwd = os.getcwd(); sys.path.insert(0, cwd) if cwd not in sys.path else None"
 
 [tool.pylint.messages_control]

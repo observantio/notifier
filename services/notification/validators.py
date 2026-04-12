@@ -69,6 +69,24 @@ def validate_channel_config(channel_type: str, channel_config: JSONDict | None) 
                     errors.append("SMTP email channel 'smtp_port' must be a valid integer")
                 elif not 1 <= port_num <= 65535:
                     errors.append("SMTP email channel 'smtp_port' must be between 1 and 65535")
+
+            auth_type = _as_text(cfg.get("smtp_auth_type") or cfg.get("smtpAuthType") or "password").strip().lower()
+            smtp_username = _as_text(cfg.get("smtp_username") or cfg.get("smtpUsername")).strip()
+            smtp_password = _as_text(cfg.get("smtp_password") or cfg.get("smtpPassword")).strip()
+            smtp_api_key = _as_text(
+                cfg.get("smtp_api_key") or cfg.get("smtpApiKey") or cfg.get("api_key") or cfg.get("apiKey")
+            ).strip()
+
+            if auth_type == "password":
+                if not smtp_username:
+                    errors.append("SMTP email channel auth_type=password requires 'smtp_username'")
+                if not smtp_password:
+                    errors.append("SMTP email channel auth_type=password requires 'smtp_password'")
+            elif auth_type == "api_key":
+                if not smtp_api_key:
+                    errors.append("SMTP email channel auth_type=api_key requires 'smtp_api_key'")
+            elif auth_type != "none":
+                errors.append("SMTP email channel 'smtp_auth_type' must be one of: password, api_key, none")
         elif provider == "sendgrid":
             api_key = (
                 cfg.get("sendgrid_api_key") or cfg.get("sendgridApiKey") or cfg.get("api_key") or cfg.get("apiKey")

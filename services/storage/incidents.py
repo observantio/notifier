@@ -61,6 +61,13 @@ class IncidentListFilters:
     offset: int = 0
 
 
+@dataclass(frozen=True)
+class IncidentActorContext:
+    user_id: str
+    group_ids: list[str] = field(default_factory=list)
+    user_email: str | None = None
+
+
 def _coerce_incident_list_filters(
     filters_or_group_ids: IncidentListFilters | list[str] | None,
     legacy_kwargs: dict[str, object],
@@ -139,6 +146,7 @@ class IncidentStorageService:
         tenant_id: str,
         user_id: str,
         group_ids: list[str] | None = None,
+        user_email: str | None = None,
     ) -> JSONDict:
         group_ids = group_ids or []
         open_total = 0
@@ -177,7 +185,12 @@ class IncidentStorageService:
                     unassigned_open += 1
                 else:
                     assigned_open += 1
-                    if assignee == str(user_id):
+                    normalized_assignee = assignee.lower()
+                    normalized_user_id = str(user_id).strip().lower()
+                    normalized_user_email = str(user_email or "").strip().lower()
+                    if normalized_assignee == normalized_user_id or (
+                        normalized_user_email and normalized_assignee == normalized_user_email
+                    ):
                         assigned_to_me_open += 1
 
         return {
@@ -291,10 +304,23 @@ class IncidentStorageService:
         self,
         incident_id: str,
         tenant_id: str,
-        user_id: str,
-        payload: AlertIncidentUpdateRequest,
-        group_ids: list[str] | None = None,
+        payload_or_user_id: AlertIncidentUpdateRequest | str,
+        *legacy_args: object,
+        actor: IncidentActorContext | None = None,
     ) -> AlertIncident | None:
+        if actor is not None:
+            payload = cast(AlertIncidentUpdateRequest, payload_or_user_id)
+            user_id = str(actor.user_id)
+            group_ids = actor.group_ids
+            user_email = actor.user_email
+        else:
+            user_id = str(payload_or_user_id)
+            if not legacy_args:
+                raise TypeError("payload is required")
+            payload = cast(AlertIncidentUpdateRequest, legacy_args[0])
+            group_ids = cast(list[str] | None, legacy_args[1] if len(legacy_args) > 1 else None)
+            user_email = cast(str | None, legacy_args[2] if len(legacy_args) > 2 else None)
+
         user_group_ids = [str(g).strip() for g in (group_ids or []) if str(g).strip()]
         with get_db_session() as db:
             incident = (
@@ -324,7 +350,11 @@ class IncidentStorageService:
             fields_set = set(getattr(payload, "model_fields_set", set()) or [])
             if "assignee" in fields_set:
                 requested_assignee = str(payload.assignee or "").strip() or None
-                if requested_assignee and visibility == "private" and requested_assignee != user_id:
+                normalized_assignee = str(requested_assignee or "").strip().lower()
+                normalized_user_id = str(user_id or "").strip().lower()
+                normalized_user_email = str(user_email or "").strip().lower()
+                allowed_self_values = {v for v in (normalized_user_id, normalized_user_email) if v}
+                if requested_assignee and visibility == "private" and normalized_assignee not in allowed_self_values:
                     raise HTTPException(
                         status_code=http_status.HTTP_403_FORBIDDEN,
                         detail="Private incidents can only be assigned to yourself",

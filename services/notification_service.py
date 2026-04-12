@@ -13,7 +13,12 @@ import logging
 import re
 from datetime import UTC, datetime
 from email.message import EmailMessage
+from html import escape as html_escape
+from pathlib import Path
+from string import Template
 from typing import cast
+
+import aiosmtplib
 
 from config import config
 from custom_types.json import JSONDict
@@ -27,6 +32,45 @@ from services.notification import transport as notification_transport
 from services.notification import validators as notification_validators
 
 logger = logging.getLogger(__name__)
+_EMAIL_TEMPLATE_ROOT = Path(__file__).resolve().parents[1] / "templates" / "emails"
+
+
+def _render_html_template(template_name: str, values: dict[str, str]) -> str | None:
+    path = _EMAIL_TEMPLATE_ROOT / template_name
+    try:
+        raw = path.read_text(encoding="utf-8")
+    except OSError as exc:
+        logger.warning("Email template %s could not be loaded: %s", path, exc)
+        return None
+    safe_values = {
+        key: (str(value or "") if key.endswith("_html") else html_escape(str(value or "")))
+        for key, value in values.items()
+    }
+    return Template(raw).safe_substitute(safe_values)
+
+
+def _incident_severity_theme(severity: str) -> dict[str, str]:
+    normalized = str(severity or "").strip().lower()
+    if normalized in {"critical", "high", "error"}:
+        return {
+            "header_bg": "#dc2626",
+            "header_fg": "#fef2f2",
+            "severity_bg": "#fee2e2",
+            "severity_fg": "#991b1b",
+        }
+    if normalized == "warning":
+        return {
+            "header_bg": "#f59e0b",
+            "header_fg": "#1f2937",
+            "severity_bg": "#fef3c7",
+            "severity_fg": "#92400e",
+        }
+    return {
+        "header_bg": "#2563eb",
+        "header_fg": "#eff6ff",
+        "severity_bg": "#dbeafe",
+        "severity_fg": "#1e40af",
+    }
 
 
 class NotificationService:
@@ -143,14 +187,33 @@ class NotificationService:
         msg["Subject"] = f"[Incident Assigned] {incident_title}"
         msg["From"] = smtp_from
         msg["To"] = recipient_email
+        timestamp = datetime.now(UTC).isoformat()
         msg.set_content(
             f"You have been assigned an incident in Watchdog.\n\n"
             f"Title: {incident_title}\n"
             f"Status: {incident_status}\n"
             f"Severity: {incident_severity}\n"
             f"Updated by: {actor}\n"
-            f"Timestamp: {datetime.now(UTC).isoformat()}\n"
+            f"Timestamp: {timestamp}\n"
         )
+        theme = _incident_severity_theme(incident_severity)
+        html_body = _render_html_template(
+            "incident_assignment.html",
+            {
+                "incident_title": incident_title,
+                "incident_status": incident_status,
+                "incident_severity": incident_severity,
+                "incident_severity_upper": str(incident_severity or "info").upper(),
+                "actor": actor,
+                "timestamp": timestamp,
+                "header_bg": theme["header_bg"],
+                "header_fg": theme["header_fg"],
+                "severity_bg": theme["severity_bg"],
+                "severity_fg": theme["severity_fg"],
+            },
+        )
+        if html_body:
+            msg.add_alternative(html_body, subtype="html")
         try:
             await self._send_smtp_with_retry(
                 message=msg,
@@ -163,7 +226,7 @@ class NotificationService:
             )
             logger.info("Incident assignment email sent to %s", recipient_email)
             return True
-        except (OSError, TimeoutError, ValueError) as exc:
+        except (ValueError, TimeoutError, OSError, aiosmtplib.errors.SMTPException) as exc:
             logger.warning("Failed to send incident assignment email to %s: %s", recipient_email, exc)
             return False
 
@@ -179,6 +242,7 @@ class NotificationService:
             return False
         subject = f"[{action.upper()}] {alert.labels.get('alertname', 'Alert')}"
         body = notification_payloads.format_alert_body(alert, action)
+        html_body = notification_payloads.format_alert_html(alert, action)
         provider_value = cfg.get("email_provider") or cfg.get("emailProvider") or "smtp"
         provider = str(provider_value).strip().lower()
         smtp_from = str(cfg.get("smtp_from") or cfg.get("smtpFrom") or cfg.get("from") or config.default_admin_email)
@@ -195,7 +259,15 @@ class NotificationService:
                 logger.error("SendGrid API key not configured for email channel %s", channel.name)
                 return False
             sent = await notification_email.send_via_sendgrid(
-                self._client, api_key, subject, body, recipients, smtp_from
+                self._client,
+                api_key,
+                notification_email.EmailDeliveryPayload(
+                    subject=subject,
+                    body=body,
+                    recipients=recipients,
+                    smtp_from=smtp_from,
+                    html_body=html_body,
+                ),
             )
             if sent:
                 logger.info("Email notification sent via SendGrid (channel=%s)", channel.name)
@@ -210,7 +282,17 @@ class NotificationService:
             if not api_key:
                 logger.error("Resend API key not configured for email channel %s", channel.name)
                 return False
-            sent = await notification_email.send_via_resend(self._client, api_key, subject, body, recipients, smtp_from)
+            sent = await notification_email.send_via_resend(
+                self._client,
+                api_key,
+                notification_email.EmailDeliveryPayload(
+                    subject=subject,
+                    body=body,
+                    recipients=recipients,
+                    smtp_from=smtp_from,
+                    html_body=html_body,
+                ),
+            )
             if sent:
                 logger.info("Email notification sent via Resend (channel=%s)", channel.name)
             else:
@@ -253,7 +335,7 @@ class NotificationService:
         elif smtp_user and not smtp_pass and smtp_api_key:
             smtp_pass = smtp_api_key
 
-        msg = notification_email.build_smtp_message(subject, body, smtp_from, recipients)
+        msg = notification_email.build_smtp_message(subject, body, smtp_from, recipients, html_body)
         logger.info("Sending email to %s via %s:%s (channel=%s)", recipients, smtp_host, smtp_port, channel.name)
         sent = await notification_email.send_via_smtp(
             msg,

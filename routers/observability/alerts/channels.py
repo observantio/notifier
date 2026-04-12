@@ -85,7 +85,12 @@ async def get_channel(
 ) -> NotificationChannel:
     tenant_id, user_id, group_ids = alertmanager_service.user_scope(current_user)
     channel = await run_in_threadpool(
-        storage_service.get_notification_channel, channel_id, tenant_id, user_id, group_ids
+        storage_service.get_notification_channel,
+        channel_id,
+        tenant_id,
+        user_id,
+        group_ids,
+        False,
     )
     if not channel:
         raise HTTPException(status_code=404, detail=f"Notification channel {channel_id} not found")
@@ -109,7 +114,12 @@ async def hide_channel(
 ) -> JSONDict:
     tenant_id, user_id, group_ids = alertmanager_service.user_scope(current_user)
     channel = await run_in_threadpool(
-        storage_service.get_notification_channel, channel_id, tenant_id, user_id, group_ids
+        storage_service.get_notification_channel,
+        channel_id,
+        tenant_id,
+        user_id,
+        group_ids,
+        True,
     )
     if not channel:
         raise HTTPException(status_code=404, detail=f"Notification channel {channel_id} not found")
@@ -208,7 +218,12 @@ async def test_channel(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only channel owner can test this channel")
 
     channel = await run_in_threadpool(
-        storage_service.get_notification_channel, channel_id, tenant_id, user_id, group_ids
+        storage_service.get_notification_channel,
+        channel_id,
+        tenant_id,
+        user_id,
+        group_ids,
+        True,
     )
     if not channel:
         raise HTTPException(status_code=404, detail=f"Notification channel {channel_id} not found")
@@ -216,6 +231,15 @@ async def test_channel(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Channel is disabled. Enable it before sending a test notification.",
+        )
+    config_errors = notification_service.validate_channel_config(
+        str(getattr(channel, "type", "")),
+        channel.config or {},
+    )
+    if config_errors:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="; ".join(config_errors),
         )
 
     test_alert = Alert.model_validate(

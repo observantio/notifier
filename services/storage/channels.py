@@ -118,6 +118,7 @@ class ChannelStorageService:
         tenant_id: str,
         user_id: str,
         group_ids: list[str] | None = None,
+        include_sensitive: bool = False,
     ) -> NotificationChannel | None:
         group_ids = group_ids or []
         with get_db_session() as db:
@@ -139,7 +140,7 @@ class ChannelStorageService:
                 return None
             raw_cfg = decrypt_config(_config_dict(ch))
             ch.config = raw_cfg
-            return channel_to_pydantic_for_viewer(ch, user_id)
+            return channel_to_pydantic_for_viewer(ch, user_id, include_sensitive=include_sensitive)
 
     def create_notification_channel(
         self,

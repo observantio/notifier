@@ -19,7 +19,7 @@ from typing import Any, TypeAlias
 from fastapi import FastAPI
 from fastapi.openapi.utils import get_openapi
 
-JSON_SCHEMA_DIALECT = "https://json-schema.org/draft/2020-12/schema"
+JSON_SCHEMA_DIALECT = "https://spec.openapis.org/oas/3.1/dialect/base"
 DEFAULT_TAG_GROUPS: tuple[str, ...] = (
     "alertmanager",
     "alertmanager-silences",
