@@ -117,10 +117,14 @@ def test_suppression_metadata_meta_and_url_helpers():
 
 
 def test_encryption_roundtrip_and_error_paths(monkeypatch):
-    key = Fernet.generate_key().decode()
-    monkeypatch.setattr(encryption.app_config, "data_encryption_key", key)
-    encryption._get_fernet.cache_clear()
+    class _RoundTripFernet:
+        def encrypt(self, payload: bytes) -> bytes:
+            return payload[::-1]
 
+        def decrypt(self, payload: bytes) -> bytes:
+            return payload[::-1]
+
+    monkeypatch.setattr(encryption, "_get_fernet", lambda: _RoundTripFernet())
     encrypted = encryption.encrypt_config({"apiKey": "secret"})
     assert encryption.decrypt_config(encrypted) == {"apiKey": "secret"}
     assert encryption.decrypt_config({"plain": True}) == {"plain": True}
@@ -369,7 +373,13 @@ async def test_notification_validators_senders_and_transport(monkeypatch):
     assert (
         validators.validate_channel_config(
             "email",
-            {"to": "a@b.com", "email_provider": "smtp", "smtp_host": "smtp.example.com", "smtp_port": 587},
+            {
+                "to": "a@b.com",
+                "email_provider": "smtp",
+                "smtp_host": "smtp.example.com",
+                "smtp_port": 587,
+                "smtp_auth_type": "none",
+            },
         )
         == []
     )

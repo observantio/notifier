@@ -610,7 +610,7 @@ def test_notification_service_uncovered_paths(monkeypatch):
 
     captured = {}
 
-    def build_message(subject, body, smtp_from, recipients):
+    def build_message(subject, body, smtp_from, recipients, html_body):
         return SimpleNamespace(subject=subject, body=body, smtp_from=smtp_from, recipients=recipients)
 
     async def smtp_capture(message, hostname, port, username, password, start_tls, use_tls):

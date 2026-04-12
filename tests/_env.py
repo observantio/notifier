@@ -17,3 +17,6 @@ def ensure_test_env() -> None:
         sys.path.insert(0, str(service_root))
     os.environ.setdefault("DATABASE_URL", "postgresql://safeuser:safePass_123@db:5432/watchdog")
     os.environ.setdefault("JWT_ALGORITHM", "RS256")
+    os.environ.setdefault("JWT_PRIVATE_KEY", "test-private-key")
+    os.environ.setdefault("JWT_PUBLIC_KEY", "test-public-key")
+    os.environ.setdefault("JWT_AUTO_GENERATE_KEYS", "false")

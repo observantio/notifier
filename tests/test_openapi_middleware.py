@@ -89,3 +89,40 @@ def test_helper_functions_cover_fallback_and_explicit_server_paths() -> None:
     )
     assert merged[401]["description"] == "Unauthorized"
     assert merged["404"]["description"] == "Not Found"
+
+
+def test_project_version_uses_pyproject_and_fallbacks(monkeypatch) -> None:
+    monkeypatch.setattr(
+        openapi_middleware.Path,
+        "read_text",
+        lambda self, encoding="utf-8": "[project]\nversion = '1.2.3'\n",
+    )
+    assert openapi_middleware._project_version() == "1.2.3"
+
+    monkeypatch.setattr(
+        openapi_middleware.Path,
+        "read_text",
+        lambda self, encoding="utf-8": "[project]\nversion = ''\n",
+    )
+    assert openapi_middleware._project_version() == openapi_middleware.DEFAULT_APP_VERSION
+
+    def _raise_oserror(self, encoding="utf-8"):
+        raise OSError("missing")
+
+    monkeypatch.setattr(openapi_middleware.Path, "read_text", _raise_oserror)
+    assert openapi_middleware._project_version() == openapi_middleware.DEFAULT_APP_VERSION
+
+
+def test_install_custom_openapi_sets_info_version(monkeypatch) -> None:
+    app = FastAPI()
+    openapi_middleware.install_custom_openapi(app)
+
+    monkeypatch.setattr(
+        openapi_middleware,
+        "get_openapi",
+        lambda **kwargs: {"info": {}, "paths": {}},
+    )
+    monkeypatch.setattr(openapi_middleware, "_project_version", lambda: "9.9.9")
+
+    generated = app.openapi()
+    assert generated["info"]["version"] == "9.9.9"

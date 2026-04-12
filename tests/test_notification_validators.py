@@ -42,3 +42,41 @@ def test_validate_channel_config_slack_and_webhook_and_pagerduty():
 
     errs = notification_validators.validate_channel_config("pagerduty", {})
     assert any("routing_key" in e or "integrationkey" in e.lower() for e in errs)
+
+
+def test_validate_channel_config_smtp_auth_branch_matrix():
+    password_ok_errors = notification_validators.validate_channel_config(
+        "email",
+        {
+            "to": "ops@example.com",
+            "email_provider": "smtp",
+            "smtp_host": "smtp.example.com",
+            "smtp_auth_type": "password",
+            "smtp_username": "user",
+            "smtp_password": "pass",
+        },
+    )
+    assert password_ok_errors == []
+
+    api_key_ok_errors = notification_validators.validate_channel_config(
+        "email",
+        {
+            "to": "ops@example.com",
+            "email_provider": "smtp",
+            "smtp_host": "smtp.example.com",
+            "smtp_auth_type": "api_key",
+            "smtp_api_key": "key",
+        },
+    )
+    assert api_key_ok_errors == []
+
+    invalid_auth_errors = notification_validators.validate_channel_config(
+        "email",
+        {
+            "to": "ops@example.com",
+            "email_provider": "smtp",
+            "smtp_host": "smtp.example.com",
+            "smtp_auth_type": "token",
+        },
+    )
+    assert any("smtp_auth_type" in error for error in invalid_auth_errors)

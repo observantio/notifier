@@ -87,3 +87,56 @@ async def test_incident_assignment_email_paths(monkeypatch):
 
     monkeypatch.setattr(svc, "_send_smtp_with_retry", fail_send)
     assert await svc.send_incident_assignment_email("u@example.com", "CPU", "open", "critical", "admin") is False
+
+
+def test_notification_service_html_template_and_theme_paths(monkeypatch):
+    monkeypatch.setattr(
+        notification_mod.Path,
+        "read_text",
+        lambda self, encoding="utf-8": (_ for _ in ()).throw(OSError("missing")),
+    )
+    assert notification_mod._render_html_template("missing.html", {"x": "y"}) is None
+
+    warning_theme = notification_mod._incident_severity_theme("warning")
+    info_theme = notification_mod._incident_severity_theme("info")
+    assert warning_theme["header_bg"] == "#f59e0b"
+    assert info_theme["header_bg"] == "#2563eb"
+
+
+@pytest.mark.asyncio
+async def test_incident_assignment_email_skips_html_alternative_when_template_missing(monkeypatch):
+    svc = NotificationService()
+    monkeypatch.setattr(config, "default_admin_email", "admin@example.com")
+    monkeypatch.setattr(
+        notification_mod.config,
+        "get_secret",
+        lambda key: {
+            "INCIDENT_ASSIGNMENT_EMAIL_ENABLED": "true",
+            "INCIDENT_ASSIGNMENT_SMTP_HOST": "smtp.example.com",
+            "INCIDENT_ASSIGNMENT_SMTP_PORT": "587",
+            "INCIDENT_ASSIGNMENT_FROM": "alerts@example.com",
+        }.get(key),
+    )
+    monkeypatch.setattr(notification_mod, "_render_html_template", lambda *_args, **_kwargs: None)
+
+    captured = {}
+
+    async def fake_send(*, message, hostname, port, username=None, password=None, start_tls=False, use_tls=False):
+        captured["hostname"] = hostname
+        captured["port"] = port
+        captured["is_multipart"] = message.is_multipart()
+
+    monkeypatch.setattr(svc, "_send_smtp_with_retry", fake_send)
+
+    result = await svc.send_incident_assignment_email(
+        "u@example.com",
+        "CPU",
+        "open",
+        "warning",
+        "admin",
+    )
+
+    assert result is True
+    assert captured["hostname"] == "smtp.example.com"
+    assert captured["port"] == 587
+    assert captured["is_multipart"] is False

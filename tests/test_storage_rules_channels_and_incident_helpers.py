@@ -311,7 +311,12 @@ def test_channel_helpers_and_storage_branches(monkeypatch):
     monkeypatch.setattr(
         channels_mod,
         "channel_to_pydantic_for_viewer",
-        lambda obj, user_id: {"id": obj.id, "user": user_id, "config": obj.config},
+        lambda obj, user_id, include_sensitive=False: {
+            "id": obj.id,
+            "user": user_id,
+            "config": obj.config,
+            "include_sensitive": include_sensitive,
+        },
     )
     monkeypatch.setattr(channels_mod, "ensure_tenant_exists", lambda *_args: None)
     monkeypatch.setattr(channels_mod, "assign_shared_groups", lambda *_args, **_kwargs: None)
@@ -319,7 +324,14 @@ def test_channel_helpers_and_storage_branches(monkeypatch):
     db = FakeDB([private_channel, group_channel], private_channel)
     monkeypatch.setattr(channels_mod, "get_db_session", lambda: FakeCtx(db))
     listed = svc.get_notification_channels("tenant", "user", ["g1"], limit=10, offset=1)
-    assert listed == [{"id": "chan-1", "user": "user", "config": {"token": "enc", "decrypted": True}}]
+    assert listed == [
+        {
+            "id": "chan-1",
+            "user": "user",
+            "config": {"token": "enc", "decrypted": True},
+            "include_sensitive": False,
+        }
+    ]
     assert svc.get_notification_channel("chan-1", "tenant", "user", ["g1"])["id"] == "chan-1"
 
     missing_db = FakeDB(None)

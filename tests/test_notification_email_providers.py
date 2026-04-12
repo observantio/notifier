@@ -21,10 +21,13 @@ from services.notification import email_providers, transport
 
 
 def test_build_smtp_message():
-    msg = email_providers.build_smtp_message("subj", "body", "from@example.com", ["a@b.com", "c@d.com"])
+    msg = email_providers.build_smtp_message(
+        "subj", "body", "from@example.com", ["a@b.com", "c@d.com"], "<b>body</b>"
+    )
     assert isinstance(msg, EmailMessage)
     assert msg["Subject"] == "subj"
     assert "a@b.com" in msg["To"]
+    assert msg.is_multipart()
 
 
 def test_send_via_sendgrid_and_resend_success_and_failure(monkeypatch):
@@ -57,3 +60,46 @@ def test_send_via_smtp_calls_transport(monkeypatch):
 
     monkeypatch.setattr(transport, "send_smtp_with_retry", fake_send_err)
     assert asyncio.run(email_providers.send_via_smtp("m", "h", 25, None, None, False, False)) is False
+
+
+def test_sendgrid_and_resend_include_html_payload_when_provided(monkeypatch):
+    captured = {}
+
+    async def capture_post(client, url, json=None, headers=None, params=None, **kwargs):
+        captured[url] = json
+        return httpx.Response(202)
+
+    monkeypatch.setattr(transport, "post_with_retry", capture_post)
+    client = httpx.AsyncClient()
+
+    assert (
+        asyncio.run(
+            email_providers.send_via_sendgrid(
+                client,
+                "key",
+                "subject",
+                "body",
+                ["x@x.com"],
+                "from@example.com",
+                "<b>html</b>",
+            )
+        )
+        is True
+    )
+    assert captured["https://api.sendgrid.com/v3/mail/send"]["content"][1]["type"] == "text/html"
+
+    assert (
+        asyncio.run(
+            email_providers.send_via_resend(
+                client,
+                "key",
+                "subject",
+                "body",
+                ["x@x.com"],
+                "from@example.com",
+                "<b>html</b>",
+            )
+        )
+        is True
+    )
+    assert captured["https://api.resend.com/emails"]["html"] == "<b>html</b>"

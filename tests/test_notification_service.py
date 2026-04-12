@@ -52,11 +52,23 @@ def test_send_slack_delegates_to_senders(monkeypatch):
 def test_send_email_delegates_to_email_providers(monkeypatch):
     called = {}
 
-    async def fake_send_via_sendgrid(client, api_key, subject, body, recipients, smtp_from):
+    async def fake_send_via_sendgrid(*args, **kwargs):
+        api_key = kwargs.get("api_key")
+        recipients = kwargs.get("recipients")
+        if api_key is None and len(args) > 1:
+            api_key = args[1]
+        if recipients is None and len(args) > 4:
+            recipients = args[4]
         called["sg"] = (api_key, recipients)
         return True
 
-    async def fake_send_via_resend(client, api_key, subject, body, recipients, smtp_from):
+    async def fake_send_via_resend(*args, **kwargs):
+        api_key = kwargs.get("api_key")
+        recipients = kwargs.get("recipients")
+        if api_key is None and len(args) > 1:
+            api_key = args[1]
+        if recipients is None and len(args) > 4:
+            recipients = args[4]
         called["rs"] = (api_key, recipients)
         return True
 
@@ -123,8 +135,8 @@ def test_format_helpers_delegate_to_payloads(monkeypatch):
 def test_send_email_uses_build_smtp_message(monkeypatch):
     captured = {}
 
-    def fake_build(subject, body, smtp_from, recipients):
-        captured["built"] = (subject, body, smtp_from, recipients)
+    def fake_build(subject, body, smtp_from, recipients, html_body=None):
+        captured["built"] = (subject, body, smtp_from, recipients, html_body)
         from email.message import EmailMessage
 
         m = EmailMessage()

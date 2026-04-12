@@ -4,11 +4,12 @@ High-coverage router tests for observability endpoints.
 
 from __future__ import annotations
 
+import asyncio
 from types import SimpleNamespace
 from typing import Any, cast
 
 import pytest
-from fastapi import HTTPException
+from fastapi import BackgroundTasks, HTTPException
 from starlette.requests import Request
 
 try:
@@ -266,6 +267,39 @@ async def test_access_webhooks_and_status_routes(monkeypatch):
     with pytest.raises(HTTPException) as exc:
         await status_router.get_alertmanager_status(_user())
     assert exc.value.status_code == 500
+
+
+@pytest.mark.asyncio
+async def test_receive_alert_webhook_awaits_notification_dispatch(monkeypatch):
+    started = asyncio.Event()
+    release = asyncio.Event()
+
+    monkeypatch.setattr(
+        webhooks_router.alertmanager_service,
+        "enforce_webhook_security",
+        lambda *_args, **_kwargs: None,
+    )
+    monkeypatch.setattr(webhooks_router, "infer_tenant_id_from_alerts", lambda *_args, **_kwargs: "tenant-a")
+    monkeypatch.setattr(webhooks_router, "scope_header", lambda _request: "scope-a")
+
+    async def _sync(*_args, **_kwargs):
+        return None
+
+    async def _notify(*_args, **_kwargs):
+        started.set()
+        await release.wait()
+        return None
+
+    monkeypatch.setattr(webhooks_router, "sync_incidents", _sync)
+    monkeypatch.setattr(webhooks_router.alertmanager_service, "notify_for_alerts", _notify)
+
+    payload = AlertWebhookRequest(alerts=[_alert_dict("CPUHigh")])
+    task = asyncio.create_task(webhooks_router.receive_alert_webhook(_request(path="/alerts/webhook"), payload))
+    await asyncio.wait_for(started.wait(), timeout=1.0)
+    assert not task.done()
+    release.set()
+    result = await asyncio.wait_for(task, timeout=1.0)
+    assert result["status"].lower() == "success"
 
 
 @pytest.mark.asyncio
@@ -1361,7 +1395,12 @@ async def test_incidents_router_listing_and_patch_paths(monkeypatch):
 
     monkeypatch.setattr(incidents_router.storage_service, "get_incident_for_user", lambda *_args: None)
     with pytest.raises(HTTPException) as exc:
-        await incidents_router.update_incident("missing", AlertIncidentUpdateRequest(), _user())
+        await incidents_router.update_incident(
+            "missing",
+            AlertIncidentUpdateRequest(),
+            background_tasks=BackgroundTasks(),
+            current_user=_user(),
+        )
     assert exc.value.status_code == 404
 
     base_incident = _incident("inc-2", labels={"alertname": "CPUHigh"}, fingerprint="fp-2")
@@ -1382,7 +1421,8 @@ async def test_incidents_router_listing_and_patch_paths(monkeypatch):
         await incidents_router.update_incident(
             "inc-2",
             AlertIncidentUpdateRequest.model_validate({"status": "resolved"}),
-            _user(),
+            background_tasks=BackgroundTasks(),
+            current_user=_user(),
         )
     assert exc.value.status_code == 400
 
@@ -1401,7 +1441,7 @@ async def test_incidents_router_listing_and_patch_paths(monkeypatch):
     monkeypatch.setattr(
         incidents_router.storage_service,
         "update_incident",
-        lambda *_args: _incident("inc-2", status="resolved", labels={"alertname": "CPUHigh"}),
+        lambda *_args, **_kwargs: _incident("inc-2", status="resolved", labels={"alertname": "CPUHigh"}),
     )
     monkeypatch.setattr(incidents_router, "sync_note_to_jira_comment", _async_noop)
     monkeypatch.setattr(incidents_router, "move_incident_ticket_to_done", _async_noop)
@@ -1411,7 +1451,8 @@ async def test_incidents_router_listing_and_patch_paths(monkeypatch):
     updated = await incidents_router.update_incident(
         "inc-2",
         AlertIncidentUpdateRequest.model_validate({"status": "resolved", "note": "done"}),
-        _user(),
+        background_tasks=BackgroundTasks(),
+        current_user=_user(),
     )
     assert updated.status == IncidentStatus.RESOLVED
 
@@ -1554,7 +1595,10 @@ async def test_incidents_jira_links_and_integrations_additional_branches(monkeyp
     monkeypatch.setattr(incidents_router.notification_service, "send_incident_assignment_email", _email)
     monkeypatch.setattr(incidents_router.alertmanager_service, "get_alerts", lambda **_kwargs: [])
     out = await incidents_router.update_incident(
-        "inc-3", AlertIncidentUpdateRequest.model_validate({"status": "open", "assignee": ""}), _user()
+        "inc-3",
+        AlertIncidentUpdateRequest.model_validate({"status": "open", "assignee": ""}),
+        background_tasks=BackgroundTasks(),
+        current_user=_user(),
     )
     assert out.status == IncidentStatus.OPEN
 
@@ -1898,7 +1942,7 @@ async def test_router_remaining_line_edges(monkeypatch):
     monkeypatch.setattr(
         incidents_router.storage_service,
         "update_incident",
-        lambda *_args: _incident("inc-line", labels={}, status=IncidentStatus.RESOLVED),
+        lambda *_args, **_kwargs: _incident("inc-line", labels={}, status=IncidentStatus.RESOLVED),
     )
     monkeypatch.setattr(
         incidents_router, "sync_note_to_jira_comment", lambda *_args, **_kwargs: _run_in_threadpool(lambda: None)
@@ -1923,23 +1967,30 @@ async def test_router_remaining_line_edges(monkeypatch):
     patched = await incidents_router.update_incident(
         "inc-line",
         AlertIncidentUpdateRequest.model_validate({"status": "resolved"}),
-        _user(),
+        background_tasks=BackgroundTasks(),
+        current_user=_user(),
     )
     assert patched.status == IncidentStatus.RESOLVED
     assert seen.get("filter_labels") == {"fingerprint": "fp-line"}
 
-    monkeypatch.setattr(incidents_router.storage_service, "update_incident", lambda *_args: None)
+    monkeypatch.setattr(incidents_router.storage_service, "update_incident", lambda *_args, **_kwargs: None)
     with pytest.raises(HTTPException) as exc:
-        await incidents_router.update_incident("inc-line", AlertIncidentUpdateRequest(), _user())
+        await incidents_router.update_incident(
+            "inc-line",
+            AlertIncidentUpdateRequest(),
+            background_tasks=BackgroundTasks(),
+            current_user=_user(),
+        )
     assert exc.value.status_code == 404
 
     weird_updated = SimpleNamespace(status="investigating", assignee=None, alert_name="CPU", severity="warning")
-    monkeypatch.setattr(incidents_router.storage_service, "update_incident", lambda *_args: weird_updated)
+    monkeypatch.setattr(incidents_router.storage_service, "update_incident", lambda *_args, **_kwargs: weird_updated)
     monkeypatch.setattr(incidents_router.alertmanager_service, "get_alerts", lambda **_kwargs: [])
     patched_weird = await incidents_router.update_incident(
         "inc-line",
         AlertIncidentUpdateRequest.model_validate({"status": "investigating"}),
-        _user(),
+        background_tasks=BackgroundTasks(),
+        current_user=_user(),
     )
     assert patched_weird.status == "investigating"
 

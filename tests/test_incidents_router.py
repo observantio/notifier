@@ -7,6 +7,7 @@ http://www.apache.org/licenses/LICENSE-2.0
 """
 
 import pytest
+from fastapi import BackgroundTasks
 
 from tests._env import ensure_test_env
 
@@ -34,6 +35,17 @@ spec.loader.exec_module(incidents_mod)
 update_incident = incidents_mod.update_incident
 storage_service = incidents_mod.storage_service
 notification_service = incidents_mod.notification_service
+recipient_email = incidents_mod._recipient_email
+
+
+def test_recipient_email_parsing_and_validation() -> None:
+    assert recipient_email(None) is None
+    assert recipient_email("") is None
+    assert recipient_email("   ") is None
+    assert recipient_email("bob@example.com") == "bob@example.com"
+    assert recipient_email(" Bob <bob@example.com> ") == "bob@example.com"
+    assert recipient_email("not-an-email") is None
+    assert recipient_email("Name <not-an-email>") is None
 
 
 @pytest.mark.asyncio
@@ -62,13 +74,7 @@ async def test_patch_incident_sends_assignment_email(monkeypatch):
     monkeypatch.setattr(storage_service, "get_incident_for_user", lambda *args, **kwargs: existing)
     monkeypatch.setattr(storage_service, "update_incident", lambda *args, **kwargs: updated)
 
-    called = {}
-
-    async def fake_email(recipient_email, incident_title, incident_status, incident_severity, actor):
-        called["args"] = (recipient_email, incident_title, incident_status, incident_severity, actor)
-        return True
-
-    monkeypatch.setattr(notification_service, "send_incident_assignment_email", fake_email)
+    monkeypatch.setattr(notification_service, "send_incident_assignment_email", lambda **_kwargs: None)
 
     user = TokenData(
         user_id="u1",
@@ -82,13 +88,15 @@ async def test_patch_incident_sends_assignment_email(monkeypatch):
     )
 
     payload = AlertIncidentUpdateRequest(assignee="bob@example.com")
-    result = await update_incident("i1", payload, current_user=user)
+    background_tasks = BackgroundTasks()
+    result = await update_incident("i1", payload, background_tasks=background_tasks, current_user=user)
 
     assert result.assignee == "bob@example.com"
-    assert "args" in called
-    assert called["args"][0] == "bob@example.com"
-    assert called["args"][1] == "Alert1"
-    assert called["args"][3] == "critical"
+    assert len(background_tasks.tasks) == 1
+    task = background_tasks.tasks[0]
+    assert task.kwargs["recipient_email"] == "bob@example.com"
+    assert task.kwargs["incident_title"] == "Alert1"
+    assert str(task.kwargs["incident_severity"]) == "critical"
 
 
 @pytest.mark.asyncio
@@ -140,7 +148,7 @@ async def test_patch_incident_requests_write_access_for_existing_incident(monkey
     )
 
     payload = AlertIncidentUpdateRequest()
-    await update_incident("i2", payload, current_user=user)
+    await update_incident("i2", payload, background_tasks=BackgroundTasks(), current_user=user)
 
     existing_write_access = (
         captured["existing_kwargs"].get("write_access")
@@ -149,9 +157,53 @@ async def test_patch_incident_requests_write_access_for_existing_incident(monkey
     )
     assert existing_write_access is True
 
-    update_group_ids = (
-        captured["update_kwargs"].get("group_ids")
-        if "group_ids" in captured["update_kwargs"]
-        else captured["update_args"][4]
-    )
+    actor = captured["update_kwargs"].get("actor")
+    assert actor is not None
+    update_group_ids = getattr(actor, "group_ids", None)
     assert update_group_ids == ["g1"]
+
+
+@pytest.mark.asyncio
+async def test_patch_incident_skips_assignment_email_for_non_email_assignee(monkeypatch):
+    existing = AlertIncident(
+        id="i3",
+        fingerprint="fp3",
+        alertName="Alert3",
+        severity="warning",
+        status=IncidentStatus.OPEN,
+        assignee=None,
+        notes=[],
+        labels={},
+        annotations={},
+        visibility="public",
+        sharedGroupIds=[],
+        lastSeenAt="2023-01-01T00:00:00Z",
+        createdAt="2023-01-01T00:00:00Z",
+        updatedAt="2023-01-01T00:00:00Z",
+        userManaged=False,
+        hideWhenResolved=False,
+    )
+    updated = existing.model_copy(update={"assignee": "5f10ece5-95e9-4548-9ab0-53f9482c3473"})
+
+    monkeypatch.setattr(storage_service, "get_incident_for_user", lambda *args, **kwargs: existing)
+    monkeypatch.setattr(storage_service, "update_incident", lambda *args, **kwargs: updated)
+
+    monkeypatch.setattr(notification_service, "send_incident_assignment_email", lambda **_kwargs: None)
+
+    user = TokenData(
+        user_id="u1",
+        username="alice",
+        tenant_id="t1",
+        org_id="o1",
+        role="user",
+        permissions=[],
+        group_ids=[],
+        is_superuser=False,
+    )
+
+    payload = AlertIncidentUpdateRequest(assignee="5f10ece5-95e9-4548-9ab0-53f9482c3473")
+    background_tasks = BackgroundTasks()
+    result = await update_incident("i3", payload, background_tasks=background_tasks, current_user=user)
+
+    assert result.assignee == "5f10ece5-95e9-4548-9ab0-53f9482c3473"
+    assert len(background_tasks.tasks) == 0

@@ -120,3 +120,34 @@ def test_test_action_is_rendered_as_test_status():
 
     pd = notification_payloads.build_pagerduty_payload(a, "test", "rk1")
     assert pd["event_action"] == "trigger"
+
+
+def test_email_html_template_uses_severity_colors_and_test_green():
+    critical_alert = _make_alert(labels={"alertname": "DiskFull", "severity": "critical"})
+    critical_html = notification_payloads.format_alert_html(critical_alert, "firing")
+    assert "WATCHDOG ALERT" in critical_html
+    assert "#dc2626" in critical_html
+
+    test_alert = _make_alert(labels={"alertname": "DiskFull", "severity": "critical"})
+    test_html = notification_payloads.format_alert_html(test_alert, "test")
+    assert "#16a34a" in test_html
+
+
+def test_email_html_fallback_and_warning_color_paths(monkeypatch):
+    warning_alert = _make_alert(labels={"alertname": "DiskFull", "severity": "warning"})
+    monkeypatch.setattr(notification_payloads, "_render_email_template", lambda *_args, **_kwargs: None)
+
+    html = notification_payloads.format_alert_html(warning_alert, "firing")
+
+    assert "<html><body>" in html
+    assert "#d97706" in html
+
+
+def test_render_email_template_returns_none_when_file_missing(monkeypatch):
+    monkeypatch.setattr(
+        notification_payloads.Path,
+        "read_text",
+        lambda self, encoding="utf-8": (_ for _ in ()).throw(OSError("missing")),
+    )
+
+    assert notification_payloads._render_email_template("missing.html", {"name": "x"}) is None

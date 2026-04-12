@@ -198,7 +198,15 @@ def test_storage_serializers_cover_rule_channel_and_incident_payloads():
         name="Pager",
         type="pagerduty",
         enabled=True,
-        config={"secret": "value"},
+        config={
+            "secret": "value",
+            "routing_key": "pd-key",
+            "routingKey": "pd-key-3",
+            "integrationKey": "pd-key-2",
+            "sendgrid_api_key": "sg-secret",
+            "resend_api_key": "re-secret",
+            "to": "ops@example.com",
+        },
         created_by="owner",
         visibility="private",
         shared_groups=[SimpleNamespace(id="g1")],
@@ -231,9 +239,17 @@ def test_storage_serializers_cover_rule_channel_and_incident_payloads():
     owner_view = serializers_mod.channel_to_pydantic_for_viewer(channel, viewer_user_id="owner")
     other_view = serializers_mod.channel_to_pydantic_for_viewer(channel, viewer_user_id="other")
     default_view = serializers_mod.channel_to_pydantic(channel)
-    assert owner_view.config == {"secret": "value"}
+    assert owner_view.config == {"to": "ops@example.com"}
     assert other_view.config == {}
-    assert default_view.config == {"secret": "value"}
+    assert default_view.config == {
+        "secret": "value",
+        "routing_key": "pd-key",
+        "routingKey": "pd-key-3",
+        "integrationKey": "pd-key-2",
+        "sendgrid_api_key": "sg-secret",
+        "resend_api_key": "re-secret",
+        "to": "ops@example.com",
+    }
 
     incident_model = serializers_mod.incident_to_pydantic(incident)
     assert incident_model.status == "resolved"
@@ -338,6 +354,23 @@ def test_storage_serializer_preserves_existing_dual_correlation_keys():
     model = serializers_mod.incident_to_pydantic(incident)
     assert model.annotations["watchdogCorrelationId"] == "corr-a"
     assert model.annotations["WatchdogCorrelationId"] == "corr-b"
+
+
+def test_storage_serializer_non_dict_channel_config_returns_empty_visible_config():
+    channel = SimpleNamespace(
+        id="chan-2",
+        name="Slack",
+        type="slack",
+        enabled=True,
+        config=["not", "a", "dict"],
+        created_by="owner",
+        visibility="private",
+        shared_groups=[],
+        is_hidden=False,
+    )
+
+    model = serializers_mod.channel_to_pydantic_for_viewer(channel, viewer_user_id="owner", include_sensitive=False)
+    assert model.config == {}
 
 
 def test_incident_datetime_serializers_cover_naive_and_none_paths():

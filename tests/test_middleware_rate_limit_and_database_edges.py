@@ -298,7 +298,13 @@ def test_hybrid_and_database_edges(monkeypatch):
     assert deny.allowed is False and allow.allowed is True
     assert events
 
-    assert db_mod.connection_test() is False
+    # Keep this assertion deterministic even if prior tests initialized a live engine.
+    old_engine = db_mod._ENGINE
+    db_mod._ENGINE = None
+    try:
+        assert db_mod.connection_test() is False
+    finally:
+        db_mod._ENGINE = old_engine
 
     with pytest.raises(RuntimeError):
         db_mod.ensure_database_exists("postgresql://user:pass@host")

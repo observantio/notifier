@@ -11,6 +11,7 @@ import os
 from contextlib import contextmanager
 from datetime import UTC, datetime
 
+import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -25,14 +26,19 @@ from services.storage.incidents import (
 )
 
 
-def _session_factory():
+@pytest.fixture
+def session_local():
     engine = create_engine("sqlite:///:memory:")
     Base.metadata.create_all(engine)
-    return sessionmaker(bind=engine, expire_on_commit=False)
+    SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
+    try:
+        yield SessionLocal
+    finally:
+        engine.dispose()
 
 
-def test_sync_incidents_aggregates_multiple_fingerprints_into_single_incident(monkeypatch):
-    SessionLocal = _session_factory()
+def test_sync_incidents_aggregates_multiple_fingerprints_into_single_incident(monkeypatch, session_local):
+    SessionLocal = session_local
 
     @contextmanager
     def fake_db_session():
@@ -84,8 +90,8 @@ def test_sync_incidents_aggregates_multiple_fingerprints_into_single_incident(mo
         assert incidents[0].status == "open"
 
 
-def test_sync_incidents_resolve_uses_incident_key_not_single_fingerprint(monkeypatch):
-    SessionLocal = _session_factory()
+def test_sync_incidents_resolve_uses_incident_key_not_single_fingerprint(monkeypatch, session_local):
+    SessionLocal = session_local
 
     @contextmanager
     def fake_db_session():
@@ -128,8 +134,8 @@ def test_sync_incidents_resolve_uses_incident_key_not_single_fingerprint(monkeyp
         assert incidents[0].status == "resolved"
 
 
-def test_sync_incidents_deduplicates_existing_open_rows_with_same_incident_key(monkeypatch):
-    SessionLocal = _session_factory()
+def test_sync_incidents_deduplicates_existing_open_rows_with_same_incident_key(monkeypatch, session_local):
+    SessionLocal = session_local
 
     @contextmanager
     def fake_db_session():
@@ -194,8 +200,8 @@ def test_sync_incidents_deduplicates_existing_open_rows_with_same_incident_key(m
         assert len(resolved_incidents) == 3
 
 
-def test_sync_incidents_aggregates_metric_states_into_single_incident(monkeypatch):
-    SessionLocal = _session_factory()
+def test_sync_incidents_aggregates_metric_states_into_single_incident(monkeypatch, session_local):
+    SessionLocal = session_local
 
     @contextmanager
     def fake_db_session():
@@ -255,8 +261,8 @@ def test_sync_incidents_aggregates_metric_states_into_single_incident(monkeypatc
         assert merged == "used,free,cached"
 
 
-def test_sync_incidents_skips_suppressed_alerts(monkeypatch):
-    SessionLocal = _session_factory()
+def test_sync_incidents_skips_suppressed_alerts(monkeypatch, session_local):
+    SessionLocal = session_local
 
     @contextmanager
     def fake_db_session():

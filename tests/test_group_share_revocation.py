@@ -9,6 +9,7 @@ http://www.apache.org/licenses/LICENSE-2.0
 import json
 import os
 
+import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -19,14 +20,20 @@ from services.common.meta import INCIDENT_META_KEY, parse_meta
 from services.storage.revocation import prune_removed_member_group_shares
 
 
-def _session():
+@pytest.fixture
+def db_session():
     engine = create_engine("sqlite:///:memory:")
     Base.metadata.create_all(engine)
-    return sessionmaker(bind=engine)()
+    db = sessionmaker(bind=engine)()
+    try:
+        yield db
+    finally:
+        db.close()
+        engine.dispose()
 
 
-def test_prune_removed_member_group_shares_revokes_visibility_across_resources():
-    db = _session()
+def test_prune_removed_member_group_shares_revokes_visibility_across_resources(db_session):
+    db = db_session
     db.add_all(
         [
             Tenant(
@@ -130,8 +137,8 @@ def test_prune_removed_member_group_shares_revokes_visibility_across_resources()
     assert counts["jira_integrations"] == 1
 
 
-def test_prune_removed_member_group_shares_matches_username_creators():
-    db = _session()
+def test_prune_removed_member_group_shares_matches_username_creators(db_session):
+    db = db_session
     db.add_all(
         [
             Tenant(
@@ -235,8 +242,8 @@ def test_prune_removed_member_group_shares_matches_username_creators():
     assert counts["jira_integrations"] == 1
 
 
-def test_prune_removed_member_group_shares_keeps_group_visibility_when_groups_remain():
-    db = _session()
+def test_prune_removed_member_group_shares_keeps_group_visibility_when_groups_remain(db_session):
+    db = db_session
     db.add_all(
         [
             Tenant(
@@ -348,8 +355,8 @@ def test_prune_removed_member_group_shares_keeps_group_visibility_when_groups_re
     assert counts["jira_integrations"] == 1
 
 
-def test_prune_removed_member_group_shares_ignores_non_list_jira_integrations():
-    db = _session()
+def test_prune_removed_member_group_shares_ignores_non_list_jira_integrations(db_session):
+    db = db_session
     db.add(
         Tenant(
             id="t3",
