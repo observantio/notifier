@@ -257,6 +257,9 @@ def _config_notifier_context_block() -> dict[str, Any]:
         "notifier_context_algorithms": ctx_algo,
         "notifier_context_replay_ttl_seconds": int(os.getenv("NOTIFIER_CONTEXT_REPLAY_TTL_SECONDS", "180")),
         "notifier_tls_enabled": _to_bool(os.getenv("NOTIFIER_TLS_ENABLED"), default=False),
+        "notifier_ssl_enabled": _to_bool(os.getenv("NOTIFIER_SSL_ENABLED"), default=False),
+        "notifier_ssl_certfile": os.getenv("NOTIFIER_SSL_CERTFILE", ""),
+        "notifier_ssl_keyfile": os.getenv("NOTIFIER_SSL_KEYFILE", ""),
     }
 
 
@@ -512,6 +515,9 @@ class Config:
             )
         if self.notifier_context_replay_ttl_seconds <= 0:
             raise ValueError("NOTIFIER_CONTEXT_REPLAY_TTL_SECONDS must be greater than 0")
+
+        if self.notifier_ssl_enabled and (not self.notifier_ssl_certfile or not self.notifier_ssl_keyfile):
+            raise ValueError("NOTIFIER_SSL_CERTFILE and NOTIFIER_SSL_KEYFILE must be set when NOTIFIER_SSL_ENABLED=true")
 
         if self.is_production:
             required_production_secrets = {

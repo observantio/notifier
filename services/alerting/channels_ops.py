@@ -160,7 +160,17 @@ async def get_status(service: AlertManagerService) -> AlertManagerStatus | None:
     try:
         response = await service.alertmanager_http_client.get(f"{service.alertmanager_url}/api/v2/status")
         response.raise_for_status()
-        return AlertManagerStatus.model_validate(response.json())
+        payload = response.json()
+        if isinstance(payload, dict):
+            version_info = payload.get("versionInfo")
+            if not payload.get("version") and isinstance(version_info, dict):
+                payload["version"] = str(version_info.get("version") or "")
+            # Some Alertmanager versions don't return configHash in /api/v2/status.
+            payload.setdefault("configHash", "")
+            payload.setdefault("uptime", "")
+            payload.setdefault("config", {})
+            payload.setdefault("cluster", {})
+        return AlertManagerStatus.model_validate(payload)
     except (httpx.HTTPError, TypeError, ValueError) as exc:
         logger.error("Error fetching status: %s", exc)
         return None

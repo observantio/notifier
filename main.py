@@ -167,4 +167,15 @@ ready = readiness
 
 
 if __name__ == "__main__":
-    uvicorn.run(app, host=config.host, port=config.port, loop="uvloop", log_level=config.log_level)
+    if config.notifier_ssl_enabled:
+        uvicorn.run(
+            app,
+            host=config.host,
+            port=config.port,
+            loop="uvloop",
+            log_level=config.log_level,
+            ssl_certfile=config.notifier_ssl_certfile,
+            ssl_keyfile=config.notifier_ssl_keyfile,
+        )
+    else:
+        uvicorn.run(app, host=config.host, port=config.port, loop="uvloop", log_level=config.log_level)

@@ -7,6 +7,12 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - Added strict notifier mutation testing support to improve coverage and validation for notification channel workflows.
+- Added notifier runtime SSL listener configuration support (`NOTIFIER_SSL_ENABLED`, `NOTIFIER_SSL_CERTFILE`, `NOTIFIER_SSL_KEYFILE`) with startup validation.
+
+### Changed
+
+- Updated notifier `__main__` startup to enable TLS listener mode when SSL runtime settings are provided.
+- Improved Alertmanager status parsing compatibility by normalizing sparse `/api/v2/status` payloads before model validation.
 
 ### Fixed
 
