@@ -310,6 +310,10 @@ def test_apply_security_defaults_rejects_unknown_auto_key_algorithm():
         ({"NOTIFIER_CONTEXT_ALGORITHM": "HS384"}, "Unsupported NOTIFIER_CONTEXT_ALGORITHM"),
         ({"NOTIFIER_CONTEXT_REPLAY_TTL_SECONDS": "0"}, "NOTIFIER_CONTEXT_REPLAY_TTL_SECONDS must be greater than 0"),
         (
+            {"NOTIFIER_SSL_ENABLED": "true", "NOTIFIER_SSL_CERTFILE": "", "NOTIFIER_SSL_KEYFILE": ""},
+            "NOTIFIER_SSL_CERTFILE and NOTIFIER_SSL_KEYFILE must be set",
+        ),
+        (
             {"APP_ENV": "production", "INBOUND_WEBHOOK_TOKEN": "changeme"},
             "INBOUND_WEBHOOK_TOKEN must be set to a strong non-placeholder secret in production",
         ),

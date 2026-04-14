@@ -21,6 +21,7 @@ except ImportError:
 ensure_test_env()
 
 from services.alerting import channels_ops
+from models.alerting.receivers import AlertManagerStatus
 
 
 class FakeResponse:
@@ -181,3 +182,26 @@ def test_channels_small_helpers_cover_string_normalization(monkeypatch):
     assert channels_ops._string_list("bad") == []
     assert channels_ops._optional_string("  x ") == "x"
     assert channels_ops._optional_string(None) is None
+
+
+@pytest.mark.asyncio
+async def test_get_status_covers_version_fallback_and_nondict_payload(monkeypatch):
+    service = SimpleNamespace(alertmanager_http_client=SimpleNamespace(), alertmanager_url="https://alertmanager")
+
+    async def dict_payload_without_version(*_args, **_kwargs):
+        return FakeResponse(payload={"versionInfo": {}, "cluster": {}})
+
+    monkeypatch.setattr(service.alertmanager_http_client, "get", dict_payload_without_version, raising=False)
+    status = await channels_ops.get_status(service)
+    assert status is not None
+    assert status.version == ""
+
+    status_instance = AlertManagerStatus(version="2.0.0", uptime="1m", configHash="h1", config={}, cluster={})
+
+    async def model_payload(*_args, **_kwargs):
+        return FakeResponse(payload=status_instance)
+
+    monkeypatch.setattr(service.alertmanager_http_client, "get", model_payload, raising=False)
+    reused = await channels_ops.get_status(service)
+    assert reused is not None
+    assert reused.version == "2.0.0"

@@ -137,3 +137,23 @@ def test_main_dunder_main_runs_uvicorn(monkeypatch):
     assert captured["host"] == "127.0.0.1"
     assert captured["port"] == 4319
     assert captured["loop"] == "uvloop"
+
+
+def test_main_dunder_main_runs_uvicorn_with_ssl(monkeypatch):
+    _load_main(monkeypatch)
+    import config as config_module
+
+    monkeypatch.setattr(config_module.config, "notifier_ssl_enabled", True)
+    monkeypatch.setattr(config_module.config, "notifier_ssl_certfile", "/tmp/notifier.crt")
+    monkeypatch.setattr(config_module.config, "notifier_ssl_keyfile", "/tmp/notifier.key")
+
+    captured = {}
+    monkeypatch.setitem(
+        sys.modules,
+        "uvicorn",
+        types.SimpleNamespace(run=lambda app, **kwargs: captured.update({"app": app, **kwargs})),
+    )
+
+    runpy.run_module("main", run_name="__main__")
+    assert captured["ssl_certfile"] == "/tmp/notifier.crt"
+    assert captured["ssl_keyfile"] == "/tmp/notifier.key"
