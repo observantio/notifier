@@ -73,6 +73,46 @@ filterwarnings = [
   "ignore::DeprecationWarning:starlette\\..*",
 ]
 
+[tool.mutmut]
+paths_to_mutate = [
+  "custom_types/json.py",
+  "models/access/auth_models.py",
+  "middleware/dependencies.py",
+  "middleware/error_handlers.py",
+  "middleware/headers.py",
+  "middleware/request_size_limit.py",
+  "middleware/resilience.py",
+  "middleware/rate_limit/hybrid.py",
+  "middleware/rate_limit/in_memory.py",
+  "middleware/rate_limit/ip.py",
+  "middleware/rate_limit/models.py",
+  "middleware/rate_limit/redis_fixed_window.py",
+  "routers/observability/alerts/access.py",
+  "services/common/__init__.py",
+  "services/common/access.py",
+  "services/common/encryption.py",
+  "services/common/http_client.py",
+  "services/common/meta.py",
+  "services/common/pagination.py",
+  "services/common/tenants.py",
+  "services/common/url_utils.py",
+  "services/common/visibility.py",
+  "services/secrets/provider.py",
+  "services/secrets/vault_client.py",
+]
+tests_dir = ["tests/test_url_utils.py"]
+do_not_mutate = [
+  "*/tests/*",
+  "*/mutants/*",
+  "*/openapi.json",
+  "*/openapi.yaml",
+  "*/assets/*",
+  "*/configs/*",
+  "*/migrations/*",
+]
+pytest_add_cli_args = ["-q"]
+mutate_only_covered_lines = true
+
 [tool.coverage.run]
 branch = true
 omit = ["tests/*"]
