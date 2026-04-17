@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased] - 2026-04-17
+
+### Added
+
+- Added notifier mutation-testing configuration for `mutmut` and selective notifier test execution.
+
+### Changed
+
+- Added Apache license header blocks to notifier regression and middleware tests.
+
+### Fixed
+
+- Cleaned up notifier test assertions and deterministic state handling in edge-case regression tests.
+
 ## [v0.0.4] - 2026-04-14
 
 ### Added
