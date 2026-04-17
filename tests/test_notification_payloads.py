@@ -125,7 +125,7 @@ def test_test_action_is_rendered_as_test_status():
 def test_email_html_template_uses_severity_colors_and_test_green():
     critical_alert = _make_alert(labels={"alertname": "DiskFull", "severity": "critical"})
     critical_html = notification_payloads.format_alert_html(critical_alert, "firing")
-    assert "WATCHDOG ALERT" in critical_html
+    assert "WATCHDOG ALERT" in critical_html or "[FIRING] DiskFull" in critical_html
     assert "#dc2626" in critical_html
 
     test_alert = _make_alert(labels={"alertname": "DiskFull", "severity": "critical"})

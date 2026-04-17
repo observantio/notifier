@@ -298,7 +298,6 @@ def test_hybrid_and_database_edges(monkeypatch):
     assert deny.allowed is False and allow.allowed is True
     assert events
 
-    # Keep this assertion deterministic even if prior tests initialized a live engine.
     old_engine = db_mod._ENGINE
     db_mod._ENGINE = None
     try:
