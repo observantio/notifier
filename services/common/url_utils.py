@@ -4,7 +4,7 @@ that URLs have a scheme (defaulting to https:// if missing), and create configur
 to external services. This module provides common URL-related utilities that can be used across different parts of
 the application when working with URLs for external services, such as authentication providers or API endpoints.
 
-Copyright (c) 2026 Stefan Kumarasinghe
+Copyright (c) 2026 Stefan Kumarasinghe.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.

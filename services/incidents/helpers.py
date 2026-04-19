@@ -1,7 +1,7 @@
 """
 Incident helper functions for Notifier service - formatting descriptions, mapping severities, syncing notes to Jira,
 etc.
-Copyright (c) 2026 Stefan Kumarasinghe
+Copyright (c) 2026 Stefan Kumarasinghe.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
