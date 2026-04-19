@@ -53,48 +53,6 @@ class HttpPostRequest:
     retry_on_status: frozenset[int] | set[int] = DEFAULT_RETRY_ON_STATUS
 
 
-def _coerce_smtp_config(
-    smtp: SmtpDeliveryConfig | object | None,
-    legacy_args: tuple[object, ...],
-    legacy_kwargs: Mapping[str, object],
-) -> SmtpDeliveryConfig:
-    if isinstance(smtp, SmtpDeliveryConfig):
-        return smtp
-
-    values: list[object] = []
-    if smtp is not None:
-        values.append(smtp)
-    values.extend(legacy_args)
-
-    kwargs = dict(legacy_kwargs)
-    hostname_value = values[0] if values else kwargs.pop("hostname", "")
-    port_value = values[1] if len(values) > 1 else kwargs.pop("port", 0)
-    username_value = values[2] if len(values) > 2 else kwargs.pop("username", None)
-    password_value = values[3] if len(values) > 3 else kwargs.pop("password", None)
-    start_tls_value = values[4] if len(values) > 4 else kwargs.pop("start_tls", False)
-    use_tls_value = values[5] if len(values) > 5 else kwargs.pop("use_tls", False)
-
-    hostname = str(hostname_value or "").strip()
-    if not hostname:
-        raise ValueError("SMTP hostname is required")
-
-    try:
-        port = int(cast(int | str | bytes | bytearray, port_value))
-    except (TypeError, ValueError) as exc:
-        raise ValueError("SMTP port must be an integer") from exc
-
-    username = str(username_value).strip() if username_value is not None else ""
-
-    return SmtpDeliveryConfig(
-        hostname=hostname,
-        port=port,
-        username=username or None,
-        password=str(password_value) if password_value is not None else None,
-        start_tls=bool(start_tls_value),
-        use_tls=bool(use_tls_value),
-    )
-
-
 def _is_transient_http(exc: BaseException, retry_on_status: frozenset[int]) -> bool:
     if isinstance(exc, httpx.RequestError):
         return True
@@ -146,39 +104,20 @@ async def post_with_retry(request: HttpPostRequest) -> httpx.Response:
 )
 async def send_smtp_with_retry(
     message: EmailMessage,
-    *legacy_args: object,
-    smtp: SmtpDeliveryConfig | object | None = None,
-    **legacy_kwargs: object,
+    smtp: SmtpDeliveryConfig,
 ) -> object:
-    smtp_config = _coerce_smtp_config(smtp, legacy_args, legacy_kwargs)
     try:
         async with asyncio.timeout(config.default_timeout):
             smtp_send = cast(Any, aiosmtplib.send)
-            try:
-                return await smtp_send(
-                    message,
-                    hostname=smtp_config.hostname,
-                    port=smtp_config.port,
-                    username=smtp_config.username,
-                    password=smtp_config.password,
-                    start_tls=smtp_config.start_tls,
-                    use_tls=smtp_config.use_tls,
-                )
-            except TypeError as exc:
-                if "positional argument" not in str(exc):
-                    raise
-                kwargs = {
-                    "message": message,
-                    "hostname": smtp_config.hostname,
-                    "port": smtp_config.port,
-                    "username": smtp_config.username,
-                    "password": smtp_config.password,
-                    "start_tls": smtp_config.start_tls,
-                    "use_tls": smtp_config.use_tls,
-                }
-                return await smtp_send(
-                    **kwargs,
-                )
+            return await smtp_send(
+                message,
+                hostname=smtp.hostname,
+                port=smtp.port,
+                username=smtp.username,
+                password=smtp.password,
+                start_tls=smtp.start_tls,
+                use_tls=smtp.use_tls,
+            )
     except Exception as exc:
-        logger.warning("SMTP send failed, retrying: %s:%s (%s)", smtp_config.hostname, smtp_config.port, exc)
+        logger.warning("SMTP send failed, retrying: %s:%s (%s)", smtp.hostname, smtp.port, exc)
         raise

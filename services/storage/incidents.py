@@ -76,43 +76,19 @@ class IncidentAccessContext:
     require_write: bool = False
 
 
-def _coerce_incident_list_filters(
-    filters_or_group_ids: IncidentListFilters | list[str] | None,
-    legacy_kwargs: dict[str, object],
+def _coerce_incident_list_filters(  # pylint: disable=too-many-arguments,too-many-positional-arguments
+    group_ids: list[str] | None,
+    status: str | None,
+    visibility: str | None,
+    group_id: str | None,
+    limit: int | None,
+    offset: int,
 ) -> IncidentListFilters:
-    if isinstance(filters_or_group_ids, IncidentListFilters):
-        filters = filters_or_group_ids
-    else:
-        filters = IncidentListFilters(group_ids=filters_or_group_ids or [])
-
-    group_ids_raw = legacy_kwargs.pop("group_ids", filters.group_ids)
-    group_ids = [str(group_id).strip() for group_id in cast(list[object], group_ids_raw or []) if str(group_id).strip()]
-
-    status = legacy_kwargs.pop("status", filters.status)
-    visibility = legacy_kwargs.pop("visibility", filters.visibility)
-    group_id = legacy_kwargs.pop("group_id", filters.group_id)
-    limit_raw = legacy_kwargs.pop("limit", filters.limit)
-    offset_raw = legacy_kwargs.pop("offset", filters.offset)
-
-    limit: int | None
-    if limit_raw is None:
-        limit = None
-    else:
-        try:
-            limit = int(cast(int | str | bytes | bytearray, limit_raw))
-        except (TypeError, ValueError):
-            limit = filters.limit
-
-    try:
-        offset = int(cast(int | str | bytes | bytearray, offset_raw))
-    except (TypeError, ValueError):
-        offset = filters.offset
-
     return IncidentListFilters(
-        group_ids=group_ids,
-        status=cast(str | None, str(status) if isinstance(status, str) else status),
-        visibility=cast(str | None, str(visibility) if isinstance(visibility, str) else visibility),
-        group_id=cast(str | None, str(group_id) if isinstance(group_id, str) else group_id),
+        group_ids=[str(value).strip() for value in cast(list[object], group_ids or []) if str(value).strip()],
+        status=str(status) if isinstance(status, str) else status,
+        visibility=str(visibility) if isinstance(visibility, str) else visibility,
+        group_id=str(group_id) if isinstance(group_id, str) else group_id,
         limit=limit,
         offset=offset,
     )
@@ -228,13 +204,24 @@ class IncidentStorageService:
                 _resolve_incidents_without_active_alerts(db, tenant_id, now, active_incident_tokens)
 
     @staticmethod
-    def list_incidents(
+    def list_incidents(  # pylint: disable=too-many-arguments,too-many-positional-arguments
         tenant_id: str,
         user_id: str,
-        filters_or_group_ids: IncidentListFilters | list[str] | None = None,
-        **legacy_kwargs: object,
+        group_ids: list[str] | None = None,
+        status: str | None = None,
+        visibility: str | None = None,
+        group_id: str | None = None,
+        limit: int | None = None,
+        offset: int = 0,
     ) -> list[AlertIncident]:
-        filters = _coerce_incident_list_filters(filters_or_group_ids, dict(legacy_kwargs))
+        filters = _coerce_incident_list_filters(
+            group_ids=group_ids,
+            status=status,
+            visibility=visibility,
+            group_id=group_id,
+            limit=limit,
+            offset=offset,
+        )
         group_ids = filters.group_ids
         capped_limit, capped_offset = cap_pagination(filters.limit, filters.offset)
 
@@ -433,28 +420,15 @@ class IncidentStorageService:
         if notes != list(incident.notes or []):
             incident.notes = notes
 
-    def update_incident(
+    def update_incident(  # pylint: disable=too-many-arguments,too-many-positional-arguments
         self,
         incident_id: str,
         tenant_id: str,
-        payload_or_user_id: AlertIncidentUpdateRequest | str,
-        *legacy_args: object,
-        actor: IncidentActorContext | None = None,
+        user_id: str,
+        payload: AlertIncidentUpdateRequest,
+        group_ids: list[str] | None = None,
+        user_email: str | None = None,
     ) -> AlertIncident | None:
-        group_ids: list[str] | None
-        if actor is not None:
-            payload = cast(AlertIncidentUpdateRequest, payload_or_user_id)
-            user_id = str(actor.user_id)
-            group_ids = actor.group_ids
-            user_email = actor.user_email
-        else:
-            user_id = str(payload_or_user_id)
-            if not legacy_args:
-                raise TypeError("payload is required")
-            payload = cast(AlertIncidentUpdateRequest, legacy_args[0])
-            group_ids = cast(list[str] | None, legacy_args[1] if len(legacy_args) > 1 else None)
-            user_email = cast(str | None, legacy_args[2] if len(legacy_args) > 2 else None)
-
         user_group_ids = [str(g).strip() for g in (group_ids or []) if str(g).strip()]
         with get_db_session() as db:
             incident = (
@@ -483,13 +457,13 @@ class IncidentStorageService:
             ):
                 return None
 
-            actor_context = IncidentActorContext(user_id=user_id, group_ids=user_group_ids, user_email=user_email)
+            actor_context = IncidentActorContext(user_id=str(user_id), group_ids=user_group_ids, user_email=user_email)
             IncidentStorageService._apply_incident_assignee(payload, incident, visibility, actor_context)
             manual_manage_flag, resolved_note_text = IncidentStorageService._apply_incident_status(
-                payload, incident, previous_status, user_id
+                payload, incident, previous_status, str(user_id)
             )
-            IncidentStorageService._apply_incident_metadata(payload, incident, user_id, manual_manage_flag)
-            IncidentStorageService._apply_incident_notes(payload, incident, user_id, resolved_note_text)
+            IncidentStorageService._apply_incident_metadata(payload, incident, str(user_id), manual_manage_flag)
+            IncidentStorageService._apply_incident_notes(payload, incident, str(user_id), resolved_note_text)
 
             db.flush()
             return incident_to_pydantic(incident)

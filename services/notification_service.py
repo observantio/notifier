@@ -17,8 +17,6 @@ from email.message import EmailMessage
 from html import escape as html_escape
 from pathlib import Path
 from string import Template
-from typing import cast
-
 import aiosmtplib
 
 from config import config
@@ -107,43 +105,11 @@ class NotificationService:
     async def _send_smtp_with_retry(
         self,
         message: EmailMessage,
-        *legacy_args: object,
-        smtp: notification_transport.SmtpDeliveryConfig | None = None,
-        **legacy_kwargs: object,
+        smtp: notification_transport.SmtpDeliveryConfig,
     ) -> object:
-        smtp_config = smtp
-        if smtp_config is None:
-            values = list(legacy_args)
-            hostname = str(values[0] if values else legacy_kwargs.get("hostname") or "").strip()
-            if not hostname:
-                raise ValueError("SMTP hostname is required")
-            try:
-                port_value = values[1] if len(values) > 1 else legacy_kwargs.get("port") or 0
-                port = int(cast(int | str | bytes | bytearray, port_value))
-            except (TypeError, ValueError) as exc:
-                raise ValueError("SMTP port must be an integer") from exc
-            smtp_config = notification_transport.SmtpDeliveryConfig(
-                hostname=hostname,
-                port=port,
-                username=(str(values[2] if len(values) > 2 else legacy_kwargs.get("username") or "").strip() or None),
-                password=(
-                    str(values[3])
-                    if len(values) > 3 and values[3] is not None
-                    else str(legacy_kwargs.get("password"))
-                    if legacy_kwargs.get("password") is not None
-                    else None
-                ),
-                start_tls=bool(values[4] if len(values) > 4 else legacy_kwargs.get("start_tls", False)),
-                use_tls=bool(values[5] if len(values) > 5 else legacy_kwargs.get("use_tls", False)),
-            )
         return await notification_transport.send_smtp_with_retry(
-            message,
-            hostname=smtp_config.hostname,
-            port=smtp_config.port,
-            username=smtp_config.username,
-            password=smtp_config.password,
-            start_tls=smtp_config.start_tls,
-            use_tls=smtp_config.use_tls,
+            message=message,
+            smtp=smtp,
         )
 
     async def send_notification(self, channel: NotificationChannel, alert: Alert, action: str = "firing") -> bool:

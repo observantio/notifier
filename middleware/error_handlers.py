@@ -13,7 +13,7 @@ import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from functools import wraps
-from typing import TypeVar, cast
+from typing import TypeVar
 
 import httpx
 from fastapi import HTTPException, Request, status
@@ -22,7 +22,6 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 logger = logging.getLogger(__name__)
 RouteResult = TypeVar("RouteResult")
-_MISSING = object()
 
 
 @dataclass(frozen=True)
@@ -36,21 +35,10 @@ def _coerce_route_error_response(
     *,
     default_detail: str | None,
     default_status_code: int,
-    detail_override: object,
-    status_override: object,
 ) -> RouteErrorResponse:
-    detail = current.detail if current else default_detail
-    status_code = current.status_code if current else default_status_code
-
-    if detail_override is not _MISSING:
-        detail = str(detail_override) if detail_override is not None else None
-    if status_override is not _MISSING:
-        try:
-            status_code = int(cast(int | str | bytes | bytearray, status_override))
-        except (TypeError, ValueError):
-            status_code = default_status_code
-
-    return RouteErrorResponse(detail=detail, status_code=status_code)
+    if current is None:
+        return RouteErrorResponse(detail=default_detail, status_code=default_status_code)
+    return RouteErrorResponse(detail=current.detail, status_code=current.status_code)
 
 
 def handle_route_errors(
@@ -60,21 +48,16 @@ def handle_route_errors(
     bad_gateway_exceptions: tuple[type[Exception], ...] = (httpx.HTTPError,),
     bad_gateway: RouteErrorResponse | None = None,
     internal: RouteErrorResponse | None = None,
-    **legacy_kwargs: object,
 ) -> Callable[[Callable[..., Awaitable[RouteResult]]], Callable[..., Awaitable[RouteResult]]]:
     bad_gateway_response = _coerce_route_error_response(
         bad_gateway,
         default_detail="Upstream request failed",
         default_status_code=status.HTTP_502_BAD_GATEWAY,
-        detail_override=legacy_kwargs.pop("bad_gateway_detail", _MISSING),
-        status_override=legacy_kwargs.pop("bad_gateway_status_code", _MISSING),
     )
     internal_response = _coerce_route_error_response(
         internal,
         default_detail="Internal server error",
         default_status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        detail_override=legacy_kwargs.pop("internal_detail", _MISSING),
-        status_override=legacy_kwargs.pop("internal_status_code", _MISSING),
     )
 
     def decorator(func: Callable[..., Awaitable[RouteResult]]) -> Callable[..., Awaitable[RouteResult]]:

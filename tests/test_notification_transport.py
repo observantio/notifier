@@ -31,7 +31,15 @@ def test_send_smtp_with_retry_calls_aiosmtplib(monkeypatch):
 
     result = asyncio.run(
         transport.send_smtp_with_retry(
-            message="m", hostname="h", port=25, username=None, password=None, start_tls=False, use_tls=False
+            message="m",
+            smtp=transport.SmtpDeliveryConfig(
+                hostname="h",
+                port=25,
+                username=None,
+                password=None,
+                start_tls=False,
+                use_tls=False,
+            ),
         )
     )
     assert result == "ok"
