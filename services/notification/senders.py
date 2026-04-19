@@ -99,7 +99,9 @@ async def _send_json(
         return False
 
     try:
-        await transport.post_with_retry(client, url, json=payload, headers=headers)
+        await transport.post_with_retry(
+            transport.HttpPostRequest(client=client, url=url, json=payload, headers=headers)
+        )
         return True
     except httpx.HTTPStatusError as exc:
         logger.warning("Webhook failed [%s]: %s", exc.response.status_code, url)

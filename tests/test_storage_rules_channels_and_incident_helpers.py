@@ -140,6 +140,10 @@ def _channel(**kwargs):
 
 def test_rule_helpers_and_delivery_lookup(monkeypatch):
     svc = rules_mod.RuleStorageService()
+    assert rules_mod.RuleStorageService._page_request(None).limit is None
+    assert rules_mod.RuleStorageService._access_context("user-1", ["g1"]).group_ids == ["g1"]
+    existing_access = rules_mod.RuleAccessContext(user_id="u2", group_ids=["g2"])
+    assert rules_mod.RuleStorageService._access_context(existing_access) is existing_access
     shared = SimpleNamespace(id="g1")
     rule_private = _rule(shared_groups=[shared])
     assert rules_mod._shared_group_ids(rule_private) == ["g1"]
@@ -175,11 +179,20 @@ def test_rule_storage_crud_and_visibility(monkeypatch):
     rule2 = _rule(id="rule-2", visibility="group", shared_groups=[SimpleNamespace(id="g2")])
     access_calls = []
 
-    def fake_has_access(visibility, creator_id, user_id, shared_group_ids, group_ids, require_write=False):
-        access_calls.append((visibility, creator_id, user_id, tuple(shared_group_ids), tuple(group_ids), require_write))
-        if require_write:
-            return visibility != "group"
-        return visibility != "group"
+    def fake_has_access(check):
+        access_calls.append(
+            (
+                check.visibility,
+                check.created_by,
+                check.user_id,
+                tuple(check.shared_group_ids),
+                tuple(check.user_group_ids),
+                check.require_write,
+            )
+        )
+        if check.require_write:
+            return check.visibility != "group"
+        return check.visibility != "group"
 
     monkeypatch.setattr(rules_mod, "has_access", fake_has_access)
     monkeypatch.setattr(rules_mod, "cap_pagination", lambda limit, offset: (limit or 50, offset))
@@ -194,10 +207,18 @@ def test_rule_storage_crud_and_visibility(monkeypatch):
         {"id": "rule-1", "visibility": "public"},
         {"id": "rule-2", "visibility": "group"},
     ]
-    assert svc.get_alert_rules("tenant", "user", ["g1"], limit=10, offset=2) == [
+    assert svc.get_alert_rules(
+        "tenant",
+        rules_mod.RuleAccessContext(user_id="user", group_ids=["g1"]),
+        rules_mod.PageRequest(limit=10, offset=2),
+    ) == [
         {"id": "rule-1", "visibility": "public"}
     ]
-    assert svc.get_alert_rules_with_owner("tenant", "user", ["g1"], limit=10, offset=2) == [
+    assert svc.get_alert_rules_with_owner(
+        "tenant",
+        rules_mod.RuleAccessContext(user_id="user", group_ids=["g1"]),
+        rules_mod.PageRequest(limit=10, offset=2),
+    ) == [
         ({"id": "rule-1", "visibility": "public"}, "owner")
     ]
     assert svc.get_alert_rule_raw("rule-1", "tenant") is rule1
@@ -260,25 +281,28 @@ def test_rule_storage_crud_and_visibility(monkeypatch):
         "rule-1",
         AlertRuleCreate.model_validate({"name": "New", "expression": "up", "severity": "warning", "groupName": "g"}),
         "tenant",
-        "owner",
-        ["g1"],
+        rules_mod.RuleAccessContext(user_id="owner", group_ids=["g1"]),
     )
     assert denied["name"] == "New"
 
-    monkeypatch.setattr(rules_mod, "has_access", lambda *_args, **kwargs: not kwargs.get("require_write", False))
+    monkeypatch.setattr(rules_mod, "has_access", lambda check: not check.require_write)
     blocked_db = FakeDB(_rule(id="rule-2", visibility="private"))
     monkeypatch.setattr(rules_mod, "get_db_session", lambda: FakeCtx(blocked_db))
-    assert svc.delete_alert_rule("rule-2", "tenant", "owner", ["g1"]) is False
+    assert svc.delete_alert_rule("rule-2", "tenant", rules_mod.RuleAccessContext(user_id="owner", group_ids=["g1"])) is False
 
-    monkeypatch.setattr(rules_mod, "has_access", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(rules_mod, "has_access", lambda _check: True)
     delete_db = FakeDB(_rule(id="rule-3", visibility="private"))
     monkeypatch.setattr(rules_mod, "get_db_session", lambda: FakeCtx(delete_db))
-    assert svc.delete_alert_rule("rule-3", "tenant", "owner", ["g1"]) is True
+    assert svc.delete_alert_rule("rule-3", "tenant", rules_mod.RuleAccessContext(user_id="owner", group_ids=["g1"])) is True
     assert len(delete_db.deleted) == 1
 
 
 def test_channel_helpers_and_storage_branches(monkeypatch):
     svc = channels_mod.ChannelStorageService()
+    assert channels_mod.ChannelStorageService._page_request(None).offset == 0
+    assert channels_mod.ChannelStorageService._access_context("user-1", ["g1"]).group_ids == ["g1"]
+    existing_access = channels_mod.ChannelAccessContext(user_id="u2", group_ids=["g2"])
+    assert channels_mod.ChannelStorageService._access_context(existing_access) is existing_access
     private_rule = _rule(visibility="private", created_by="owner")
     private_channel = _channel(visibility="private", created_by="owner")
     other_channel = _channel(id="chan-2", visibility="private", created_by="other")
@@ -304,7 +328,7 @@ def test_channel_helpers_and_storage_branches(monkeypatch):
     assert svc._rule_channel_compatible(_rule(visibility="public"), group_channel) is True
 
     monkeypatch.setattr(channels_mod, "cap_pagination", lambda limit, offset: (limit or 50, offset))
-    monkeypatch.setattr(channels_mod, "has_access", lambda visibility, *_args, **_kwargs: visibility != "group")
+    monkeypatch.setattr(channels_mod, "has_access", lambda check: check.visibility != "group")
     monkeypatch.setattr(channels_mod, "decrypt_config", lambda cfg: {**cfg, "decrypted": True})
     monkeypatch.setattr(channels_mod, "encrypt_config", lambda cfg: {**cfg, "encrypted": True})
     monkeypatch.setattr(channels_mod, "channel_to_pydantic", lambda obj: {"id": obj.id, "config": obj.config})
@@ -323,7 +347,11 @@ def test_channel_helpers_and_storage_branches(monkeypatch):
 
     db = FakeDB([private_channel, group_channel], private_channel)
     monkeypatch.setattr(channels_mod, "get_db_session", lambda: FakeCtx(db))
-    listed = svc.get_notification_channels("tenant", "user", ["g1"], limit=10, offset=1)
+    listed = svc.get_notification_channels(
+        "tenant",
+        channels_mod.ChannelAccessContext(user_id="user", group_ids=["g1"]),
+        channels_mod.PageRequest(limit=10, offset=1),
+    )
     assert listed == [
         {
             "id": "chan-1",
@@ -368,8 +396,7 @@ def test_channel_helpers_and_storage_branches(monkeypatch):
         "chan-1",
         NotificationChannelCreate.model_validate({"name": "Teams", "type": "teams", "config": {"hook": "1"}}),
         "tenant",
-        "owner",
-        ["g1"],
+        channels_mod.ChannelAccessContext(user_id="owner", group_ids=["g1"]),
     )
     assert updated["id"] == "chan-1"
 
@@ -380,7 +407,7 @@ def test_channel_helpers_and_storage_branches(monkeypatch):
             "chan-2",
             NotificationChannelCreate.model_validate({"name": "Nope", "type": "email", "config": {}}),
             "tenant",
-            "owner",
+            channels_mod.ChannelAccessContext(user_id="owner"),
         )
         is None
     )
@@ -391,23 +418,31 @@ def test_channel_helpers_and_storage_branches(monkeypatch):
         _channel(id="chan-4", created_by="owner"),
     )
     monkeypatch.setattr(channels_mod, "get_db_session", lambda: FakeCtx(delete_db))
-    assert svc.delete_notification_channel("chan-1", "tenant", "owner") is True
-    assert svc.delete_notification_channel("chan-3", "tenant", "owner") is False
+    assert svc.delete_notification_channel("chan-1", "tenant", channels_mod.ChannelAccessContext(user_id="owner")) is True
+    assert svc.delete_notification_channel("chan-3", "tenant", channels_mod.ChannelAccessContext(user_id="owner")) is False
 
     owner_db = FakeDB(_channel(id="chan-3", created_by="other"), _channel(id="chan-4", created_by="owner"))
     monkeypatch.setattr(channels_mod, "get_db_session", lambda: FakeCtx(owner_db))
-    assert svc.is_notification_channel_owner("chan-3", "tenant", "owner") is False
-    assert svc.is_notification_channel_owner("chan-4", "tenant", "owner") is True
+    assert svc.is_notification_channel_owner("chan-3", "tenant", channels_mod.ChannelAccessContext(user_id="owner")) is False
+    assert svc.is_notification_channel_owner("chan-4", "tenant", channels_mod.ChannelAccessContext(user_id="owner")) is True
 
-    monkeypatch.setattr(svc, "get_notification_channel", lambda *_args, **_kwargs: None)
-    assert svc.test_notification_channel("chan-1", "tenant", "owner") == {
+    monkeypatch.setattr(
+        channels_mod.ChannelStorageService,
+        "get_notification_channel",
+        staticmethod(lambda *_args, **_kwargs: None),
+    )
+    assert svc.test_notification_channel("chan-1", "tenant", channels_mod.ChannelAccessContext(user_id="owner")) == {
         "success": False,
         "error": "Channel not found",
     }
     monkeypatch.setattr(
-        svc, "get_notification_channel", lambda *_args, **_kwargs: SimpleNamespace(name="Slack", type="slack")
+        channels_mod.ChannelStorageService,
+        "get_notification_channel",
+        staticmethod(lambda *_args, **_kwargs: SimpleNamespace(name="Slack", type="slack")),
     )
-    assert svc.test_notification_channel("chan-1", "tenant", "owner")["success"] is True
+    assert svc.test_notification_channel("chan-1", "tenant", channels_mod.ChannelAccessContext(user_id="owner"))[
+        "success"
+    ] is True
 
     rule_with_specific = _rule(id="rule-a", notification_channels=["chan-1", "missing", "chan-2"], visibility="private")
     rule_no_specific = _rule(
@@ -452,7 +487,7 @@ def test_rule_storage_additional_edges(monkeypatch):
     monkeypatch.setattr(rules_mod, "get_db_session", lambda: FakeCtx(db))
     assert svc.get_alert_rule("missing", "tenant", "user", ["g1"]) is None
 
-    monkeypatch.setattr(rules_mod, "has_access", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(rules_mod, "has_access", lambda _check: True)
     db = FakeDB(_rule(id="r-visible", name="Visible"))
     monkeypatch.setattr(rules_mod, "get_db_session", lambda: FakeCtx(db))
     assert svc.get_alert_rule("r-visible", "tenant", "user", ["g1"]) == {
@@ -470,13 +505,12 @@ def test_rule_storage_additional_edges(monkeypatch):
                 {"name": "New", "expression": "up", "severity": "warning", "groupName": "g"}
             ),
             "tenant",
-            "user",
-            ["g1"],
+            rules_mod.RuleAccessContext(user_id="user", group_ids=["g1"]),
         )
         is None
     )
 
-    monkeypatch.setattr(rules_mod, "has_access", lambda *_args, **_kwargs: False)
+    monkeypatch.setattr(rules_mod, "has_access", lambda _check: False)
     db = FakeDB(_rule(id="r-no-read"))
     monkeypatch.setattr(rules_mod, "get_db_session", lambda: FakeCtx(db))
     assert (
@@ -486,13 +520,12 @@ def test_rule_storage_additional_edges(monkeypatch):
                 {"name": "New", "expression": "up", "severity": "warning", "groupName": "g"}
             ),
             "tenant",
-            "user",
-            ["g1"],
+            rules_mod.RuleAccessContext(user_id="user", group_ids=["g1"]),
         )
         is None
     )
 
-    monkeypatch.setattr(rules_mod, "has_access", lambda *_args, **kwargs: not kwargs.get("require_write", False))
+    monkeypatch.setattr(rules_mod, "has_access", lambda check: not check.require_write)
     db = FakeDB(_rule(id="r-no-write"))
     monkeypatch.setattr(rules_mod, "get_db_session", lambda: FakeCtx(db))
     assert (
@@ -502,15 +535,14 @@ def test_rule_storage_additional_edges(monkeypatch):
                 {"name": "New", "expression": "up", "severity": "warning", "groupName": "g"}
             ),
             "tenant",
-            "user",
-            ["g1"],
+            rules_mod.RuleAccessContext(user_id="user", group_ids=["g1"]),
         )
         is None
     )
 
     db = FakeDB(None)
     monkeypatch.setattr(rules_mod, "get_db_session", lambda: FakeCtx(db))
-    assert svc.delete_alert_rule("missing", "tenant", "user", ["g1"]) is False
+    assert svc.delete_alert_rule("missing", "tenant", rules_mod.RuleAccessContext(user_id="user", group_ids=["g1"])) is False
 
 
 def test_incident_run_async_falls_back_to_new_loop(monkeypatch):
@@ -575,11 +607,13 @@ async def test_incident_helpers_and_jira_side_effects(monkeypatch):
     assert incidents_core_mod._is_alert_suppressed({"status": {"state": "suppressed"}}) is True
     assert (
         incidents_mod._incident_access_allowed(
-            visibility="group",
-            creator_id="owner",
-            user_id="user",
-            shared_group_ids=["g1"],
-            user_group_ids=["g1"],
+            incidents_mod.AccessCheck(
+                visibility="group",
+                created_by="owner",
+                user_id="user",
+                shared_group_ids=["g1"],
+                user_group_ids=["g1"],
+            )
         )
         is True
     )
@@ -660,7 +694,7 @@ def test_incident_update_private_assignment_guard(monkeypatch):
     db = FakeDB(incident)
     monkeypatch.setattr(incidents_mod, "get_db_session", lambda: FakeCtx(db))
     monkeypatch.setattr(incidents_mod, "normalize_storage_visibility", lambda value: value)
-    monkeypatch.setattr(incidents_mod, "_incident_access_allowed", lambda **_kwargs: True)
+    monkeypatch.setattr(incidents_mod, "_incident_access_allowed", lambda _check: True)
     with pytest.raises(HTTPException) as exc:
         svc.update_incident(
             "inc-1",
@@ -701,7 +735,7 @@ def test_incident_storage_additional_edges(monkeypatch):
     )
     summary_db = FakeDB([summary_incident])
     monkeypatch.setattr(incidents_mod, "get_db_session", lambda: FakeCtx(summary_db))
-    monkeypatch.setattr(incidents_mod, "_incident_access_allowed", lambda **_kwargs: False)
+    monkeypatch.setattr(incidents_mod, "_incident_access_allowed", lambda _check: False)
     summary = svc.get_incident_summary("tenant", "user", ["g1"])
     assert summary["open_total"] == 0
 
@@ -749,7 +783,7 @@ def test_incident_storage_additional_edges(monkeypatch):
     list_db = FakeDB([incident_private])
     monkeypatch.setattr(incidents_mod, "get_db_session", lambda: FakeCtx(list_db))
     monkeypatch.setattr(incidents_mod, "cap_pagination", lambda limit, offset: (limit or 50, offset))
-    monkeypatch.setattr(incidents_mod, "_incident_access_allowed", lambda **_kwargs: False)
+    monkeypatch.setattr(incidents_mod, "_incident_access_allowed", lambda _check: False)
     assert svc.list_incidents("tenant", "user", ["g1"]) == []
 
     incident_public = SimpleNamespace(
@@ -760,7 +794,7 @@ def test_incident_storage_additional_edges(monkeypatch):
     )
     list_db = FakeDB([incident_public])
     monkeypatch.setattr(incidents_mod, "get_db_session", lambda: FakeCtx(list_db))
-    monkeypatch.setattr(incidents_mod, "_incident_access_allowed", lambda **_kwargs: True)
+    monkeypatch.setattr(incidents_mod, "_incident_access_allowed", lambda _check: True)
     monkeypatch.setattr(incidents_mod, "incident_to_pydantic", lambda incident: {"id": incident.id})
     assert svc.list_incidents("tenant", "user", ["g1"], group_id=None) == [{"id": "inc-public"}]
     assert svc.list_incidents("tenant", "user", ["g1"], group_id="g1") == []
@@ -771,9 +805,13 @@ def test_incident_storage_additional_edges(monkeypatch):
     )
     get_db = FakeDB(invalid_visibility_incident)
     monkeypatch.setattr(incidents_mod, "get_db_session", lambda: FakeCtx(get_db))
-    monkeypatch.setattr(incidents_mod, "_incident_access_allowed", lambda **_kwargs: True)
+    monkeypatch.setattr(incidents_mod, "_incident_access_allowed", lambda _check: True)
     monkeypatch.setattr(incidents_mod, "incident_to_pydantic", lambda incident: {"id": incident.id})
-    assert svc.get_incident_for_user("inc-invalid-visibility", "tenant", user_id="user") == {
+    assert svc.get_incident_for_user(
+        "inc-invalid-visibility",
+        "tenant",
+        incidents_mod.IncidentAccessContext(user_id="user"),
+    ) == {
         "id": "inc-invalid-visibility"
     }
 
@@ -789,7 +827,7 @@ def test_incident_storage_additional_edges(monkeypatch):
     update_db = FakeDB(incident_for_update)
     monkeypatch.setattr(incidents_mod, "get_db_session", lambda: FakeCtx(update_db))
     monkeypatch.setattr(incidents_mod, "normalize_storage_visibility", lambda value: value)
-    monkeypatch.setattr(incidents_mod, "_incident_access_allowed", lambda **_kwargs: True)
+    monkeypatch.setattr(incidents_mod, "_incident_access_allowed", lambda _check: True)
     monkeypatch.setattr(
         incidents_mod,
         "incident_to_pydantic",

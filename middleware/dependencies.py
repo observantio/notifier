@@ -16,6 +16,7 @@ import secrets
 import threading
 import time
 from collections.abc import Callable
+from dataclasses import dataclass
 from functools import lru_cache
 from ipaddress import IPv4Network, IPv6Network, ip_address, ip_network
 
@@ -209,23 +210,30 @@ def require_any_permission_with_scope(permissions: list[Permission | str], scope
     return dependency
 
 
-def enforce_public_endpoint_security(
-    request: Request,
-    *,
-    scope: str,
-    limit: int,
-    window_seconds: int,
-    allowlist: str | None = None,
-    fallback_mode: str | None = None,
-) -> None:
+@dataclass(frozen=True)
+class PublicEndpointSecurityConfig:
+    scope: str
+    limit: int
+    window_seconds: int
+    allowlist: str | None = None
+    fallback_mode: str | None = None
+
+
+def enforce_public_endpoint_security(request: Request, config_data: PublicEndpointSecurityConfig) -> None:
     resolved_ip = client_ip(request)
     if config.require_client_ip_for_public_endpoints and resolved_ip == "unknown":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"Access denied for {scope}: client IP resolution failed",
+            detail=f"Access denied for {config_data.scope}: client IP resolution failed",
         )
-    enforce_ip_rate_limit(request, scope=scope, limit=limit, window_seconds=window_seconds, fallback_mode=fallback_mode)
-    _enforce_ip_allowlist(request, allowlist, scope=scope)
+    enforce_ip_rate_limit(
+        request,
+        scope=config_data.scope,
+        limit=config_data.limit,
+        window_seconds=config_data.window_seconds,
+        fallback_mode=config_data.fallback_mode,
+    )
+    _enforce_ip_allowlist(request, config_data.allowlist, scope=config_data.scope)
 
 
 def _enforce_ip_allowlist(request: Request, allowlist: str | None, *, scope: str) -> None:

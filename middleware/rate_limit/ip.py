@@ -41,17 +41,19 @@ def client_ip(request: Request) -> str:
         if not validated:
             return False
 
+        is_trusted = False
         try:
             peer_ip = ip_address(validated)
             for cidr in trusted_cidrs:
                 try:
                     if peer_ip in ip_network(cidr, strict=False):
-                        return True
+                        is_trusted = True
+                        break
                 except ValueError:
                     continue
         except ValueError:
-            return False
-        return False
+            is_trusted = False
+        return is_trusted
 
     if _trusted_proxy_peer():
         forwarded_for = (request.headers.get("x-forwarded-for") or "").strip()

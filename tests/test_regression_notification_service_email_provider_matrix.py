@@ -138,18 +138,18 @@ async def test_send_email_smtp_api_key_mode_sets_default_username(monkeypatch: p
     )
     captured = {}
 
-    def _build_message(_subject, _body, _from_addr, _recipients, _html_body):
+    def _build_message(_payload):
         msg = EmailMessage()
         msg["Subject"] = "subject"
         return msg
 
-    async def _send_smtp(_msg, host, port, username, password, start_tls, use_tls):
-        captured["host"] = host
-        captured["port"] = port
-        captured["username"] = username
-        captured["password"] = password
-        captured["start_tls"] = start_tls
-        captured["use_tls"] = use_tls
+    async def _send_smtp(_msg, smtp=None, **_kwargs):
+        captured["host"] = smtp.hostname
+        captured["port"] = smtp.port
+        captured["username"] = smtp.username
+        captured["password"] = smtp.password
+        captured["start_tls"] = smtp.start_tls
+        captured["use_tls"] = smtp.use_tls
         return True
 
     monkeypatch.setattr(notification_mod.notification_email, "build_smtp_message", _build_message)
@@ -183,13 +183,13 @@ async def test_send_email_smtp_none_auth_clears_credentials_and_uses_default_por
     )
     captured = {}
 
-    def _build_message(_subject, _body, _from_addr, _recipients, _html_body):
+    def _build_message(_payload):
         return EmailMessage()
 
-    async def _send_smtp(_msg, _host, port, username, password, _start_tls, _use_tls):
-        captured["port"] = port
-        captured["username"] = username
-        captured["password"] = password
+    async def _send_smtp(_msg, smtp=None, **_kwargs):
+        captured["port"] = smtp.port
+        captured["username"] = smtp.username
+        captured["password"] = smtp.password
         return True
 
     monkeypatch.setattr(notification_mod.notification_email, "build_smtp_message", _build_message)

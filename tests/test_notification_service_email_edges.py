@@ -21,6 +21,7 @@ ensure_test_env()
 
 from config import config
 from services import notification_service as notification_mod
+from services.notification_service import IncidentAssignmentEmail
 from services.notification_service import NotificationService
 
 
@@ -52,7 +53,12 @@ async def test_incident_assignment_email_paths(monkeypatch):
     monkeypatch.setattr(config, "default_admin_email", "admin@example.com")
 
     monkeypatch.setattr(notification_mod.config, "get_secret", lambda key: None)
-    assert await svc.send_incident_assignment_email("u@example.com", "CPU", "open", "critical", "admin") is False
+    assert (
+        await svc.send_incident_assignment_email(
+            IncidentAssignmentEmail("u@example.com", "CPU", "open", "critical", "admin")
+        )
+        is False
+    )
 
     monkeypatch.setattr(
         notification_mod.config,
@@ -62,11 +68,16 @@ async def test_incident_assignment_email_paths(monkeypatch):
             "INCIDENT_ASSIGNMENT_SMTP_PORT": "bad-port",
         }.get(key),
     )
-    assert await svc.send_incident_assignment_email("u@example.com", "CPU", "open", "critical", "admin") is False
+    assert (
+        await svc.send_incident_assignment_email(
+            IncidentAssignmentEmail("u@example.com", "CPU", "open", "critical", "admin")
+        )
+        is False
+    )
 
-    async def fake_send(*, message, hostname, port, username=None, password=None, start_tls=False, use_tls=False):
-        assert hostname == "smtp.example.com"
-        assert port == 587
+    async def fake_send(*, message, smtp, **_kwargs):
+        assert smtp.hostname == "smtp.example.com"
+        assert smtp.port == 587
         assert message["To"] == "u@example.com"
 
     monkeypatch.setattr(
@@ -80,13 +91,23 @@ async def test_incident_assignment_email_paths(monkeypatch):
         }.get(key),
     )
     monkeypatch.setattr(svc, "_send_smtp_with_retry", fake_send)
-    assert await svc.send_incident_assignment_email("u@example.com", "CPU", "open", "critical", "admin") is True
+    assert (
+        await svc.send_incident_assignment_email(
+            IncidentAssignmentEmail("u@example.com", "CPU", "open", "critical", "admin")
+        )
+        is True
+    )
 
     async def fail_send(**_kwargs):
         raise OSError("smtp down")
 
     monkeypatch.setattr(svc, "_send_smtp_with_retry", fail_send)
-    assert await svc.send_incident_assignment_email("u@example.com", "CPU", "open", "critical", "admin") is False
+    assert (
+        await svc.send_incident_assignment_email(
+            IncidentAssignmentEmail("u@example.com", "CPU", "open", "critical", "admin")
+        )
+        is False
+    )
 
 
 def test_notification_service_html_template_and_theme_paths(monkeypatch):
@@ -121,19 +142,21 @@ async def test_incident_assignment_email_skips_html_alternative_when_template_mi
 
     captured = {}
 
-    async def fake_send(*, message, hostname, port, username=None, password=None, start_tls=False, use_tls=False):
-        captured["hostname"] = hostname
-        captured["port"] = port
+    async def fake_send(*, message, smtp, **_kwargs):
+        captured["hostname"] = smtp.hostname
+        captured["port"] = smtp.port
         captured["is_multipart"] = message.is_multipart()
 
     monkeypatch.setattr(svc, "_send_smtp_with_retry", fake_send)
 
     result = await svc.send_incident_assignment_email(
-        "u@example.com",
-        "CPU",
-        "open",
-        "warning",
-        "admin",
+        IncidentAssignmentEmail(
+            "u@example.com",
+            "CPU",
+            "open",
+            "warning",
+            "admin",
+        )
     )
 
     assert result is True

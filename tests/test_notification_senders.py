@@ -33,9 +33,9 @@ def _make_alert():
 def test_send_slack_calls_transport(monkeypatch):
     called = {}
 
-    async def fake_post(client, url, json=None, headers=None, params=None):
-        called["url"] = url
-        called["json"] = json
+    async def fake_post(request):
+        called["url"] = str(request.url)
+        called["json"] = request.json
         return httpx.Response(200)
 
     monkeypatch.setattr(transport, "post_with_retry", fake_post)
@@ -56,8 +56,8 @@ def test_send_slack_invalid_url_returns_false():
 def test_send_webhook_and_pagerduty(monkeypatch):
     calls = []
 
-    async def fake_post(client, url, json=None, headers=None, params=None):
-        calls.append((url, json, headers))
+    async def fake_post(request):
+        calls.append((str(request.url), request.json, request.headers))
         return httpx.Response(200)
 
     monkeypatch.setattr(transport, "post_with_retry", fake_post)

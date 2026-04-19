@@ -31,8 +31,8 @@ def _make_alert():
 
 
 def test_send_webhook_handles_http_status_error(monkeypatch):
-    async def fake_post(client, url, json=None, headers=None, params=None):
-        req = httpx.Request("POST", url)
+    async def fake_post(request):
+        req = httpx.Request("POST", str(request.url))
         resp = httpx.Response(405, request=req)
         raise httpx.HTTPStatusError("Client error", request=req, response=resp)
 
@@ -44,7 +44,7 @@ def test_send_webhook_handles_http_status_error(monkeypatch):
 
 
 def test_send_webhook_handles_request_error(monkeypatch):
-    async def fake_post(client, url, json=None, headers=None, params=None):
+    async def fake_post(request):
         raise httpx.RequestError("network down")
 
     monkeypatch.setattr(transport, "post_with_retry", fake_post)

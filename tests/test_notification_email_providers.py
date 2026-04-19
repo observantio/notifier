@@ -23,7 +23,7 @@ from services.notification import email_providers, transport
 
 def test_build_smtp_message():
     msg = email_providers.build_smtp_message(
-        "subj", "body", "from@example.com", ["a@b.com", "c@d.com"], "<b>body</b>"
+        email_providers.EmailDeliveryPayload("subj", "body", ["a@b.com", "c@d.com"], "from@example.com", "<b>body</b>")
     )
     assert isinstance(msg, EmailMessage)
     assert msg["Subject"] == "subj"
@@ -32,10 +32,10 @@ def test_build_smtp_message():
 
 
 def test_send_via_sendgrid_and_resend_success_and_failure(monkeypatch):
-    async def ok_post(client, url, json=None, headers=None, params=None, **kwargs):
+    async def ok_post(_request):
         return httpx.Response(202)
 
-    async def fail_post(client, url, json=None, headers=None, params=None, **kwargs):
+    async def fail_post(_request):
         raise Exception("boom")
 
     monkeypatch.setattr(transport, "post_with_retry", ok_post)
@@ -66,8 +66,8 @@ def test_send_via_smtp_calls_transport(monkeypatch):
 def test_sendgrid_and_resend_include_html_payload_when_provided(monkeypatch):
     captured = {}
 
-    async def capture_post(client, url, json=None, headers=None, params=None, **kwargs):
-        captured[url] = json
+    async def capture_post(request):
+        captured[str(request.url)] = request.json
         return httpx.Response(202)
 
     monkeypatch.setattr(transport, "post_with_retry", capture_post)

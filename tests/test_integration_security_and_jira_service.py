@@ -26,7 +26,7 @@ ensure_test_env()
 
 from models.access.auth_models import Role, TokenData
 from services.alerting import integration_security_service as sec_mod
-from services.jira_service import JiraError, JiraService, _extract_display_name
+from services.jira_service import JiraError, JiraIssueCreateRequest, JiraRequest, JiraService, _extract_display_name
 
 
 class FakeQuery:
@@ -193,7 +193,14 @@ def test_secret_storage_config_and_visibility_helpers(monkeypatch):
     db = FakeDB(tenant)
     monkeypatch.setattr(sec_mod, "get_db_session", lambda: FakeCtx(db))
     result = sec_mod.save_tenant_jira_config(
-        "tenant-a", enabled=True, base_url="https://jira", email="a@b.c", api_token="secret", bearer=None
+        "tenant-a",
+        sec_mod.JiraTenantConfigUpdate(
+            enabled=True,
+            base_url="https://jira",
+            email="a@b.c",
+            api_token="secret",
+            bearer=None,
+        ),
     )
     assert result["hasApiToken"] is True
     assert db.flushed == 1
@@ -202,7 +209,14 @@ def test_secret_storage_config_and_visibility_helpers(monkeypatch):
     monkeypatch.setattr(sec_mod, "get_db_session", lambda: FakeCtx(db))
     with pytest.raises(HTTPException):
         sec_mod.save_tenant_jira_config(
-            "missing", enabled=False, base_url=None, email=None, api_token=None, bearer=None
+            "missing",
+            sec_mod.JiraTenantConfigUpdate(
+                enabled=False,
+                base_url=None,
+                email=None,
+                api_token=None,
+                bearer=None,
+            ),
         )
 
     monkeypatch.setattr(
@@ -388,7 +402,12 @@ async def test_jira_service_auth_headers_and_request_paths(monkeypatch):
         )
     ) == {"key": "OPS-1"}
     created = await service.create_issue(
-        "OPS", "Summary", "Desc", credentials={"base_url": "https://jira", "authMode": "bearer", "bearer": "abc"}
+        JiraIssueCreateRequest(
+            project_key="OPS",
+            summary="Summary",
+            options="Desc",
+            credentials={"base_url": "https://jira", "authMode": "bearer", "bearer": "abc"},
+        )
     )
     assert created["key"] == "OPS-1"
 
@@ -442,12 +461,14 @@ async def test_jira_service_higher_level_helpers_and_errors(monkeypatch):
     service._client = ErrClient()
     with pytest.raises(JiraError):
         await service._request(
-            "GET", "/rest/api/2/project", {"base_url": "https://jira", "authMode": "bearer", "bearer": "abc"}
+            JiraRequest("GET", "/rest/api/2/project", {"base_url": "https://jira", "authMode": "bearer", "bearer": "abc"})
         )
     with pytest.raises(JiraError):
         await service._request(
-            "POST",
-            "/rest/api/2/project",
-            {"base_url": "https://jira", "authMode": "bearer", "bearer": "abc"},
-            payload={},
+            JiraRequest(
+                "POST",
+                "/rest/api/2/project",
+                {"base_url": "https://jira", "authMode": "bearer", "bearer": "abc"},
+                payload={},
+            )
         )

@@ -6,7 +6,11 @@ from middleware.error_handlers import handle_route_errors
 from middleware.openapi import BAD_REQUEST_ERRORS, NOT_FOUND_ERRORS, merge_responses
 from models.access.auth_models import Permission, TokenData
 from models.alerting.requests import JiraConfigUpdateRequest
-from services.alerting.integration_security_service import load_tenant_jira_config, save_tenant_jira_config
+from services.alerting.integration_security_service import (
+    JiraTenantConfigUpdate,
+    load_tenant_jira_config,
+    save_tenant_jira_config,
+)
 
 router = APIRouter(tags=["alertmanager-jira"])
 
@@ -53,10 +57,12 @@ async def update_jira_config(
 ) -> JSONDict:
     saved = save_tenant_jira_config(
         current_user.tenant_id,
-        enabled=bool(payload.enabled),
-        base_url=payload.baseUrl,
-        email=payload.email,
-        api_token=payload.apiToken,
-        bearer=payload.bearerToken,
+        JiraTenantConfigUpdate(
+            enabled=bool(payload.enabled),
+            base_url=payload.baseUrl,
+            email=payload.email,
+            api_token=payload.apiToken,
+            bearer=payload.bearerToken,
+        ),
     )
     return _jira_config_payload(saved)

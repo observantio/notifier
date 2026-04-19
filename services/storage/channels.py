@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import logging
 import uuid
+from dataclasses import dataclass, field
 
 from sqlalchemy.orm import joinedload
 
@@ -22,7 +23,7 @@ from database import get_db_session
 from db_models import AlertRule as AlertRuleDB
 from db_models import NotificationChannel as NotificationChannelDB
 from models.alerting.channels import NotificationChannel, NotificationChannelCreate
-from services.common.access import assign_shared_groups, has_access
+from services.common.access import AccessCheck, SharedGroupAssignment, assign_shared_groups, has_access
 from services.common.encryption import decrypt_config, encrypt_config
 from services.common.pagination import cap_pagination
 from services.common.tenants import ensure_tenant_exists
@@ -49,7 +50,34 @@ def _config_dict(channel: NotificationChannelDB) -> JSONDict:
     return raw_config if isinstance(raw_config, dict) else {}
 
 
+@dataclass(frozen=True)
+class ChannelAccessContext:
+    user_id: str
+    group_ids: list[str] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class PageRequest:
+    limit: int | None = None
+    offset: int = 0
+
+
 class ChannelStorageService:
+    @staticmethod
+    def _access_context(
+        access: ChannelAccessContext | str,
+        group_ids: list[str] | None = None,
+    ) -> ChannelAccessContext:
+        if isinstance(access, ChannelAccessContext):
+            return access
+        return ChannelAccessContext(user_id=str(access), group_ids=list(group_ids or []))
+
+    @staticmethod
+    def _page_request(value: PageRequest | list[str] | None) -> PageRequest:
+        if isinstance(value, PageRequest):
+            return value
+        return PageRequest()
+
     @staticmethod
     def _rule_channel_compatible(rule: AlertRuleDB, channel: NotificationChannelDB) -> bool:
         rule_visibility = normalize_storage_visibility(getattr(rule, "visibility", None))
@@ -76,16 +104,19 @@ class ChannelStorageService:
         # Tenant/public rules can trigger private, group, and public channels.
         return channel_visibility in {"private", "group", "public"}
 
+    @staticmethod
     def get_notification_channels(
-        self,
         tenant_id: str,
-        user_id: str,
-        group_ids: list[str] | None = None,
-        limit: int | None = None,
-        offset: int = 0,
+        access: ChannelAccessContext | str,
+        page_or_group_ids: PageRequest | list[str] | None = None,
     ) -> list[NotificationChannel]:
-        group_ids = group_ids or []
-        capped_limit, capped_offset = cap_pagination(limit, offset)
+        context = ChannelStorageService._access_context(
+            access,
+            group_ids=page_or_group_ids if isinstance(page_or_group_ids, list) else None,
+        )
+        group_ids = list(context.group_ids or [])
+        paging = ChannelStorageService._page_request(page_or_group_ids)
+        capped_limit, capped_offset = cap_pagination(paging.limit, paging.offset)
 
         with get_db_session() as db:
             channels = (
@@ -100,27 +131,31 @@ class ChannelStorageService:
             results: list[NotificationChannel] = []
             for ch in channels:
                 if not has_access(
-                    _visibility_of(ch),
-                    _creator_of(ch),
-                    user_id,
-                    _shared_group_ids(ch),
-                    group_ids,
+                    AccessCheck(
+                        visibility=_visibility_of(ch),
+                        created_by=_creator_of(ch),
+                        user_id=context.user_id,
+                        shared_group_ids=_shared_group_ids(ch),
+                        user_group_ids=group_ids,
+                    )
                 ):
                     continue
                 raw_cfg = decrypt_config(_config_dict(ch))
                 ch.config = raw_cfg
-                results.append(channel_to_pydantic_for_viewer(ch, user_id))
+                results.append(channel_to_pydantic_for_viewer(ch, context.user_id))
             return results
 
+    @staticmethod
     def get_notification_channel(
-        self,
         channel_id: str,
         tenant_id: str,
-        user_id: str,
-        group_ids: list[str] | None = None,
-        include_sensitive: bool = False,
+        access: ChannelAccessContext | str,
+        include_sensitive: bool | list[str] | None = False,
     ) -> NotificationChannel | None:
-        group_ids = group_ids or []
+        legacy_group_ids = include_sensitive if isinstance(include_sensitive, list) else None
+        include_sensitive_flag = bool(include_sensitive) if not isinstance(include_sensitive, list) else False
+        context = ChannelStorageService._access_context(access, group_ids=legacy_group_ids)
+        group_ids = list(context.group_ids or [])
         with get_db_session() as db:
             ch = (
                 db.query(NotificationChannelDB)
@@ -131,30 +166,33 @@ class ChannelStorageService:
             if not ch:
                 return None
             if not has_access(
-                _visibility_of(ch),
-                _creator_of(ch),
-                user_id,
-                _shared_group_ids(ch),
-                group_ids,
+                AccessCheck(
+                    visibility=_visibility_of(ch),
+                    created_by=_creator_of(ch),
+                    user_id=context.user_id,
+                    shared_group_ids=_shared_group_ids(ch),
+                    user_group_ids=group_ids,
+                )
             ):
                 return None
             raw_cfg = decrypt_config(_config_dict(ch))
             ch.config = raw_cfg
-            return channel_to_pydantic_for_viewer(ch, user_id, include_sensitive=include_sensitive)
+            return channel_to_pydantic_for_viewer(ch, context.user_id, include_sensitive=include_sensitive_flag)
 
+    @staticmethod
     def create_notification_channel(
-        self,
         channel_create: NotificationChannelCreate,
         tenant_id: str,
-        user_id: str,
+        access: ChannelAccessContext | str,
         group_ids: list[str] | None = None,
     ) -> NotificationChannel:
+        context = ChannelStorageService._access_context(access, group_ids=group_ids)
         with get_db_session() as db:
             ensure_tenant_exists(db, tenant_id)
             ch = NotificationChannelDB(
                 id=str(uuid.uuid4()),
                 tenant_id=tenant_id,
-                created_by=user_id,
+                created_by=context.user_id,
                 name=channel_create.name,
                 type=channel_create.type,
                 config=encrypt_config(channel_create.config or {}),
@@ -164,10 +202,12 @@ class ChannelStorageService:
             assign_shared_groups(
                 ch,
                 db,
-                tenant_id,
-                _visibility_of(ch),
-                channel_create.shared_group_ids,
-                actor_group_ids=group_ids,
+                SharedGroupAssignment(
+                    tenant_id=tenant_id,
+                    visibility=_visibility_of(ch),
+                    group_ids=channel_create.shared_group_ids,
+                    actor_group_ids=context.group_ids,
+                ),
             )
             db.add(ch)
             db.flush()
@@ -175,17 +215,17 @@ class ChannelStorageService:
 
             cfg = decrypt_config(_config_dict(ch))
             ch.config = cfg
-            return channel_to_pydantic_for_viewer(ch, user_id)
+            return channel_to_pydantic_for_viewer(ch, context.user_id)
 
+    @staticmethod
     def update_notification_channel(
-        self,
         channel_id: str,
         channel_update: NotificationChannelCreate,
         tenant_id: str,
-        user_id: str,
-        group_ids: list[str] | None = None,
+        access: ChannelAccessContext | str,
     ) -> NotificationChannel | None:
-        group_ids = group_ids or []
+        context = ChannelStorageService._access_context(access)
+        group_ids = list(context.group_ids or [])
         with get_db_session() as db:
             ch = (
                 db.query(NotificationChannelDB)
@@ -193,7 +233,7 @@ class ChannelStorageService:
                 .filter(NotificationChannelDB.id == channel_id, NotificationChannelDB.tenant_id == tenant_id)
                 .first()
             )
-            if not ch or ch.created_by != user_id:
+            if not ch or ch.created_by != context.user_id:
                 return None
 
             ch.name = channel_update.name
@@ -204,10 +244,12 @@ class ChannelStorageService:
             assign_shared_groups(
                 ch,
                 db,
-                tenant_id,
-                _visibility_of(ch),
-                channel_update.shared_group_ids,
-                actor_group_ids=group_ids,
+                SharedGroupAssignment(
+                    tenant_id=tenant_id,
+                    visibility=_visibility_of(ch),
+                    group_ids=channel_update.shared_group_ids,
+                    actor_group_ids=group_ids,
+                ),
             )
 
             db.flush()
@@ -215,9 +257,16 @@ class ChannelStorageService:
 
             cfg = decrypt_config(_config_dict(ch))
             ch.config = cfg
-            return channel_to_pydantic_for_viewer(ch, user_id)
+            return channel_to_pydantic_for_viewer(ch, context.user_id)
 
-    def delete_notification_channel(self, channel_id: str, tenant_id: str, user_id: str) -> bool:
+    @staticmethod
+    def delete_notification_channel(
+        channel_id: str,
+        tenant_id: str,
+        access: ChannelAccessContext | str,
+        group_ids: list[str] | None = None,
+    ) -> bool:
+        context = ChannelStorageService._access_context(access, group_ids=group_ids)
         with get_db_session() as db:
             ch = (
                 db.query(NotificationChannelDB)
@@ -225,13 +274,15 @@ class ChannelStorageService:
                 .filter(NotificationChannelDB.id == channel_id, NotificationChannelDB.tenant_id == tenant_id)
                 .first()
             )
-            if not ch or ch.created_by != user_id:
+            if not ch or ch.created_by != context.user_id:
                 return False
             db.delete(ch)
             logger.info("Deleted channel %s", channel_id)
             return True
 
-    def is_notification_channel_owner(self, channel_id: str, tenant_id: str, user_id: str) -> bool:
+    @staticmethod
+    def is_notification_channel_owner(channel_id: str, tenant_id: str, access: ChannelAccessContext | str) -> bool:
+        context = ChannelStorageService._access_context(access)
         with get_db_session() as db:
             ch = (
                 db.query(NotificationChannelDB)
@@ -241,16 +292,16 @@ class ChannelStorageService:
                 )
                 .first()
             )
-            return bool(ch and ch.created_by == user_id)
+            return bool(ch and ch.created_by == context.user_id)
 
+    @staticmethod
     def test_notification_channel(
-        self,
         channel_id: str,
         tenant_id: str,
-        user_id: str,
-        group_ids: list[str] | None = None,
+        access: ChannelAccessContext | str,
     ) -> dict[str, object]:
-        channel = self.get_notification_channel(channel_id, tenant_id, user_id, group_ids)
+        context = ChannelStorageService._access_context(access)
+        channel = ChannelStorageService.get_notification_channel(channel_id, tenant_id, context)
         if not channel:
             return {"success": False, "error": "Channel not found"}
         logger.info("Testing channel: %s (%s)", channel.name, channel.type)
@@ -259,8 +310,8 @@ class ChannelStorageService:
             "message": f"Test notification would be sent to {channel.type} channel: {channel.name}",
         }
 
+    @staticmethod
     def get_notification_channels_for_rule_name(
-        self,
         tenant_id: str,
         rule_name: str,
         org_id: str | None = None,
@@ -317,7 +368,7 @@ class ChannelStorageService:
                 for ch in candidate_channels:
                     if ch.id in seen_ids:
                         continue
-                    if not self._rule_channel_compatible(r, ch):
+                    if not ChannelStorageService._rule_channel_compatible(r, ch):
                         compatible_skipped += 1
                         continue
                     raw_cfg = decrypt_config(_config_dict(ch))

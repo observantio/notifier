@@ -57,6 +57,22 @@ class AlertSyncPayload:
     rule: AlertRuleDB | None
 
 
+@dataclass(frozen=True)
+class IncidentLookupContext:
+    tenant_id: str
+    incident_key: str | None
+    fingerprint: str
+    labels: JSONDict
+    now: datetime
+
+
+@dataclass(frozen=True)
+class AlertSyncContext:
+    tenant_id: str
+    now: datetime
+    alert: object
+
+
 def _derive_fingerprint(alert_data: JSONDict, labels: JSONDict, annotations: JSONDict) -> str:
     fp = alert_data.get("fingerprint") or labels.get("fingerprint")
     if fp:
@@ -138,35 +154,30 @@ def _resolve_duplicate_incidents_for_key(
 
 def _find_incident_by_key_or_fingerprint(
     db: Session,
-    tenant_id: str,
-    *,
-    incident_key: str | None,
-    fingerprint: str,
-    labels: JSONDict,
-    now: datetime,
+    context: IncidentLookupContext,
 ) -> AlertIncidentDB | None:
-    if incident_key:
-        alert_name = str(labels.get("alertname") or "").strip()
+    if context.incident_key:
+        alert_name = str(context.labels.get("alertname") or "").strip()
         candidates = (
             db.query(AlertIncidentDB)
             .filter(
-                AlertIncidentDB.tenant_id == tenant_id,
+                AlertIncidentDB.tenant_id == context.tenant_id,
                 AlertIncidentDB.alert_name == alert_name,
             )
             .order_by(AlertIncidentDB.updated_at.desc())
             .all()
         )
-        matching = [item for item in candidates if incident_key_from_db_row(item) == incident_key]
+        matching = [item for item in candidates if incident_key_from_db_row(item) == context.incident_key]
         if matching:
             return _resolve_duplicate_incidents_for_key(
-                tenant_id=tenant_id,
-                incident_key=incident_key,
+                tenant_id=context.tenant_id,
+                incident_key=context.incident_key,
                 matching_candidates=matching,
-                now=now,
+                now=context.now,
             )
     return (
         db.query(AlertIncidentDB)
-        .filter(AlertIncidentDB.tenant_id == tenant_id, AlertIncidentDB.fingerprint == fingerprint)
+        .filter(AlertIncidentDB.tenant_id == context.tenant_id, AlertIncidentDB.fingerprint == context.fingerprint)
         .first()
     )
 
@@ -265,12 +276,10 @@ def _apply_open_incident_update_from_alert(
 
 def _sync_single_alert_into_incidents(
     db: Session,
-    tenant_id: str,
-    now: datetime,
-    alert: object,
+    context: AlertSyncContext,
     active_incident_tokens: set[str],
 ) -> None:
-    alert_data = _json_dict(alert)
+    alert_data = _json_dict(context.alert)
     if _is_alert_suppressed(alert_data):
         return
     labels = _json_dict(alert_data.get("labels", {}))
@@ -281,23 +290,25 @@ def _sync_single_alert_into_incidents(
     active_incident_tokens.add(f"k:{incident_key}" if incident_key else f"fp:{fingerprint}")
     incident = _find_incident_by_key_or_fingerprint(
         db,
-        tenant_id,
-        incident_key=incident_key,
-        fingerprint=fingerprint,
-        labels=labels,
-        now=now,
+        IncidentLookupContext(
+            tenant_id=context.tenant_id,
+            incident_key=incident_key,
+            fingerprint=fingerprint,
+            labels=labels,
+            now=context.now,
+        ),
     )
     parsed_starts = _parse_starts_at_from_alert(alert_data)
-    rule = _resolve_rule_by_alertname(db, tenant_id, labels)
+    rule = _resolve_rule_by_alertname(db, context.tenant_id, labels)
     sync_payload = AlertSyncPayload(
-        tenant_id=tenant_id,
+        tenant_id=context.tenant_id,
         fingerprint=fingerprint,
         labels=labels,
         annotations=annotations,
         metric_state=metric_state,
         incident_key=incident_key,
         parsed_starts=parsed_starts,
-        now=now,
+        now=context.now,
         rule=rule,
     )
     if not incident:

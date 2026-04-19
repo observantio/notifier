@@ -431,11 +431,17 @@ async def test_alert_routes_and_channel_type_integrations(monkeypatch):
     )
     monkeypatch.setattr(alerts_router.storage_service, "get_hidden_rule_names", lambda *_args: ["HIDDEN"])
 
-    items = await alerts_router.list_alerts(filter_labels='{"alertname":"A"}', show_hidden=False, current_user=_user())
+    items = await alerts_router.list_alerts(
+        query=alerts_router.AlertListQuery(filter_labels='{"alertname":"A"}', show_hidden=False),
+        current_user=_user(),
+    )
     assert len(items) == 1
     assert items[0].labels["alertname"] == "A"
 
-    items = await alerts_router.list_alerts(filter_labels='{"alertname":"A"}', show_hidden=True, current_user=_user())
+    items = await alerts_router.list_alerts(
+        query=alerts_router.AlertListQuery(filter_labels='{"alertname":"A"}', show_hidden=True),
+        current_user=_user(),
+    )
     assert len(items) == 2
 
     async def _groups(**_kwargs):
@@ -497,9 +503,17 @@ async def test_channel_routes_cover_error_and_success_paths(monkeypatch):
         lambda *_args: [_channel("c1"), _channel("c2", owner="u2", visibility="group")],
     )
     monkeypatch.setattr(channels_router.storage_service, "get_hidden_channel_ids", lambda *_args: ["c2"])
-    visible = await channels_router.list_channels(request=_request(), show_hidden=False, current_user=_user())
+    visible = await channels_router.list_channels(
+        request=_request(),
+        query=channels_router.ChannelListQuery(show_hidden="false"),
+        current_user=_user(),
+    )
     assert [item.id for item in visible] == ["c1"]
-    all_items = await channels_router.list_channels(request=_request(), show_hidden=True, current_user=_user())
+    all_items = await channels_router.list_channels(
+        request=_request(),
+        query=channels_router.ChannelListQuery(show_hidden="true"),
+        current_user=_user(),
+    )
     assert len(all_items) == 2
 
     monkeypatch.setattr(channels_router.storage_service, "get_notification_channel", lambda *_args: None)
@@ -669,12 +683,16 @@ async def test_silence_routes_cover_read_write_hide(monkeypatch):
     monkeypatch.setattr(silences_router.storage_service, "get_hidden_silence_ids", lambda *_args: ["s1"])
 
     visible = await silences_router.list_silences(
-        request=_request(), include_expired=False, show_hidden=False, current_user=_user()
+        request=_request(),
+        query=silences_router.SilenceListQuery(include_expired=False, show_hidden="false"),
+        current_user=_user(),
     )
     assert visible == []
 
     visible = await silences_router.list_silences(
-        request=_request(), show_hidden=True, include_expired=True, current_user=_user()
+        request=_request(),
+        query=silences_router.SilenceListQuery(include_expired=True, show_hidden="true"),
+        current_user=_user(),
     )
     assert [item.id for item in visible] == ["s1"]
 
@@ -871,9 +889,17 @@ async def test_rules_routes_cover_main_paths(monkeypatch):
             (_rule_model("r2", "RuleTwo", created_by="u2", org_id="org-b"), "u2"),
         ],
     )
-    listed = await rules_router.list_rules(request=_request(), show_hidden=False, current_user=_user())
+    listed = await rules_router.list_rules(
+        request=_request(),
+        query=rules_router.RuleListQuery(show_hidden="false"),
+        current_user=_user(),
+    )
     assert len(listed) == 1
-    listed_all = await rules_router.list_rules(request=_request(), show_hidden=True, current_user=_user())
+    listed_all = await rules_router.list_rules(
+        request=_request(),
+        query=rules_router.RuleListQuery(show_hidden="true"),
+        current_user=_user(),
+    )
     assert listed_all[1].org_id is None
 
     async def _list_metric_names(_org):
@@ -1282,7 +1308,7 @@ async def test_jira_config_discovery_integrations_and_links(monkeypatch):
     monkeypatch.setattr(jira_links_router, "format_incident_description", lambda _incident_obj, _desc: "desc")
     monkeypatch.setattr(jira_links_router, "map_severity_to_jira_priority", lambda _sev: "High")
 
-    async def _create_issue(**_kwargs):
+    async def _create_issue(*_args, **_kwargs):
         return {"key": "OPS-2", "url": "https://jira/browse/OPS-2"}
 
     async def _transition(**_kwargs):
@@ -1380,7 +1406,10 @@ async def test_incidents_router_listing_and_patch_paths(monkeypatch):
         "list_incidents",
         lambda **_kwargs: [_incident("inc-1")],
     )
-    listed = await incidents_router.list_incidents(current_user=_user())
+    listed = await incidents_router.list_incidents(
+        query=incidents_router.IncidentListQuery(),
+        current_user=_user(),
+    )
     assert listed[0].id == "inc-1"
 
     monkeypatch.setattr(
@@ -1770,7 +1799,8 @@ async def test_router_remaining_line_edges(monkeypatch):
     monkeypatch.setattr(alerts_router.storage_service, "filter_alerts_for_user", lambda *_args: [_alert_dict("A")])
     monkeypatch.setattr(alerts_router.storage_service, "get_hidden_rule_names", lambda *_args: [])
     visible_alerts = await alerts_router.list_alerts(
-        filter_labels='{"alertname":"A"}', show_hidden=False, current_user=_user()
+        query=alerts_router.AlertListQuery(filter_labels='{"alertname":"A"}', show_hidden=False),
+        current_user=_user(),
     )
     assert len(visible_alerts) == 1
 
@@ -2121,7 +2151,11 @@ async def test_router_query_param_and_test_rule_remaining_branches(monkeypatch):
         }
     )
     with pytest.raises(HTTPException) as exc:
-        await channels_router.list_channels(request=bad_channels_request, current_user=_user())
+        await channels_router.list_channels(
+            request=bad_channels_request,
+            query=channels_router.ChannelListQuery(),
+            current_user=_user(),
+        )
     assert exc.value.status_code == 400
 
     bad_silences_list_request = Request(
@@ -2137,7 +2171,11 @@ async def test_router_query_param_and_test_rule_remaining_branches(monkeypatch):
         }
     )
     with pytest.raises(HTTPException) as exc:
-        await silences_router.list_silences(request=bad_silences_list_request, current_user=_user())
+        await silences_router.list_silences(
+            request=bad_silences_list_request,
+            query=silences_router.SilenceListQuery(),
+            current_user=_user(),
+        )
     assert exc.value.status_code == 400
 
     bad_silence_get_request = Request(
@@ -2227,7 +2265,11 @@ async def test_router_list_endpoints_skip_unknown_query_rejection_when_request_n
     monkeypatch.setattr(channels_router, "run_in_threadpool", _run_in_threadpool)
     monkeypatch.setattr(channels_router.storage_service, "get_notification_channels", lambda *_args: [_channel("c1")])
     monkeypatch.setattr(channels_router.storage_service, "get_hidden_channel_ids", lambda *_args: [])
-    channels = await channels_router.list_channels(request=None, current_user=_user())
+    channels = await channels_router.list_channels(
+        request=None,
+        query=channels_router.ChannelListQuery(),
+        current_user=_user(),
+    )
     assert len(channels) == 1
 
     monkeypatch.setattr(rules_router, "reject_unknown_query_params", _should_not_be_called)
@@ -2238,7 +2280,11 @@ async def test_router_list_endpoints_skip_unknown_query_rejection_when_request_n
         "get_alert_rules_with_owner",
         lambda *_args: [(_rule_model("r1", "Rule One"), "u1")],
     )
-    rules = await rules_router.list_rules(request=None, current_user=_user())
+    rules = await rules_router.list_rules(
+        request=None,
+        query=rules_router.RuleListQuery(),
+        current_user=_user(),
+    )
     assert len(rules) == 1
 
     monkeypatch.setattr(silences_router, "reject_unknown_query_params", _should_not_be_called)
@@ -2256,7 +2302,11 @@ async def test_router_list_endpoints_skip_unknown_query_rejection_when_request_n
     monkeypatch.setattr(silences_router.alertmanager_service, "apply_silence_metadata", lambda silence: silence)
     monkeypatch.setattr(silences_router.alertmanager_service, "silence_accessible", lambda *_args: True)
     monkeypatch.setattr(silences_router.storage_service, "get_hidden_silence_ids", lambda *_args: [])
-    silences = await silences_router.list_silences(request=None, current_user=_user())
+    silences = await silences_router.list_silences(
+        request=None,
+        query=silences_router.SilenceListQuery(),
+        current_user=_user(),
+    )
     assert len(silences) == 1
     silence = await silences_router.get_silence("s1", request=None, current_user=_user())
     assert silence.id == "s1"

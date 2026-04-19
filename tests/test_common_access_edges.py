@@ -65,30 +65,50 @@ class FakeDB:
 
 def test_resolve_groups_handles_empty_missing_and_membership_paths():
     db = FakeDB(groups=[])
-    assert access._resolve_groups(db, "tenant", []) == []
+    assert access._resolve_groups(db, access.GroupResolveRequest(tenant_id="tenant", group_ids=[])) == []
 
     existing = [SimpleNamespace(id="g1", tenant_id="tenant")]
     db = FakeDB(groups=existing)
-    groups = access._resolve_groups(db, "tenant", [" g1 ", None, ""], actor_group_ids=["g1"])
+    groups = access._resolve_groups(
+        db,
+        access.GroupResolveRequest(tenant_id="tenant", group_ids=[" g1 ", None, ""], actor_group_ids=["g1"]),
+    )
     assert [group.id for group in groups] == ["g1"]
 
     db = FakeDB(groups=[])
-    groups = access._resolve_groups(db, "tenant", ["g2"], actor_group_ids=["g2"])
+    groups = access._resolve_groups(
+        db,
+        access.GroupResolveRequest(tenant_id="tenant", group_ids=["g2"], actor_group_ids=["g2"]),
+    )
     assert [group.id for group in groups] == ["g2"]
     assert len(db.added) == 1
 
     db = FakeDB(groups=[], flush_error=IntegrityError("stmt", {}, Exception("boom")))
-    groups = access._resolve_groups(db, "tenant", ["g3"], actor_group_ids=["g3"])
+    groups = access._resolve_groups(
+        db,
+        access.GroupResolveRequest(tenant_id="tenant", group_ids=["g3"], actor_group_ids=["g3"]),
+    )
     assert [group.id for group in groups] == ["g3"]
     assert db.rolled_back is True
 
     db = FakeDB(groups=[SimpleNamespace(id="g4", tenant_id="tenant")])
     with pytest.raises(HTTPException) as exc:
-        access._resolve_groups(db, "tenant", ["g4"], actor_group_ids=["other"])
+        access._resolve_groups(
+            db,
+            access.GroupResolveRequest(tenant_id="tenant", group_ids=["g4"], actor_group_ids=["other"]),
+        )
     assert exc.value.status_code == 403
 
     db = FakeDB(groups=[SimpleNamespace(id="g5", tenant_id="tenant")])
-    groups = access._resolve_groups(db, "tenant", ["g5"], actor_group_ids=[], enforce_membership=False)
+    groups = access._resolve_groups(
+        db,
+        access.GroupResolveRequest(
+            tenant_id="tenant",
+            group_ids=["g5"],
+            actor_group_ids=[],
+            enforce_membership=False,
+        ),
+    )
     assert [group.id for group in groups] == ["g5"]
 
 
@@ -97,19 +117,46 @@ def test_assign_shared_groups_and_access_matrix(monkeypatch):
     monkeypatch.setattr(access, "_resolve_groups", lambda *_args, **_kwargs: resolved)
     obj = SimpleNamespace(shared_groups=["old"])
 
-    access.assign_shared_groups(obj, "db", "tenant", "private", ["g1"], actor_group_ids=["g1"])
+    access.assign_shared_groups(
+        obj,
+        "db",
+        access.SharedGroupAssignment(
+            tenant_id="tenant",
+            visibility="private",
+            group_ids=["g1"],
+            actor_group_ids=["g1"],
+        ),
+    )
     assert obj.shared_groups == []
 
     with pytest.raises(ValueError):
-        access.assign_shared_groups(obj, "db", "tenant", "group", None, actor_group_ids=["g1"])
+        access.assign_shared_groups(
+            obj,
+            "db",
+            access.SharedGroupAssignment(
+                tenant_id="tenant",
+                visibility="group",
+                group_ids=None,
+                actor_group_ids=["g1"],
+            ),
+        )
 
-    access.assign_shared_groups(obj, "db", "tenant", "group", ["g1"], actor_group_ids=["g1"])
+    access.assign_shared_groups(
+        obj,
+        "db",
+        access.SharedGroupAssignment(
+            tenant_id="tenant",
+            visibility="group",
+            group_ids=["g1"],
+            actor_group_ids=["g1"],
+        ),
+    )
     assert obj.shared_groups == resolved
 
-    assert access.has_access("private", "u1", "u1", [], []) is True
-    assert access.has_access("tenant", "owner", "u2", [], [], require_write=False) is True
-    assert access.has_access("tenant", "owner", "u2", [], [], require_write=True) is False
-    assert access.has_access("group", "owner", "u2", ["g1"], ["g1"]) is True
-    assert access.has_access("group", "owner", "u2", ["g1"], ["g2"]) is False
-    assert access.has_access("private", "owner", "u2", [], []) is False
-    assert access.has_access("mystery", "owner", "u2", [], []) is False
+    assert access.has_access(access.AccessCheck("private", "u1", "u1", [], [])) is True
+    assert access.has_access(access.AccessCheck("tenant", "owner", "u2", [], [], require_write=False)) is True
+    assert access.has_access(access.AccessCheck("tenant", "owner", "u2", [], [], require_write=True)) is False
+    assert access.has_access(access.AccessCheck("group", "owner", "u2", ["g1"], ["g1"])) is True
+    assert access.has_access(access.AccessCheck("group", "owner", "u2", ["g1"], ["g2"])) is False
+    assert access.has_access(access.AccessCheck("private", "owner", "u2", [], [])) is False
+    assert access.has_access(access.AccessCheck("mystery", "owner", "u2", [], [])) is False

@@ -45,76 +45,93 @@ def _as_int(value: object) -> int | None:
         return None
 
 
+def _validate_smtp_email(cfg: JSONDict, errors: list[str]) -> None:
+    smtp_host = cfg.get("smtp_host") or cfg.get("smtpHost")
+    if not str(smtp_host or "").strip():
+        errors.append("SMTP email channel requires 'smtp_host'")
+
+    smtp_port = cfg.get("smtp_port") or cfg.get("smtpPort")
+    if smtp_port is not None:
+        port_num = _as_int(smtp_port)
+        if port_num is None:
+            errors.append("SMTP email channel 'smtp_port' must be a valid integer")
+        elif not 1 <= port_num <= 65535:
+            errors.append("SMTP email channel 'smtp_port' must be between 1 and 65535")
+
+    auth_type = _as_text(cfg.get("smtp_auth_type") or cfg.get("smtpAuthType") or "password").strip().lower()
+    smtp_username = _as_text(cfg.get("smtp_username") or cfg.get("smtpUsername")).strip()
+    smtp_password = _as_text(cfg.get("smtp_password") or cfg.get("smtpPassword")).strip()
+    smtp_api_key = _as_text(
+        cfg.get("smtp_api_key") or cfg.get("smtpApiKey") or cfg.get("api_key") or cfg.get("apiKey")
+    ).strip()
+    if auth_type == "password":
+        if not smtp_username:
+            errors.append("SMTP email channel auth_type=password requires 'smtp_username'")
+        if not smtp_password:
+            errors.append("SMTP email channel auth_type=password requires 'smtp_password'")
+        return
+    if auth_type == "api_key":
+        if not smtp_api_key:
+            errors.append("SMTP email channel auth_type=api_key requires 'smtp_api_key'")
+        return
+    if auth_type != "none":
+        errors.append("SMTP email channel 'smtp_auth_type' must be one of: password, api_key, none")
+
+
+def _validate_email_channel(cfg: JSONDict, errors: list[str]) -> None:
+    to_field = cfg.get("to") or cfg.get("recipient")
+    recipients = [item.strip() for item in re.split(r"[,;\s]+", str(to_field or "")) if item.strip()]
+    if not recipients:
+        errors.append("Email channel requires at least one recipient in 'to'")
+
+    provider = _as_text(cfg.get("email_provider") or cfg.get("emailProvider") or "smtp").strip().lower()
+    if provider == "smtp":
+        _validate_smtp_email(cfg, errors)
+        return
+    if provider == "sendgrid":
+        api_key = cfg.get("sendgrid_api_key") or cfg.get("sendgridApiKey") or cfg.get("api_key") or cfg.get("apiKey")
+        if not str(api_key or "").strip():
+            errors.append("SendGrid email channel requires 'sendgrid_api_key'")
+        return
+    if provider == "resend":
+        api_key = cfg.get("resend_api_key") or cfg.get("resendApiKey") or cfg.get("api_key") or cfg.get("apiKey")
+        if not str(api_key or "").strip():
+            errors.append("Resend email channel requires 'resend_api_key'")
+        return
+    errors.append(f"Unsupported email provider '{provider}'")
+
+
+def _validate_slack_channel(cfg: JSONDict, errors: list[str]) -> None:
+    webhook_url = _as_optional_url(cfg.get("webhook_url") or cfg.get("webhookUrl"))
+    if not is_safe_http_url(webhook_url):
+        errors.append("Slack channel requires a valid 'webhook_url'")
+
+
+def _validate_teams_channel(cfg: JSONDict, errors: list[str]) -> None:
+    webhook_url = _as_optional_url(cfg.get("webhook_url") or cfg.get("webhookUrl"))
+    if not is_safe_http_url(webhook_url):
+        errors.append("Teams channel requires a valid 'webhook_url'")
+
+
+def _validate_webhook_channel(cfg: JSONDict, errors: list[str]) -> None:
+    webhook_url = _as_optional_url(cfg.get("url") or cfg.get("webhook_url") or cfg.get("webhookUrl"))
+    if not is_safe_http_url(webhook_url):
+        errors.append("Webhook channel requires a valid URL")
+
+
 def validate_channel_config(channel_type: str, channel_config: JSONDict | None) -> list[str]:
     cfg = channel_config or {}
     normalized_type = str(channel_type or "").strip().lower()
     errors: list[str] = []
 
     if normalized_type == "email":
-        to_field = cfg.get("to") or cfg.get("recipient")
-        recipients = [r.strip() for r in re.split(r"[,;\s]+", str(to_field or "")) if r.strip()]
-        if not recipients:
-            errors.append("Email channel requires at least one recipient in 'to'")
-
-        provider = _as_text(cfg.get("email_provider") or cfg.get("emailProvider") or "smtp").strip().lower()
-        if provider == "smtp":
-            smtp_host = cfg.get("smtp_host") or cfg.get("smtpHost")
-            if not str(smtp_host or "").strip():
-                errors.append("SMTP email channel requires 'smtp_host'")
-
-            smtp_port = cfg.get("smtp_port") or cfg.get("smtpPort")
-            if smtp_port is not None:
-                port_num = _as_int(smtp_port)
-                if port_num is None:
-                    errors.append("SMTP email channel 'smtp_port' must be a valid integer")
-                elif not 1 <= port_num <= 65535:
-                    errors.append("SMTP email channel 'smtp_port' must be between 1 and 65535")
-
-            auth_type = _as_text(cfg.get("smtp_auth_type") or cfg.get("smtpAuthType") or "password").strip().lower()
-            smtp_username = _as_text(cfg.get("smtp_username") or cfg.get("smtpUsername")).strip()
-            smtp_password = _as_text(cfg.get("smtp_password") or cfg.get("smtpPassword")).strip()
-            smtp_api_key = _as_text(
-                cfg.get("smtp_api_key") or cfg.get("smtpApiKey") or cfg.get("api_key") or cfg.get("apiKey")
-            ).strip()
-
-            if auth_type == "password":
-                if not smtp_username:
-                    errors.append("SMTP email channel auth_type=password requires 'smtp_username'")
-                if not smtp_password:
-                    errors.append("SMTP email channel auth_type=password requires 'smtp_password'")
-            elif auth_type == "api_key":
-                if not smtp_api_key:
-                    errors.append("SMTP email channel auth_type=api_key requires 'smtp_api_key'")
-            elif auth_type != "none":
-                errors.append("SMTP email channel 'smtp_auth_type' must be one of: password, api_key, none")
-        elif provider == "sendgrid":
-            api_key = (
-                cfg.get("sendgrid_api_key") or cfg.get("sendgridApiKey") or cfg.get("api_key") or cfg.get("apiKey")
-            )
-            if not str(api_key or "").strip():
-                errors.append("SendGrid email channel requires 'sendgrid_api_key'")
-        elif provider == "resend":
-            api_key = cfg.get("resend_api_key") or cfg.get("resendApiKey") or cfg.get("api_key") or cfg.get("apiKey")
-            if not str(api_key or "").strip():
-                errors.append("Resend email channel requires 'resend_api_key'")
-        else:
-            errors.append(f"Unsupported email provider '{provider}'")
-
+        _validate_email_channel(cfg, errors)
     elif normalized_type == "slack":
-        webhook_url = _as_optional_url(cfg.get("webhook_url") or cfg.get("webhookUrl"))
-        if not is_safe_http_url(webhook_url):
-            errors.append("Slack channel requires a valid 'webhook_url'")
-
+        _validate_slack_channel(cfg, errors)
     elif normalized_type == "teams":
-        webhook_url = _as_optional_url(cfg.get("webhook_url") or cfg.get("webhookUrl"))
-        if not is_safe_http_url(webhook_url):
-            errors.append("Teams channel requires a valid 'webhook_url'")
-
+        _validate_teams_channel(cfg, errors)
     elif normalized_type == "webhook":
-        webhook_url = _as_optional_url(cfg.get("url") or cfg.get("webhook_url") or cfg.get("webhookUrl"))
-        if not is_safe_http_url(webhook_url):
-            errors.append("Webhook channel requires a valid URL")
-
+        _validate_webhook_channel(cfg, errors)
     elif normalized_type == "pagerduty":
         routing_key = cfg.get("routing_key") or cfg.get("integrationKey")
         if not str(routing_key or "").strip():

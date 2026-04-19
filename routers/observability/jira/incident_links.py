@@ -22,7 +22,7 @@ from services.incidents.helpers import (
     map_severity_to_jira_priority,
 )
 from services.jira.helpers import resolve_incident_jira_credentials
-from services.jira_service import JiraError, jira_service
+from services.jira_service import JiraError, JiraIssueCreateOptions, JiraIssueCreateRequest, jira_service
 
 from .shared import SUPPORTED_INCIDENT_JIRA_ISSUE_TYPES, storage_service
 
@@ -85,12 +85,16 @@ async def create_incident_link(
 
     try:
         response = await jira_service.create_issue(
-            project_key=project,
-            summary=(payload.summary or incident.alert_name or "Incident").strip(),
-            description=format_incident_description(incident, payload.description),
-            issue_type="Bug" if requested_issue_type.lower() == "bug" else "Task",
-            priority=map_severity_to_jira_priority(getattr(incident, "severity", None)),
-            credentials=jira_integration_credentials(integration),
+            request=JiraIssueCreateRequest(
+                project_key=project,
+                summary=(payload.summary or incident.alert_name or "Incident").strip(),
+                options=JiraIssueCreateOptions(
+                    description=format_incident_description(incident, payload.description),
+                    issue_type="Bug" if requested_issue_type.lower() == "bug" else "Task",
+                    priority=map_severity_to_jira_priority(getattr(incident, "severity", None)),
+                ),
+                credentials=jira_integration_credentials(integration),
+            )
         )
     except JiraError as exc:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc

@@ -424,7 +424,10 @@ def test_dependencies_helpers_and_allowlist_paths(monkeypatch):
     monkeypatch.setattr(config, "require_client_ip_for_public_endpoints", True)
     monkeypatch.setattr(dependencies, "client_ip", lambda _request: "unknown")
     with pytest.raises(HTTPException):
-        dependencies.enforce_public_endpoint_security(_request(), scope="public", limit=10, window_seconds=60)
+        dependencies.enforce_public_endpoint_security(
+            _request(),
+            dependencies.PublicEndpointSecurityConfig(scope="public", limit=10, window_seconds=60),
+        )
 
     monkeypatch.setattr(config, "require_client_ip_for_public_endpoints", False)
     monkeypatch.setattr(dependencies, "enforce_ip_rate_limit", lambda *_args, **_kwargs: None)
@@ -433,16 +436,34 @@ def test_dependencies_helpers_and_allowlist_paths(monkeypatch):
 
     with pytest.raises(HTTPException):
         dependencies.enforce_public_endpoint_security(
-            _request(), scope="public", limit=10, window_seconds=60, allowlist="203.0.113.0/24,bad-cidr/"
+            _request(),
+            dependencies.PublicEndpointSecurityConfig(
+                scope="public",
+                limit=10,
+                window_seconds=60,
+                allowlist="203.0.113.0/24,bad-cidr/",
+            ),
         )
 
     with pytest.raises(HTTPException):
         dependencies.enforce_public_endpoint_security(
-            _request("198.51.100.1"), scope="public", limit=10, window_seconds=60, allowlist="203.0.113.0/24"
+            _request("198.51.100.1"),
+            dependencies.PublicEndpointSecurityConfig(
+                scope="public",
+                limit=10,
+                window_seconds=60,
+                allowlist="203.0.113.0/24",
+            ),
         )
 
     dependencies.enforce_public_endpoint_security(
-        _request("203.0.113.10"), scope="public", limit=10, window_seconds=60, allowlist="203.0.113.0/24"
+        _request("203.0.113.10"),
+        dependencies.PublicEndpointSecurityConfig(
+            scope="public",
+            limit=10,
+            window_seconds=60,
+            allowlist="203.0.113.0/24",
+        ),
     )
 
     monkeypatch.setattr(config, "allowlist_fail_open", True)

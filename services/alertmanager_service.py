@@ -22,12 +22,15 @@ from sqlalchemy.exc import SQLAlchemyError
 from config import config
 from database import get_db_session
 from db_models import PurgedSilence
-from middleware.dependencies import enforce_public_endpoint_security
+from middleware.dependencies import PublicEndpointSecurityConfig, enforce_public_endpoint_security
 from middleware.resilience import with_retry, with_timeout
 from models.access.auth_models import TokenData
 from models.alerting.alerts import Alert
 from models.alerting.rules import AlertRule
 from models.alerting.silences import Silence
+from services.alerting.alerts_ops import (
+    AlertQuery,
+)
 from services.alerting.alerts_ops import (
     delete_alerts as delete_alerts_ops,
 )
@@ -178,10 +181,12 @@ class AlertManagerService:
     def enforce_webhook_security(self, request: Request, *, scope: str) -> None:
         enforce_public_endpoint_security(
             request,
-            scope=scope,
-            limit=config.rate_limit_public_per_minute,
-            window_seconds=60,
-            allowlist=config.webhook_ip_allowlist,
+            PublicEndpointSecurityConfig(
+                scope=scope,
+                limit=config.rate_limit_public_per_minute,
+                window_seconds=60,
+                allowlist=config.webhook_ip_allowlist,
+            ),
         )
         expected = config.inbound_webhook_token
         if not expected:
@@ -248,12 +253,23 @@ class AlertManagerService:
     @with_timeout()
     async def get_alerts(
         self,
-        filter_labels: dict[str, str] | None = None,
-        active: bool | None = None,
-        silenced: bool | None = None,
-        inhibited: bool | None = None,
+        query: AlertQuery | None = None,
+        **legacy_kwargs: object,
     ) -> list[Alert]:
-        return await get_alerts_ops(self, filter_labels, active, silenced, inhibited)
+        effective_query = query
+        if effective_query is None and legacy_kwargs:
+            filter_labels_raw = legacy_kwargs.get("filter_labels")
+            filter_labels = filter_labels_raw if isinstance(filter_labels_raw, dict) else {}
+            active_value = legacy_kwargs.get("active")
+            silenced_value = legacy_kwargs.get("silenced")
+            inhibited_value = legacy_kwargs.get("inhibited")
+            effective_query = AlertQuery(
+                filter_labels={str(key): str(value) for key, value in filter_labels.items()},
+                active=active_value if isinstance(active_value, bool) else None,
+                silenced=silenced_value if isinstance(silenced_value, bool) else None,
+                inhibited=inhibited_value if isinstance(inhibited_value, bool) else None,
+            )
+        return await get_alerts_ops(self, effective_query)
 
     async def delete_silence(self, silence_id: str) -> bool:
         if not await delete_silence_ops(self, silence_id):

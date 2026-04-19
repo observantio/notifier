@@ -49,10 +49,10 @@ async def test_send_teams_rejects_non_teams_webhook_host() -> None:
 async def test_send_webhook_forwards_only_allowed_headers(monkeypatch: pytest.MonkeyPatch) -> None:
     captured = {}
 
-    async def _post_with_retry(_client, url, *, json, headers=None):
-        captured["url"] = url
-        captured["json"] = json
-        captured["headers"] = headers or {}
+    async def _post_with_retry(request):
+        captured["url"] = str(request.url)
+        captured["json"] = request.json
+        captured["headers"] = request.headers or {}
         return None
 
     monkeypatch.setattr(senders.transport, "post_with_retry", _post_with_retry)
@@ -104,10 +104,10 @@ async def test_send_pagerduty_requires_routing_key(monkeypatch: pytest.MonkeyPat
 async def test_send_pagerduty_posts_to_events_api_with_resolve_action(monkeypatch: pytest.MonkeyPatch) -> None:
     captured = {}
 
-    async def _post_with_retry(_client, url, *, json, headers=None):
-        captured["url"] = url
-        captured["json"] = json
-        captured["headers"] = headers
+    async def _post_with_retry(request):
+        captured["url"] = str(request.url)
+        captured["json"] = request.json
+        captured["headers"] = request.headers
         return None
 
     monkeypatch.setattr(senders.transport, "post_with_retry", _post_with_retry)

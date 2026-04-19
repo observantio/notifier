@@ -10,7 +10,8 @@ from services.storage.revocation import prune_removed_member_group_shares
 
 
 class HiddenEntityStorageService:
-    def get_hidden_silence_ids(self, tenant_id: str, user_id: str) -> list[str]:
+    @staticmethod
+    def get_hidden_silence_ids(tenant_id: str, user_id: str) -> list[str]:
         with get_db_session() as db:
             rows = (
                 db.query(HiddenSilence.silence_id)
@@ -22,7 +23,8 @@ class HiddenEntityStorageService:
             )
             return [str(silence_id) for (silence_id,) in rows]
 
-    def toggle_silence_hidden(self, tenant_id: str, user_id: str, silence_id: str, hidden: bool) -> bool:
+    @staticmethod
+    def toggle_silence_hidden(tenant_id: str, user_id: str, silence_id: str, hidden: bool) -> bool:
         with get_db_session() as db:
             existing = (
                 db.query(HiddenSilence)
@@ -48,7 +50,8 @@ class HiddenEntityStorageService:
                     db.delete(existing)
             return True
 
-    def get_hidden_channel_ids(self, tenant_id: str, user_id: str) -> list[str]:
+    @staticmethod
+    def get_hidden_channel_ids(tenant_id: str, user_id: str) -> list[str]:
         with get_db_session() as db:
             rows = (
                 db.query(HiddenNotificationChannel.channel_id)
@@ -60,7 +63,8 @@ class HiddenEntityStorageService:
             )
             return [str(channel_id) for (channel_id,) in rows]
 
-    def toggle_channel_hidden(self, tenant_id: str, user_id: str, channel_id: str, hidden: bool) -> bool:
+    @staticmethod
+    def toggle_channel_hidden(tenant_id: str, user_id: str, channel_id: str, hidden: bool) -> bool:
         with get_db_session() as db:
             existing = (
                 db.query(HiddenNotificationChannel)
@@ -85,8 +89,8 @@ class HiddenEntityStorageService:
                     db.delete(existing)
             return True
 
+    @staticmethod
     def prune_removed_member_group_shares(
-        self,
         tenant_id: str,
         group_id: str,
         removed_user_ids: list[str] | None = None,
@@ -101,7 +105,8 @@ class HiddenEntityStorageService:
                 removed_usernames=removed_usernames or [],
             )
 
-    def get_hidden_jira_integration_ids(self, tenant_id: str, user_id: str) -> list[str]:
+    @staticmethod
+    def get_hidden_jira_integration_ids(tenant_id: str, user_id: str) -> list[str]:
         with get_db_session() as db:
             rows = (
                 db.query(HiddenJiraIntegration.integration_id)
@@ -113,8 +118,8 @@ class HiddenEntityStorageService:
             )
             return [str(integration_id) for (integration_id,) in rows]
 
+    @staticmethod
     def toggle_jira_integration_hidden(
-        self,
         tenant_id: str,
         user_id: str,
         integration_id: str,

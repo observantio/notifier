@@ -27,6 +27,8 @@ import db_models as db_models_mod
 from config import config
 from models.access.auth_models import Role, TokenData
 from services import alertmanager_service as alert_mod
+from services.alerting.channels_ops import NotificationDispatchContext
+from services.storage.incidents import IncidentAccessContext
 from services.storage_db_service import DatabaseStorageService
 
 
@@ -134,7 +136,7 @@ def test_storage_service_delegates_to_subservices(monkeypatch):
     assert svc.list_incidents("tenant", "user", ["g1"], limit=10, offset=2)[0] == "list-incidents"
     assert svc.get_incident_summary("tenant", "user")[0] == "summary"
     assert svc.unlink_jira_integration_from_incidents("tenant", "jira")[0] == "unlink"
-    assert svc.get_incident_for_user("inc", "tenant", "user")[0] == "incident"
+    assert svc.get_incident_for_user("inc", "tenant", IncidentAccessContext(user_id="user"))[0] == "incident"
     assert svc.update_incident("inc", "tenant", "user", "payload")[0] == "update-incident"
     assert svc.filter_alerts_for_user("tenant", "user", ["g1"], [{"a": 1}])[0] == "filter"
     assert svc.get_public_alert_rules("tenant")[0] == "public"
@@ -362,7 +364,7 @@ async def test_alertmanager_service_helpers_and_delete_silence(monkeypatch):
     monkeypatch.setitem(ops, "prune_removed_member_group_silences", lambda *_a, **_k: async_value(2))
     monkeypatch.setitem(ops, "get_status", lambda *_a, **_k: async_value("status"))
     monkeypatch.setitem(ops, "get_receivers", lambda *_a, **_k: async_value(["receiver"]))
-    assert await svc.notify_for_alerts("tenant", [], object(), object()) is None
+    assert await svc.notify_for_alerts(NotificationDispatchContext(svc, "tenant", object(), object()), []) is None
     assert await svc.list_metric_names("org") == ["metric"]
     assert await svc.list_label_names("org") == ["label-a"]
     assert await svc.list_label_values("org", "job", "up") == ["value-a"]

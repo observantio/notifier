@@ -173,10 +173,12 @@ def test_public_endpoint_security_enforces_allowlist(monkeypatch):
     with pytest.raises(HTTPException) as exc:
         dependencies.enforce_public_endpoint_security(
             _request("198.51.100.1"),
-            scope="test",
-            limit=100,
-            window_seconds=60,
-            allowlist="203.0.113.10",
+            dependencies.PublicEndpointSecurityConfig(
+                scope="test",
+                limit=100,
+                window_seconds=60,
+                allowlist="203.0.113.10",
+            ),
         )
     assert exc.value.status_code == 403
 
@@ -188,10 +190,12 @@ def test_public_endpoint_security_allows_allowlisted_ip(monkeypatch):
 
     dependencies.enforce_public_endpoint_security(
         _request("203.0.113.10"),
-        scope="test",
-        limit=100,
-        window_seconds=60,
-        allowlist="203.0.113.10",
+        dependencies.PublicEndpointSecurityConfig(
+            scope="test",
+            limit=100,
+            window_seconds=60,
+            allowlist="203.0.113.10",
+        ),
     )
 
 

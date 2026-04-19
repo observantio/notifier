@@ -150,11 +150,8 @@ async def test_patch_incident_requests_write_access_for_existing_incident(monkey
     payload = AlertIncidentUpdateRequest()
     await update_incident("i2", payload, background_tasks=BackgroundTasks(), current_user=user)
 
-    existing_write_access = (
-        captured["existing_kwargs"].get("write_access")
-        if "write_access" in captured["existing_kwargs"]
-        else captured["existing_args"][4]
-    )
+    existing_context = captured["existing_kwargs"].get("context") or captured["existing_args"][2]
+    existing_write_access = getattr(existing_context, "require_write", False)
     assert existing_write_access is True
 
     actor = captured["update_kwargs"].get("actor")

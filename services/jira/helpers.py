@@ -94,6 +94,7 @@ def resolve_incident_jira_credentials(
     tenant_id: str,
     current_user: TokenData,
 ) -> JSONDict | None:
+    credentials: JSONDict | None = None
     integration_id = str(getattr(incident, "jira_integration_id", "") or "").strip()
     if integration_id:
         integration: JSONDict | None
@@ -106,18 +107,14 @@ def resolve_incident_jira_credentials(
             )
         except HTTPException:
             integration = _find_integration(tenant_id, integration_id)
-        if not integration or not integration_is_usable(integration):
-            return None
+        if integration and integration_is_usable(integration):
+            try:
+                credentials = dict(jira_integration_credentials(integration))
+            except (TypeError, ValueError):
+                credentials = None
+    elif jira_is_enabled_for_tenant(tenant_id):
         try:
-            credentials: JSONDict = dict(jira_integration_credentials(integration))
-            return credentials
+            credentials = dict(get_effective_jira_credentials(tenant_id))
         except (TypeError, ValueError):
-            return None
-
-    if not jira_is_enabled_for_tenant(tenant_id):
-        return None
-    try:
-        default_credentials: JSONDict = dict(get_effective_jira_credentials(tenant_id))
-        return default_credentials
-    except (TypeError, ValueError):
-        return None
+            credentials = None
+    return credentials

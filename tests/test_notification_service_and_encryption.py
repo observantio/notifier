@@ -24,6 +24,7 @@ ensure_test_env()
 from models.alerting.alerts import Alert, AlertState, AlertStatus
 from models.alerting.channels import ChannelType, NotificationChannel
 from services import notification_service as notif_mod
+from services.notification_service import IncidentAssignmentEmail
 from services.common import encryption as enc_mod
 
 
@@ -129,19 +130,26 @@ async def test_notification_service_paths(monkeypatch):
 
     monkeypatch.setattr(service, "_send_smtp_with_retry", fake_send_smtp_with_retry)
     assert (
-        await service.send_incident_assignment_email("user@example.com", "CPUHigh", "open", "critical", "alice") is True
+        await service.send_incident_assignment_email(
+            IncidentAssignmentEmail("user@example.com", "CPUHigh", "open", "critical", "alice")
+        )
+        is True
     )
-    assert smtp_calls[0]["port"] == 587
+    assert smtp_calls[0]["smtp"].port == 587
 
     secrets["INCIDENT_ASSIGNMENT_EMAIL_ENABLED"] = "false"
     assert (
-        await service.send_incident_assignment_email("user@example.com", "CPUHigh", "open", "critical", "alice")
+        await service.send_incident_assignment_email(
+            IncidentAssignmentEmail("user@example.com", "CPUHigh", "open", "critical", "alice")
+        )
         is False
     )
     secrets["INCIDENT_ASSIGNMENT_EMAIL_ENABLED"] = "true"
     secrets["INCIDENT_ASSIGNMENT_SMTP_HOST"] = ""
     assert (
-        await service.send_incident_assignment_email("user@example.com", "CPUHigh", "open", "critical", "alice")
+        await service.send_incident_assignment_email(
+            IncidentAssignmentEmail("user@example.com", "CPUHigh", "open", "critical", "alice")
+        )
         is False
     )
     secrets["INCIDENT_ASSIGNMENT_SMTP_HOST"] = "smtp.example.com"
@@ -151,7 +159,9 @@ async def test_notification_service_paths(monkeypatch):
 
     monkeypatch.setattr(service, "_send_smtp_with_retry", failing_send_smtp_with_retry)
     assert (
-        await service.send_incident_assignment_email("user@example.com", "CPUHigh", "open", "critical", "alice")
+        await service.send_incident_assignment_email(
+            IncidentAssignmentEmail("user@example.com", "CPUHigh", "open", "critical", "alice")
+        )
         is False
     )
 
@@ -169,12 +179,12 @@ async def test_notification_email_provider_paths(monkeypatch):
     monkeypatch.setattr(
         notif_mod.notification_email,
         "build_smtp_message",
-        lambda subject, body, from_addr, recipients, html_body=None: {
-            "subject": subject,
-            "body": body,
-            "from": from_addr,
-            "to": recipients,
-            "html": html_body,
+        lambda payload: {
+            "subject": payload.subject,
+            "body": payload.body,
+            "from": payload.smtp_from,
+            "to": payload.recipients,
+            "html": payload.html_body,
         },
     )
 
@@ -202,8 +212,8 @@ async def test_notification_email_provider_paths(monkeypatch):
         resend_calls.append((api_key, recipients, from_addr))
         return False
 
-    async def fake_smtp(message, host, port, user, password, starttls, use_ssl):
-        smtp_calls.append((message, host, port, user, password, starttls, use_ssl))
+    async def fake_smtp(message, smtp=None, **_kwargs):
+        smtp_calls.append((message, smtp))
         return True
 
     monkeypatch.setattr(notif_mod.notification_email, "send_via_sendgrid", fake_sendgrid)
@@ -259,7 +269,9 @@ async def test_notification_email_provider_paths(monkeypatch):
         }
     )
     assert await service._send_email(smtp_channel, _alert(), "resolved") is True
-    assert smtp_calls[0][1:4] == ("smtp.example.com", 587, "apikey")
+    assert smtp_calls[0][1].hostname == "smtp.example.com"
+    assert smtp_calls[0][1].port == 587
+    assert smtp_calls[0][1].username == "apikey"
 
     noauth_channel = _channel(
         config={"to": "ops@example.com", "smtp_host": "smtp.example.com", "smtp_port": 25, "smtp_auth_type": "none"}
