@@ -73,7 +73,7 @@ class ChannelStorageService:
         return ChannelAccessContext(user_id=str(access), group_ids=list(group_ids or []))
 
     @staticmethod
-    def _page_request(value: PageRequest | list[str] | None) -> PageRequest:
+    def _page_request(value: PageRequest | None) -> PageRequest:
         if isinstance(value, PageRequest):
             return value
         return PageRequest()
@@ -108,14 +108,12 @@ class ChannelStorageService:
     def get_notification_channels(
         tenant_id: str,
         access: ChannelAccessContext | str,
-        page_or_group_ids: PageRequest | list[str] | None = None,
+        page: PageRequest | None = None,
+        group_ids: list[str] | None = None,
     ) -> list[NotificationChannel]:
-        context = ChannelStorageService._access_context(
-            access,
-            group_ids=page_or_group_ids if isinstance(page_or_group_ids, list) else None,
-        )
+        context = ChannelStorageService._access_context(access, group_ids=group_ids)
         group_ids = list(context.group_ids or [])
-        paging = ChannelStorageService._page_request(page_or_group_ids)
+        paging = ChannelStorageService._page_request(page)
         capped_limit, capped_offset = cap_pagination(paging.limit, paging.offset)
 
         with get_db_session() as db:
@@ -146,15 +144,14 @@ class ChannelStorageService:
             return results
 
     @staticmethod
-    def get_notification_channel(
+    def get_notification_channel(  # pylint: disable=too-many-positional-arguments
         channel_id: str,
         tenant_id: str,
         access: ChannelAccessContext | str,
-        include_sensitive: bool | list[str] | None = False,
+        group_ids: list[str] | None = None,
+        include_sensitive: bool = False,
     ) -> NotificationChannel | None:
-        legacy_group_ids = include_sensitive if isinstance(include_sensitive, list) else None
-        include_sensitive_flag = bool(include_sensitive) if not isinstance(include_sensitive, list) else False
-        context = ChannelStorageService._access_context(access, group_ids=legacy_group_ids)
+        context = ChannelStorageService._access_context(access, group_ids=group_ids)
         group_ids = list(context.group_ids or [])
         with get_db_session() as db:
             ch = (
@@ -177,7 +174,7 @@ class ChannelStorageService:
                 return None
             raw_cfg = decrypt_config(_config_dict(ch))
             ch.config = raw_cfg
-            return channel_to_pydantic_for_viewer(ch, context.user_id, include_sensitive=include_sensitive_flag)
+            return channel_to_pydantic_for_viewer(ch, context.user_id, include_sensitive=include_sensitive)
 
     @staticmethod
     def create_notification_channel(
