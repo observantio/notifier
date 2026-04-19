@@ -84,7 +84,7 @@ async def test_resolved_transition_adds_status_note_and_moves_ticket_done(monkey
     monkeypatch.setattr(incidents_router, "move_incident_ticket_to_todo", _noop)
     monkeypatch.setattr(incidents_router, "move_incident_ticket_to_in_progress", _noop)
 
-    async def _get_alerts(**_kwargs):
+    async def _get_alerts(*_args, **_kwargs):
         return []
 
     monkeypatch.setattr(incidents_router.alertmanager_service, "get_alerts", _get_alerts)

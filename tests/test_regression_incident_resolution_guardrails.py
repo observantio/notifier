@@ -39,7 +39,7 @@ async def test_resolve_is_blocked_when_matching_active_alert_exists_by_incident_
     monkeypatch.setattr(incidents_router.storage_service, "get_incident_for_user", lambda *_args: existing)
     monkeypatch.setattr(incidents_router, "incident_key_from_labels", lambda labels: labels.get("alertname", ""))
 
-    async def _get_alerts(**_kwargs):
+    async def _get_alerts(*_args, **_kwargs):
         return [SimpleNamespace(labels={"alertname": "DiskFull"})]
 
     monkeypatch.setattr(incidents_router.alertmanager_service, "get_alerts", _get_alerts)
@@ -61,14 +61,14 @@ async def test_resolve_is_blocked_when_fingerprint_query_finds_active_alert(monk
     user = token_data()
     existing = alert_incident(incident_id="inc-r2", status=IncidentStatus.OPEN, labels={}, fingerprint="fp-r2")
 
-    get_alerts_calls: list[dict[str, object]] = []
+    get_alerts_calls: list[object] = []
 
     monkeypatch.setattr(incidents_router, "run_in_threadpool", run_in_threadpool_inline)
     monkeypatch.setattr(incidents_router.storage_service, "get_incident_for_user", lambda *_args: existing)
     monkeypatch.setattr(incidents_router, "incident_key_from_labels", lambda _labels: None)
 
-    async def _get_alerts(**kwargs):
-        get_alerts_calls.append(kwargs)
+    async def _get_alerts(*args, **_kwargs):
+        get_alerts_calls.extend(args)
         return [SimpleNamespace(labels={"alertname": "Anything"})]
 
     monkeypatch.setattr(incidents_router.alertmanager_service, "get_alerts", _get_alerts)
@@ -82,7 +82,7 @@ async def test_resolve_is_blocked_when_fingerprint_query_finds_active_alert(monk
         )
 
     assert exc.value.status_code == 400
-    assert get_alerts_calls[0]["filter_labels"] == {"fingerprint": "fp-r2"}
+    assert getattr(get_alerts_calls[0], "filter_labels", {}) == {"fingerprint": "fp-r2"}
 
 
 @pytest.mark.asyncio
@@ -96,7 +96,7 @@ async def test_resolve_continues_when_alertmanager_lookup_errors(monkeypatch: py
     monkeypatch.setattr(incidents_router.storage_service, "update_incident", lambda *_args, **_kwargs: updated)
     monkeypatch.setattr(incidents_router, "incident_key_from_labels", lambda labels: labels.get("alertname", ""))
 
-    async def _get_alerts(**_kwargs):
+    async def _get_alerts(*_args, **_kwargs):
         raise httpx.RequestError("boom", request=httpx.Request("GET", "https://alertmanager.example"))
 
     monkeypatch.setattr(incidents_router.alertmanager_service, "get_alerts", _get_alerts)
@@ -128,7 +128,7 @@ async def test_resolve_moves_ticket_done_when_no_active_alerts(monkeypatch: pyte
     monkeypatch.setattr(incidents_router.storage_service, "update_incident", lambda *_args, **_kwargs: updated)
     monkeypatch.setattr(incidents_router, "incident_key_from_labels", lambda labels: labels.get("alertname", ""))
 
-    async def _get_alerts(**_kwargs):
+    async def _get_alerts(*_args, **_kwargs):
         return []
 
     async def _done(*_args, **_kwargs):

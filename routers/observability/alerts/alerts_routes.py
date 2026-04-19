@@ -10,6 +10,7 @@ from middleware.error_handlers import handle_route_errors
 from middleware.openapi import BAD_REQUEST_ERRORS
 from models.access.auth_models import Permission, TokenData
 from models.alerting.alerts import Alert, AlertGroup
+from services.alerting.alerts_ops import AlertQuery
 
 from .shared import INVALID_FILTER_LABELS_JSON, alertmanager_service, storage_service, sync_incidents
 
@@ -43,10 +44,12 @@ async def list_alerts(
 ) -> list[Alert]:
     labels = alertmanager_service.parse_filter_labels(query.filter_labels)
     alerts = await alertmanager_service.get_alerts(
-        filter_labels=labels or {},
-        active=query.active,
-        silenced=query.silenced,
-        inhibited=query.inhibited,
+        AlertQuery(
+            filter_labels=labels or {},
+            active=query.active,
+            silenced=query.silenced,
+            inhibited=query.inhibited,
+        )
     )
     alert_dicts = [alert.model_dump(by_alias=True) for alert in alerts]
     await sync_incidents(current_user.tenant_id, alert_dicts, log_context="get_alerts")

@@ -254,22 +254,8 @@ class AlertManagerService:
     async def get_alerts(
         self,
         query: AlertQuery | None = None,
-        **legacy_kwargs: object,
     ) -> list[Alert]:
-        effective_query = query
-        if effective_query is None and legacy_kwargs:
-            filter_labels_raw = legacy_kwargs.get("filter_labels")
-            filter_labels = filter_labels_raw if isinstance(filter_labels_raw, dict) else {}
-            active_value = legacy_kwargs.get("active")
-            silenced_value = legacy_kwargs.get("silenced")
-            inhibited_value = legacy_kwargs.get("inhibited")
-            effective_query = AlertQuery(
-                filter_labels={str(key): str(value) for key, value in filter_labels.items()},
-                active=active_value if isinstance(active_value, bool) else None,
-                silenced=silenced_value if isinstance(silenced_value, bool) else None,
-                inhibited=inhibited_value if isinstance(inhibited_value, bool) else None,
-            )
-        return await get_alerts_ops(self, effective_query)
+        return await get_alerts_ops(self, query)
 
     async def delete_silence(self, silence_id: str) -> bool:
         if not await delete_silence_ops(self, silence_id):
