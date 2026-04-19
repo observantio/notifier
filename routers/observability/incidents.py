@@ -25,6 +25,7 @@ from middleware.error_handlers import handle_route_errors
 from middleware.openapi import BAD_REQUEST_ERRORS, BAD_REQUEST_NOT_FOUND_ERRORS, COMMON_ERRORS
 from models.access.auth_models import Permission, TokenData
 from models.alerting.incidents import AlertIncident, AlertIncidentUpdateRequest
+from services.alerting.alerts_ops import AlertQuery
 from services.alertmanager_service import AlertManagerService
 from services.incidents.helpers import (
     move_incident_ticket_to_done,
@@ -72,17 +73,8 @@ def _status_value(value: object) -> str:
 
 
 async def _send_incident_assignment_email_task(
-    payload: IncidentAssignmentEmail | None = None,
-    **legacy_kwargs: object,
+    payload: IncidentAssignmentEmail,
 ) -> bool:
-    if payload is None:
-        payload = IncidentAssignmentEmail(
-            recipient_email=str(legacy_kwargs.get("recipient_email") or ""),
-            incident_title=str(legacy_kwargs.get("incident_title") or ""),
-            incident_status=str(legacy_kwargs.get("incident_status") or ""),
-            incident_severity=str(legacy_kwargs.get("incident_severity") or ""),
-            actor=str(legacy_kwargs.get("actor") or ""),
-        )
     return await notification_service.send_incident_assignment_email(
         payload
     )
@@ -97,13 +89,15 @@ async def _ensure_resolve_allowed(payload: AlertIncidentUpdateRequest, existing:
         if existing_incident_key:
             active_alerts = [
                 alert
-                for alert in (await alertmanager_service.get_alerts(active=True))
+                for alert in (await alertmanager_service.get_alerts(AlertQuery(active=True)))
                 if incident_key_from_labels(getattr(alert, "labels", {}) or {}) == existing_incident_key
             ]
         else:
             active_alerts = await alertmanager_service.get_alerts(
-                filter_labels={"fingerprint": existing.fingerprint},
-                active=True,
+                AlertQuery(
+                    filter_labels={"fingerprint": existing.fingerprint},
+                    active=True,
+                )
             )
     except httpx.HTTPError:
         active_alerts = []
@@ -165,11 +159,13 @@ async def _record_assignment_change(
     if recipient_email:
         background_tasks.add_task(
             _send_incident_assignment_email_task,
-            recipient_email=recipient_email,
-            incident_title=updated.alert_name,
-            incident_status=updated.status,
-            incident_severity=updated.severity,
-            actor=actor_label,
+            IncidentAssignmentEmail(
+                recipient_email=recipient_email,
+                incident_title=updated.alert_name,
+                incident_status=updated.status,
+                incident_severity=updated.severity,
+                actor=actor_label,
+            ),
         )
         return
     logger.warning(

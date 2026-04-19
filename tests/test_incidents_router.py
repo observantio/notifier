@@ -94,9 +94,10 @@ async def test_patch_incident_sends_assignment_email(monkeypatch):
     assert result.assignee == "bob@example.com"
     assert len(background_tasks.tasks) == 1
     task = background_tasks.tasks[0]
-    assert task.kwargs["recipient_email"] == "bob@example.com"
-    assert task.kwargs["incident_title"] == "Alert1"
-    assert str(task.kwargs["incident_severity"]) == "critical"
+    payload = task.args[0]
+    assert payload.recipient_email == "bob@example.com"
+    assert payload.incident_title == "Alert1"
+    assert str(payload.incident_severity) == "critical"
 
 
 @pytest.mark.asyncio

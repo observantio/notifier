@@ -416,7 +416,7 @@ async def test_alert_routes_and_channel_type_integrations(monkeypatch):
     monkeypatch.setattr(alerts_router, "run_in_threadpool", _run_in_threadpool)
     monkeypatch.setattr(alerts_router.alertmanager_service, "parse_filter_labels", lambda _value: {"alertname": "A"})
 
-    async def _get_alerts(**_kwargs):
+    async def _get_alerts(*_args, **_kwargs):
         return [Alert.model_validate(_alert_dict("A")), Alert.model_validate(_alert_dict("HIDDEN"))]
 
     async def _sync(_tenant_id, _alerts, log_context: str):
@@ -1446,7 +1446,7 @@ async def test_incidents_router_listing_and_patch_paths(monkeypatch):
         def __init__(self, labels):
             self.labels = labels
 
-    async def _active_alerts(**_kwargs):
+    async def _active_alerts(*_args, **_kwargs):
         return [AlertObj({"alertname": "CPUHigh"})]
 
     monkeypatch.setattr(incidents_router.alertmanager_service, "get_alerts", _active_alerts)
@@ -1459,7 +1459,7 @@ async def test_incidents_router_listing_and_patch_paths(monkeypatch):
         )
     assert exc.value.status_code == 400
 
-    async def _boom_alerts(**_kwargs):
+    async def _boom_alerts(*_args, **_kwargs):
         import httpx
 
         raise httpx.RequestError("boom", request=httpx.Request("GET", "https://am"))
@@ -1791,7 +1791,7 @@ async def test_router_remaining_line_edges(monkeypatch):
 
     monkeypatch.setattr(alerts_router.alertmanager_service, "parse_filter_labels", lambda _value: {"alertname": "A"})
 
-    async def _single_alerts(**_kwargs):
+    async def _single_alerts(*_args, **_kwargs):
         return [Alert.model_validate(_alert_dict("A"))]
 
     monkeypatch.setattr(alerts_router.alertmanager_service, "get_alerts", _single_alerts)
@@ -1966,9 +1966,12 @@ async def test_router_remaining_line_edges(monkeypatch):
     base_incident = _incident("inc-line", labels={}, fingerprint="fp-line", status=IncidentStatus.OPEN)
     monkeypatch.setattr(incidents_router.storage_service, "get_incident_for_user", lambda *_args: base_incident)
 
-    seen = {}
+    seen: dict[str, object] = {}
 
-    async def _alerts_by_fingerprint(**kwargs):
+    async def _alerts_by_fingerprint(*args, **kwargs):
+        if args:
+            query = args[0]
+            seen["filter_labels"] = getattr(query, "filter_labels", None)
         seen.update(kwargs)
         return []
 
@@ -2019,7 +2022,7 @@ async def test_router_remaining_line_edges(monkeypatch):
 
     weird_updated = SimpleNamespace(status="investigating", assignee=None, alert_name="CPU", severity="warning")
     monkeypatch.setattr(incidents_router.storage_service, "update_incident", lambda *_args, **_kwargs: weird_updated)
-    monkeypatch.setattr(incidents_router.alertmanager_service, "get_alerts", lambda **_kwargs: [])
+    monkeypatch.setattr(incidents_router.alertmanager_service, "get_alerts", lambda *_args, **_kwargs: [])
     patched_weird = await incidents_router.update_incident(
         "inc-line",
         AlertIncidentUpdateRequest.model_validate({"status": "investigating"}),

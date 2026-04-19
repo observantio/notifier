@@ -78,35 +78,12 @@ def _json_dict_list(value: object) -> list[JSONDict]:
 
 def _coerce_issue_options(
     issue: JiraIssueCreateOptions | object | None,
-    legacy_kwargs: dict[str, object],
 ) -> JiraIssueCreateOptions:
     if isinstance(issue, JiraIssueCreateOptions):
-        description = issue.description
-        issue_type = issue.issue_type
-        priority = issue.priority
-    elif issue is not None:
-        description = str(issue)
-        issue_type = "Task"
-        priority = None
-    else:
-        description = None
-        issue_type = "Task"
-        priority = None
-
-    if "description" in legacy_kwargs:
-        raw = legacy_kwargs.pop("description")
-        description = str(raw) if raw is not None else None
-    if "issue_type" in legacy_kwargs:
-        issue_type = str(legacy_kwargs.pop("issue_type") or "Task")
-    if "priority" in legacy_kwargs:
-        raw = legacy_kwargs.pop("priority")
-        priority = str(raw) if raw is not None else None
-
-    return JiraIssueCreateOptions(
-        description=description,
-        issue_type=issue_type,
-        priority=priority,
-    )
+        return issue
+    if issue is not None:
+        return JiraIssueCreateOptions(description=str(issue))
+    return JiraIssueCreateOptions()
 
 
 class JiraError(Exception):
@@ -210,7 +187,7 @@ class JiraService:
         return await self._request(JiraRequest(method="POST", path=path, credentials=credentials, payload=payload))
 
     async def create_issue(self, request: JiraIssueCreateRequest) -> JSONDict:
-        issue_options = _coerce_issue_options(request.options, {})
+        issue_options = _coerce_issue_options(request.options)
         fields: JSONDict = {
             "project": {"key": request.project_key},
             "summary": request.summary,

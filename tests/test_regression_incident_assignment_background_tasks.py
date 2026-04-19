@@ -77,7 +77,7 @@ async def test_assignment_change_schedules_email_task_for_valid_email(monkeypatc
     assert "assigned incident to Bob <bob@example.com>" in sync_calls[0]
     assert move_calls == ["in-progress"]
     assert len(background.tasks) == 1
-    assert background.tasks[0].kwargs["recipient_email"] == "bob@example.com"
+    assert background.tasks[0].args[0].recipient_email == "bob@example.com"
 
 
 @pytest.mark.asyncio
@@ -241,4 +241,4 @@ async def test_assignment_note_write_failure_does_not_abort_assignment_flow(monk
     assert len(sync_calls) == 1
     assert move_calls == ["in-progress"]
     assert len(background.tasks) == 1
-    assert background.tasks[0].kwargs["recipient_email"] == "ops@example.com"
+    assert background.tasks[0].args[0].recipient_email == "ops@example.com"
