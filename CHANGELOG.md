@@ -18,6 +18,7 @@ All notable changes to this project will be documented in this file.
 - Hardened URL safety parsing to satisfy strict typing without behavior drift, and restored full notifier `mypy`/`pytest` green status at 100% coverage.
 - Refactored alertmanager, incident, Jira, notification, and storage/access call surfaces to typed request/context models while preserving router/runtime behavior.
 - Removed remaining strict-design lint violations (`too-many-args`, `too-many-positional-arguments`, `too-many-statements`, etc.) across notifier and restored full `pylint` 10.00/10 with notifier-wide `mypy` + `pytest` green at 100% coverage.
+- Removed stale deprecated/legacy wording in notifier Jira secret warning and related tests without changing runtime logic.
 
 ## [v0.0.4] - 2026-04-14
 

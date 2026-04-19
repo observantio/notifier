@@ -399,9 +399,9 @@ def test_config_validate_warns_when_jwt_secret_key_set(monkeypatch):
     with monkeypatch.context() as ctx:
         for key, value in _valid_dev_env().items():
             ctx.setenv(key, value)
-        ctx.setenv("JWT_SECRET_KEY", "legacy-secret")
+        ctx.setenv("JWT_SECRET_KEY", "shared-secret")
         module = _reload_config_module()
-        assert module.config.jwt_secret_key == "legacy-secret"
+        assert module.config.jwt_secret_key == "shared-secret"
 
 
 def test_config_init_raises_when_vault_required_and_load_fails(monkeypatch):
