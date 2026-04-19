@@ -5,11 +5,10 @@ maximum limits, ensuring that API endpoints that support pagination can enforce 
 records returned in a single request while allowing clients to specify their desired pagination settings within those
 constraints.
 
-Copyright (c) 2026 Stefan Kumarasinghe
+Copyright (c) 2026 Stefan Kumarasinghe.
 
 Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
-License. You may obtain a copy of the License at
-http://www.apache.org/licenses/LICENSE-2.0
+License. You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
 """
 
 from config import config as app_config

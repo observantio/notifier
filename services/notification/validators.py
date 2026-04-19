@@ -6,11 +6,10 @@ ensures that email configurations have the necessary information for sending ema
 list of error messages if any issues are found with the channel configuration, allowing for proper feedback when setting
 up or updating notification channels.
 
-Copyright (c) 2026 Stefan Kumarasinghe
+Copyright (c) 2026 Stefan Kumarasinghe.
 
 Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
-License. You may obtain a copy of the License at
-http://www.apache.org/licenses/LICENSE-2.0
+License. You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
 """
 
 import re

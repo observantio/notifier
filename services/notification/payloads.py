@@ -6,11 +6,10 @@ structured payloads that conform to the expected formats of each notification ch
 notifications are informative and properly formatted to facilitate quick understanding and response by recipients when
 alerts are triggered or resolved.
 
-Copyright (c) 2026 Stefan Kumarasinghe
+Copyright (c) 2026 Stefan Kumarasinghe.
 
 Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
-License. You may obtain a copy of the License at
-http://www.apache.org/licenses/LICENSE-2.0
+License. You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
 """
 
 import logging

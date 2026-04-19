@@ -5,11 +5,10 @@ bearer tokens, to construct appropriate API requests to the Jira REST API, and t
 Jira. The service ensures that the base URL for Jira is properly configured and validated, and it provides error
 handling for various scenarios that may arise when interacting with the Jira API.
 
-Copyright (c) 2026 Stefan Kumarasinghe
+Copyright (c) 2026 Stefan Kumarasinghe.
 
 Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
-License. You may obtain a copy of the License at
-http://www.apache.org/licenses/LICENSE-2.0
+License. You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
 """
 
 import base64
