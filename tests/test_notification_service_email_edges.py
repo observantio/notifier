@@ -120,7 +120,7 @@ def test_notification_service_html_template_and_theme_paths(monkeypatch):
     monkeypatch.setattr(
         notification_mod.Path,
         "read_text",
-        lambda self, encoding="utf-8": (_ for _ in ()).throw(OSError("missing")),
+        lambda *args, **kwargs: (_ for _ in ()).throw(OSError("missing")),
     )
     assert notification_mod._render_html_template("missing.html", {"x": "y"}) is None
 

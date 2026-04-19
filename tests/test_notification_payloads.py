@@ -147,7 +147,7 @@ def test_render_email_template_returns_none_when_file_missing(monkeypatch):
     monkeypatch.setattr(
         notification_payloads.Path,
         "read_text",
-        lambda self, encoding="utf-8": (_ for _ in ()).throw(OSError("missing")),
+        lambda *args, **kwargs: (_ for _ in ()).throw(OSError("missing")),
     )
 
     assert notification_payloads._render_email_template("missing.html", {"name": "x"}) is None

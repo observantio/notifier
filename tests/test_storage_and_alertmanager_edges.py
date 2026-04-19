@@ -398,10 +398,8 @@ async def test_alertmanager_service_helpers_and_delete_silence(monkeypatch):
     assert await svc.delete_silence("sil-1") is True
     assert db.added == []
 
-    @contextmanager
     def broken_ctx():
         raise SQLAlchemyError("boom")
-        yield
 
     monkeypatch.setattr("services.alertmanager_service.get_db_session", broken_ctx)
     assert await svc.delete_silence("sil-1") is True

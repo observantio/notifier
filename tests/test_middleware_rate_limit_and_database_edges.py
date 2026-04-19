@@ -318,7 +318,7 @@ def test_hybrid_and_database_edges(monkeypatch):
         def __enter__(self):
             return self
 
-        def __exit__(self, exc_type, exc, tb):
+        def __exit__(self, *args):
             return False
 
         def execute(self, *_args, **_kwargs):

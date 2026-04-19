@@ -69,7 +69,7 @@ class _Ctx:
     def __enter__(self):
         return self.db
 
-    def __exit__(self, exc_type, exc, tb):
+    def __exit__(self, *args):
         return False
 
 
