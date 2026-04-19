@@ -12,8 +12,9 @@ http://www.apache.org/licenses/LICENSE-2.0
 from datetime import UTC, datetime
 from typing import cast
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
 from fastapi.concurrency import run_in_threadpool
+from pydantic import BaseModel, Field
 
 from config import config
 from custom_types.json import JSONDict
@@ -23,6 +24,7 @@ from middleware.openapi import BAD_REQUEST_ERRORS, BAD_REQUEST_NOT_FOUND_ERRORS,
 from models.access.auth_models import Permission, TokenData
 from models.alerting.alerts import Alert
 from models.alerting.channels import ChannelType, NotificationChannel, NotificationChannelCreate
+from services.storage.channels import ChannelAccessContext, PageRequest
 
 from .shared import (
     HideTogglePayload,
@@ -37,6 +39,12 @@ from .shared import (
 router = APIRouter(tags=["alertmanager-channels"])
 
 
+class ChannelListQuery(BaseModel):
+    limit: int = Field(default=config.default_query_limit, ge=1, le=config.max_query_limit)
+    offset: int = Field(default=0, ge=0)
+    show_hidden: str = Field(default="false", pattern="^(true|false)$")
+
+
 @router.get(
     "/channels",
     response_model=list[NotificationChannel],
@@ -47,26 +55,23 @@ router = APIRouter(tags=["alertmanager-channels"])
 )
 async def list_channels(
     request: Request,
-    limit: int = Query(config.default_query_limit, ge=1, le=config.max_query_limit),
-    offset: int = Query(0, ge=0),
-    show_hidden: str = Query("false", pattern="^(true|false)$"),
+    query: ChannelListQuery = Depends(),
     current_user: TokenData = Depends(require_permission_with_scope(Permission.READ_CHANNELS, "alertmanager")),
 ) -> list[NotificationChannel]:
     if request is not None:
         reject_unknown_query_params(request, {"limit", "offset", "show_hidden"})
     tenant_id, user_id, group_ids = alertmanager_service.user_scope(current_user)
+    access = ChannelAccessContext(user_id=user_id, group_ids=group_ids)
     channels = await run_in_threadpool(
         storage_service.get_notification_channels,
         tenant_id,
-        user_id,
-        group_ids,
-        limit,
-        offset,
+        access,
+        PageRequest(limit=query.limit, offset=query.offset),
     )
     hidden_ids = set(await run_in_threadpool(storage_service.get_hidden_channel_ids, tenant_id, user_id))
     for channel in channels:
         channel.is_hidden = bool(channel.id and channel.id in hidden_ids)
-    if not parse_show_hidden(show_hidden):
+    if not parse_show_hidden(query.show_hidden):
         channels = [channel for channel in channels if not channel.is_hidden]
     return cast(list[NotificationChannel], channels)
 
@@ -84,12 +89,12 @@ async def get_channel(
     current_user: TokenData = Depends(require_permission_with_scope(Permission.READ_CHANNELS, "alertmanager")),
 ) -> NotificationChannel:
     tenant_id, user_id, group_ids = alertmanager_service.user_scope(current_user)
+    access = ChannelAccessContext(user_id=user_id, group_ids=group_ids)
     channel = await run_in_threadpool(
         storage_service.get_notification_channel,
         channel_id,
         tenant_id,
-        user_id,
-        group_ids,
+        access,
         False,
     )
     if not channel:
@@ -113,12 +118,12 @@ async def hide_channel(
     current_user: TokenData = Depends(require_permission_with_scope(Permission.READ_CHANNELS, "alertmanager")),
 ) -> JSONDict:
     tenant_id, user_id, group_ids = alertmanager_service.user_scope(current_user)
+    access = ChannelAccessContext(user_id=user_id, group_ids=group_ids)
     channel = await run_in_threadpool(
         storage_service.get_notification_channel,
         channel_id,
         tenant_id,
-        user_id,
-        group_ids,
+        access,
         True,
     )
     if not channel:
@@ -153,7 +158,12 @@ async def create_channel(
 ) -> NotificationChannel:
     tenant_id, user_id, group_ids = alertmanager_service.user_scope(current_user)
     validate_channel(channel, notification_service)
-    return await run_in_threadpool(storage_service.create_notification_channel, channel, tenant_id, user_id, group_ids)
+    return await run_in_threadpool(
+        storage_service.create_notification_channel,
+        channel,
+        tenant_id,
+        ChannelAccessContext(user_id=user_id, group_ids=group_ids),
+    )
 
 
 @router.put(
@@ -174,7 +184,11 @@ async def update_channel(
     tenant_id, user_id, group_ids = alertmanager_service.user_scope(current_user)
     validate_channel(channel, notification_service)
     updated_channel = await run_in_threadpool(
-        storage_service.update_notification_channel, channel_id, channel, tenant_id, user_id, group_ids
+        storage_service.update_notification_channel,
+        channel_id,
+        channel,
+        tenant_id,
+        ChannelAccessContext(user_id=user_id, group_ids=group_ids),
     )
     if not updated_channel:
         raise HTTPException(status_code=404, detail=f"Notification channel {channel_id} not found or access denied")
@@ -193,8 +207,13 @@ async def delete_channel(
     channel_id: str,
     current_user: TokenData = Depends(require_permission_with_scope(Permission.DELETE_CHANNELS, "alertmanager")),
 ) -> JSONDict:
-    tenant_id, user_id, _ = alertmanager_service.user_scope(current_user)
-    if not await run_in_threadpool(storage_service.delete_notification_channel, channel_id, tenant_id, user_id):
+    tenant_id, user_id, group_ids = alertmanager_service.user_scope(current_user)
+    if not await run_in_threadpool(
+        storage_service.delete_notification_channel,
+        channel_id,
+        tenant_id,
+        ChannelAccessContext(user_id=user_id, group_ids=group_ids),
+    ):
         raise HTTPException(status_code=404, detail=f"Notification channel {channel_id} not found or access denied")
     return {"status": "success", "message": f"Notification channel {channel_id} deleted"}
 
@@ -214,15 +233,15 @@ async def test_channel(
     ),
 ) -> JSONDict:
     tenant_id, user_id, group_ids = alertmanager_service.user_scope(current_user)
-    if not await run_in_threadpool(storage_service.is_notification_channel_owner, channel_id, tenant_id, user_id):
+    access = ChannelAccessContext(user_id=user_id, group_ids=group_ids)
+    if not await run_in_threadpool(storage_service.is_notification_channel_owner, channel_id, tenant_id, access):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only channel owner can test this channel")
 
     channel = await run_in_threadpool(
         storage_service.get_notification_channel,
         channel_id,
         tenant_id,
-        user_id,
-        group_ids,
+        access,
         True,
     )
     if not channel:

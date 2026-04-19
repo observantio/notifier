@@ -49,6 +49,15 @@ class _NotificationStub:
         return True
 
 
+def _context(storage: _StorageStub, notifier: _NotificationStub) -> channels_ops.NotificationDispatchContext:
+    return channels_ops.NotificationDispatchContext(
+        service=object(),
+        tenant_id="tenant-a",
+        storage_service=storage,
+        notification_service=notifier,
+    )
+
+
 @pytest.mark.asyncio
 async def test_notify_for_alerts_skips_entries_without_alertname() -> None:
     storage = _StorageStub(
@@ -57,13 +66,7 @@ async def test_notify_for_alerts_skips_entries_without_alertname() -> None:
     )
     notifier = _NotificationStub()
 
-    await channels_ops.notify_for_alerts(
-        service=object(),
-        tenant_id="tenant-a",
-        alerts_list=[{"labels": {"severity": "critical"}}],
-        storage_service=storage,
-        notification_service=notifier,
-    )
+    await channels_ops.notify_for_alerts(_context(storage, notifier), [{"labels": {"severity": "critical"}}])
 
     assert storage.channel_calls == []
     assert notifier.calls == []
@@ -75,11 +78,8 @@ async def test_notify_for_alerts_skips_when_no_channels_are_configured() -> None
     notifier = _NotificationStub()
 
     await channels_ops.notify_for_alerts(
-        service=object(),
-        tenant_id="tenant-a",
-        alerts_list=[{"labels": {"alertname": "DiskFull"}, "status": {"state": "active"}}],
-        storage_service=storage,
-        notification_service=notifier,
+        _context(storage, notifier),
+        [{"labels": {"alertname": "DiskFull"}, "status": {"state": "active"}}],
     )
 
     assert storage.channel_calls == [("DiskFull", None)]
@@ -95,16 +95,13 @@ async def test_notify_for_alerts_skips_suppressed_status() -> None:
     notifier = _NotificationStub()
 
     await channels_ops.notify_for_alerts(
-        service=object(),
-        tenant_id="tenant-a",
-        alerts_list=[
+        _context(storage, notifier),
+        [
             {
                 "labels": {"alertname": "DiskFull"},
                 "status": {"state": "suppressed", "silencedBy": ["s-1"], "inhibitedBy": []},
             }
         ],
-        storage_service=storage,
-        notification_service=notifier,
     )
 
     assert notifier.calls == []
@@ -120,17 +117,14 @@ async def test_notify_for_alerts_sends_active_alert_to_all_channels() -> None:
     notifier = _NotificationStub()
 
     await channels_ops.notify_for_alerts(
-        service=object(),
-        tenant_id="tenant-a",
-        alerts_list=[
+        _context(storage, notifier),
+        [
             {
                 "labels": {"alertname": "HighCpuUsage", "severity": "critical"},
                 "annotations": {"summary": "cpu"},
                 "status": {"state": "active", "silencedBy": [], "inhibitedBy": []},
             }
         ],
-        storage_service=storage,
-        notification_service=notifier,
     )
 
     assert len(notifier.calls) == 2
@@ -151,17 +145,14 @@ async def test_notify_for_alerts_enriches_rule_annotations_before_delivery() -> 
     notifier = _NotificationStub()
 
     await channels_ops.notify_for_alerts(
-        service=object(),
-        tenant_id="tenant-a",
-        alerts_list=[
+        _context(storage, notifier),
+        [
             {
                 "labels": {"alertname": "LatencyHigh", "product": "platform"},
                 "annotations": {"summary": "latency too high"},
                 "status": {"state": "resolved", "silencedBy": [], "inhibitedBy": []},
             }
         ],
-        storage_service=storage,
-        notification_service=notifier,
     )
 
     assert len(notifier.calls) == 1

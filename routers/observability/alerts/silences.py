@@ -10,6 +10,7 @@ http://www.apache.org/licenses/LICENSE-2.0
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
 from fastapi.concurrency import run_in_threadpool
+from pydantic import BaseModel, Field
 
 from custom_types.json import JSONDict
 from middleware.dependencies import require_any_permission_with_scope, require_permission_with_scope
@@ -31,6 +32,12 @@ from .shared import (
 router = APIRouter(tags=["alertmanager-silences"])
 
 
+class SilenceListQuery(BaseModel):
+    filter_labels: str | None = Field(default=None)
+    include_expired: bool = Field(default=False)
+    show_hidden: str = Field(default="false", pattern="^(true|false)$")
+
+
 @router.get(
     "/silences",
     response_model=list[Silence],
@@ -45,15 +52,13 @@ router = APIRouter(tags=["alertmanager-silences"])
 )
 async def list_silences(
     request: Request,
-    filter_labels: str | None = Query(None),
-    include_expired: bool = Query(False),
-    show_hidden: str = Query("false", pattern="^(true|false)$"),
+    query: SilenceListQuery = Depends(),
     current_user: TokenData = Depends(require_permission_with_scope(Permission.READ_SILENCES, "alertmanager")),
 ) -> list[Silence]:
     if request is not None:
         reject_unknown_query_params(request, {"filter_labels", "include_expired", "show_hidden"})
     silences = await alertmanager_service.get_silences(
-        filter_labels=alertmanager_service.parse_filter_labels(filter_labels)
+        filter_labels=alertmanager_service.parse_filter_labels(query.filter_labels)
     )
     hidden_ids = set(
         await run_in_threadpool(
@@ -65,13 +70,13 @@ async def list_silences(
     result = []
     for silence in silences:
         silence = alertmanager_service.apply_silence_metadata(silence)
-        if not include_expired:
+        if not query.include_expired:
             state = (silence.status or {}).get("state") if silence.status else None
             if state and str(state).lower() == "expired":
                 continue
         if alertmanager_service.silence_accessible(silence, current_user):
             silence.is_hidden = bool(silence.id and silence.id in hidden_ids)
-            if silence.is_hidden and not parse_show_hidden(show_hidden):
+            if silence.is_hidden and not parse_show_hidden(query.show_hidden):
                 continue
             result.append(silence)
     return result

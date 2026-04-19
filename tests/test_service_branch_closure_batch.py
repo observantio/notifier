@@ -31,7 +31,14 @@ from models.alerting.silences import Matcher, Silence, SilenceCreate
 from services import notification_service as notif_mod
 from services.alerting import integration_security_service as sec_mod
 from services.alerting import silences_ops as sil_mod
-from services.jira_service import JiraError, JiraService
+from services.jira_service import (
+    JiraError,
+    JiraIssueCreateOptions,
+    JiraIssueCreateRequest,
+    JiraRequest,
+    JiraService,
+    JiraTransitionTarget,
+)
 from services.notification_service import NotificationService
 from services.storage import revocation as rev_mod
 
@@ -224,7 +231,7 @@ async def test_jira_service_uncovered_paths(monkeypatch):
 
     svc._client = _StatusClient()
     with pytest.raises(JiraError, match="503"):
-        await svc._request("GET", "/rest/api/2/project", creds)
+        await svc._request(JiraRequest("GET", "/rest/api/2/project", creds))
 
     class _StatusClientWithDetail:
         async def get(self, _url, headers=None, params=None):
@@ -235,19 +242,19 @@ async def test_jira_service_uncovered_paths(monkeypatch):
 
     svc._client = _StatusClientWithDetail()
     with pytest.raises(JiraError, match="jira says no"):
-        await svc._request("GET", "/rest/api/2/project", creds)
+        await svc._request(JiraRequest("GET", "/rest/api/2/project", creds))
 
     svc._client = _RequestErrorClient()
     with pytest.raises(JiraError, match="Unable to connect"):
-        await svc._request("GET", "/rest/api/2/project", creds)
+        await svc._request(JiraRequest("GET", "/rest/api/2/project", creds))
 
     svc._client = _JiraErrorClient()
     with pytest.raises(JiraError, match="already wrapped"):
-        await svc._request("GET", "/rest/api/2/project", creds)
+        await svc._request(JiraRequest("GET", "/rest/api/2/project", creds))
 
     svc._client = _UnexpectedClient()
     with pytest.raises(JiraError, match="Failed to contact Jira API"):
-        await svc._request("GET", "/rest/api/2/project", creds)
+        await svc._request(JiraRequest("GET", "/rest/api/2/project", creds))
 
     captured: dict[str, object] = {}
 
@@ -257,7 +264,14 @@ async def test_jira_service_uncovered_paths(monkeypatch):
 
     svc._post = fake_post
     svc._resolve_base_url = lambda credentials=None: "https://jira.example.com"
-    created = await svc.create_issue("OPS", "Summary", priority="High", credentials=creds)
+    created = await svc.create_issue(
+        JiraIssueCreateRequest(
+            project_key="OPS",
+            summary="Summary",
+            options=JiraIssueCreateOptions(priority="High"),
+            credentials=creds,
+        )
+    )
     assert created["key"] == "OPS-1"
     assert captured["payload"]["fields"]["priority"]["name"] == "High"
 
@@ -268,10 +282,8 @@ async def test_jira_service_uncovered_paths(monkeypatch):
     assert (
         await svc._transition_issue_by_target(
             "OPS-1",
-            credentials=creds,
-            target_names={"done"},
-            transition_names={"done"},
-            status_category_key="done",
+            JiraTransitionTarget({"done"}, {"done"}, "done"),
+            creds,
         )
         is False
     )
@@ -283,10 +295,8 @@ async def test_jira_service_uncovered_paths(monkeypatch):
     assert (
         await svc._transition_issue_by_target(
             "OPS-1",
-            credentials=creds,
-            target_names={"done"},
-            transition_names={"done"},
-            status_category_key="done",
+            JiraTransitionTarget({"done"}, {"done"}, "done"),
+            creds,
         )
         is False
     )
@@ -330,22 +340,26 @@ def test_integration_security_uncovered_paths(monkeypatch):
     with pytest.raises(HTTPException, match="missing or invalid"):
         sec_mod.save_tenant_jira_config(
             "tenant-a",
-            enabled=True,
-            base_url="http://bad",
-            email="user@example.com",
-            api_token="token",
-            bearer=None,
+            sec_mod.JiraTenantConfigUpdate(
+                enabled=True,
+                base_url="http://bad",
+                email="user@example.com",
+                api_token="token",
+                bearer=None,
+            ),
         )
 
     monkeypatch.setattr(sec_mod, "is_safe_http_url", lambda _url: True)
     with pytest.raises(HTTPException, match="credentials are incomplete"):
         sec_mod.save_tenant_jira_config(
             "tenant-a",
-            enabled=True,
-            base_url="https://jira.example.com",
-            email="user@example.com",
-            api_token=None,
-            bearer=None,
+            sec_mod.JiraTenantConfigUpdate(
+                enabled=True,
+                base_url="https://jira.example.com",
+                email="user@example.com",
+                api_token=None,
+                bearer=None,
+            ),
         )
 
     monkeypatch.setattr(
@@ -610,12 +624,17 @@ def test_notification_service_uncovered_paths(monkeypatch):
 
     captured = {}
 
-    def build_message(subject, body, smtp_from, recipients, html_body):
-        return SimpleNamespace(subject=subject, body=body, smtp_from=smtp_from, recipients=recipients)
+    def build_message(payload):
+        return SimpleNamespace(
+            subject=payload.subject,
+            body=payload.body,
+            smtp_from=payload.smtp_from,
+            recipients=payload.recipients,
+        )
 
-    async def smtp_capture(message, hostname, port, username, password, start_tls, use_tls):
-        captured["username"] = username
-        captured["password"] = password
+    async def smtp_capture(message, smtp=None, **_kwargs):
+        captured["username"] = smtp.username
+        captured["password"] = smtp.password
         return False
 
     channel = NotificationChannel(

@@ -16,12 +16,14 @@ from typing import cast
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, status
 from fastapi.concurrency import run_in_threadpool
+from pydantic import BaseModel, Field
 
 from config import config
 from custom_types.json import JSONDict
 from database import get_db_session
 from db_models import Tenant
 from middleware.dependencies import (
+    PublicEndpointSecurityConfig,
     enforce_public_endpoint_security,
     require_any_permission_with_scope,
     require_permission_with_scope,
@@ -33,6 +35,7 @@ from models.alerting.alerts import Alert
 from models.alerting.requests import RuleImportRequest
 from models.alerting.rules import AlertRule, AlertRuleCreate
 from services.alerting.rule_import_service import RuleImportError, parse_rules_yaml
+from services.storage.rules import PageRequest, RuleAccessContext
 
 from .shared import (
     HideTogglePayload,
@@ -46,6 +49,12 @@ from .shared import (
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["alertmanager-rules"])
+
+
+class RuleListQuery(BaseModel):
+    limit: int = Field(default=config.default_query_limit, ge=1, le=config.max_query_limit)
+    offset: int = Field(default=0, ge=0)
+    show_hidden: str = Field(default="false", pattern="^(true|false)$")
 
 
 def _with_creator_username(rule: AlertRuleCreate, current_user: TokenData) -> AlertRuleCreate:
@@ -83,7 +92,8 @@ async def import_rules(
             "rules": [item.model_dump(by_alias=True) for item in parsed_rules],
         }
 
-    existing_rules = await run_in_threadpool(storage_service.get_alert_rules, tenant_id, user_id, group_ids)
+    access = RuleAccessContext(user_id=user_id, group_ids=group_ids)
+    existing_rules = await run_in_threadpool(storage_service.get_alert_rules, tenant_id, access)
     existing_index = {(item.name, item.group, item.org_id or ""): item for item in existing_rules}
     created = updated = 0
     imported_rules: list[AlertRule] = []
@@ -97,13 +107,17 @@ async def import_rules(
             if current_id is None:
                 continue
             updated_rule = await run_in_threadpool(
-                storage_service.update_alert_rule, current_id, rule, tenant_id, user_id, group_ids
+                storage_service.update_alert_rule,
+                current_id,
+                rule,
+                tenant_id,
+                access,
             )
             if updated_rule:
                 updated += 1
                 imported_rules.append(updated_rule)
         else:
-            new_rule = await run_in_threadpool(storage_service.create_alert_rule, rule, tenant_id, user_id, group_ids)
+            new_rule = await run_in_threadpool(storage_service.create_alert_rule, rule, tenant_id, access)
             created += 1
             imported_rules.append(new_rule)
             existing_index[(new_rule.name, new_rule.group, new_rule.org_id or "")] = new_rule
@@ -132,9 +146,7 @@ async def import_rules(
 )
 async def list_rules(
     request: Request,
-    limit: int = Query(config.default_query_limit, ge=1, le=config.max_query_limit),
-    offset: int = Query(0, ge=0),
-    show_hidden: str = Query("false", pattern="^(true|false)$"),
+    query: RuleListQuery = Depends(),
     current_user: TokenData = Depends(require_permission_with_scope(Permission.READ_RULES, "alertmanager")),
 ) -> list[AlertRule]:
     if request is not None:
@@ -148,12 +160,15 @@ async def list_rules(
         )
     )
     rules_with_owner = await run_in_threadpool(
-        storage_service.get_alert_rules_with_owner, tenant_id, user_id, group_ids, limit, offset
+        storage_service.get_alert_rules_with_owner,
+        tenant_id,
+        RuleAccessContext(user_id=user_id, group_ids=group_ids),
+        PageRequest(limit=query.limit, offset=query.offset),
     )
     result: list[AlertRule] = []
     for rule, owner in rules_with_owner:
         rule.is_hidden = bool(rule.id and rule.id in hidden_ids)
-        if rule.is_hidden and not parse_show_hidden(show_hidden):
+        if rule.is_hidden and not parse_show_hidden(query.show_hidden):
             continue
         if owner != current_user.user_id and not getattr(current_user, "is_superuser", False):
             rule.org_id = None
@@ -172,10 +187,12 @@ async def list_rules(
 async def list_public_rules(request: Request) -> list[AlertRule]:
     enforce_public_endpoint_security(
         request,
-        scope="alertmanager_public_rules",
-        limit=config.rate_limit_public_per_minute,
-        window_seconds=60,
-        allowlist=config.auth_public_ip_allowlist,
+        PublicEndpointSecurityConfig(
+            scope="alertmanager_public_rules",
+            limit=config.rate_limit_public_per_minute,
+            window_seconds=60,
+            allowlist=config.auth_public_ip_allowlist,
+        ),
     )
 
     def _resolve_default_tenant_id() -> str | None:
@@ -319,7 +336,8 @@ async def get_rule(
     current_user: TokenData = Depends(require_permission_with_scope(Permission.READ_RULES, "alertmanager")),
 ) -> AlertRule:
     tenant_id, user_id, group_ids = alertmanager_service.user_scope(current_user)
-    rule = await run_in_threadpool(storage_service.get_alert_rule, rule_id, tenant_id, user_id, group_ids)
+    access = RuleAccessContext(user_id=user_id, group_ids=group_ids)
+    rule = await run_in_threadpool(storage_service.get_alert_rule, rule_id, tenant_id, access)
     if not rule:
         raise HTTPException(status_code=404, detail=f"Alert rule {rule_id} not found")
     hidden_ids = set(
@@ -388,7 +406,12 @@ async def create_rule(
     resolved_org_id = alertmanager_service.resolve_rule_org_id(rule.org_id, current_user)
     if rule.org_id != resolved_org_id:
         rule = rule.model_copy(update={"org_id": resolved_org_id})
-    created_rule = await run_in_threadpool(storage_service.create_alert_rule, rule, tenant_id, user_id, group_ids)
+    created_rule = await run_in_threadpool(
+        storage_service.create_alert_rule,
+        rule,
+        tenant_id,
+        RuleAccessContext(user_id=user_id, group_ids=group_ids),
+    )
     org_to_sync = created_rule.org_id or resolved_org_id
     await alertmanager_service.sync_mimir_rules_for_org(
         org_to_sync, await run_in_threadpool(storage_service.get_alert_rules_for_org, tenant_id, org_to_sync)
@@ -417,15 +440,14 @@ async def update_rule(
 ) -> AlertRule:
     tenant_id, user_id, group_ids = alertmanager_service.user_scope(current_user)
     rule = _with_creator_username(rule, current_user)
-    existing_rule = await run_in_threadpool(storage_service.get_alert_rule, rule_id, tenant_id, user_id, group_ids)
+    access = RuleAccessContext(user_id=user_id, group_ids=group_ids)
+    existing_rule = await run_in_threadpool(storage_service.get_alert_rule, rule_id, tenant_id, access)
     if not existing_rule:
         raise HTTPException(status_code=404, detail=f"Alert rule {rule_id} not found or access denied")
     resolved_org_id = alertmanager_service.resolve_rule_org_id(rule.org_id, current_user)
     if rule.org_id != resolved_org_id:
         rule = rule.model_copy(update={"org_id": resolved_org_id})
-    updated_rule = await run_in_threadpool(
-        storage_service.update_alert_rule, rule_id, rule, tenant_id, user_id, group_ids
-    )
+    updated_rule = await run_in_threadpool(storage_service.update_alert_rule, rule_id, rule, tenant_id, access)
     if not updated_rule:
         raise HTTPException(status_code=404, detail=f"Alert rule {rule_id} not found or access denied")
     updated_org_id = updated_rule.org_id or resolved_org_id
@@ -456,7 +478,12 @@ async def test_rule(
     ),
 ) -> JSONDict:
     tenant_id, user_id, group_ids = alertmanager_service.user_scope(current_user)
-    rule = await run_in_threadpool(storage_service.get_alert_rule, rule_id, tenant_id, user_id, group_ids)
+    rule = await run_in_threadpool(
+        storage_service.get_alert_rule,
+        rule_id,
+        tenant_id,
+        RuleAccessContext(user_id=user_id, group_ids=group_ids),
+    )
     if not rule:
         raise HTTPException(status_code=404, detail=f"Alert rule {rule_id} not found")
 
@@ -557,10 +584,11 @@ async def delete_rule(
     current_user: TokenData = Depends(require_permission_with_scope(Permission.DELETE_RULES, "alertmanager")),
 ) -> JSONDict:
     tenant_id, user_id, group_ids = alertmanager_service.user_scope(current_user)
-    existing_rule = await run_in_threadpool(storage_service.get_alert_rule, rule_id, tenant_id, user_id, group_ids)
+    access = RuleAccessContext(user_id=user_id, group_ids=group_ids)
+    existing_rule = await run_in_threadpool(storage_service.get_alert_rule, rule_id, tenant_id, access)
     if not existing_rule:
         raise HTTPException(status_code=404, detail=f"Alert rule {rule_id} not found or access denied")
-    if not await run_in_threadpool(storage_service.delete_alert_rule, rule_id, tenant_id, user_id, group_ids):
+    if not await run_in_threadpool(storage_service.delete_alert_rule, rule_id, tenant_id, access):
         raise HTTPException(status_code=404, detail=f"Alert rule {rule_id} not found or access denied")
     resolved_org_id = alertmanager_service.resolve_rule_org_id(existing_rule.org_id, current_user)
     await alertmanager_service.sync_mimir_rules_for_org(

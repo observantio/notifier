@@ -12,6 +12,7 @@ http://www.apache.org/licenses/LICENSE-2.0
 import logging
 import os
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from urllib.parse import urlparse
 
 from cryptography.fernet import Fernet, InvalidToken
@@ -221,21 +222,22 @@ def load_tenant_jira_config(tenant_id: str) -> dict[str, object]:
         }
 
 
-def save_tenant_jira_config(
-    tenant_id: str,
-    *,
-    enabled: bool,
-    base_url: str | None,
-    email: str | None,
-    api_token: str | None,
-    bearer: str | None,
-) -> dict[str, object]:
-    normalized_url = str(base_url or "").strip() or None
-    normalized_email = str(email or "").strip() or None
-    normalized_api_token = str(api_token or "").strip() or None
-    normalized_bearer = str(bearer or "").strip() or None
+@dataclass(frozen=True)
+class JiraTenantConfigUpdate:
+    enabled: bool
+    base_url: str | None
+    email: str | None
+    api_token: str | None
+    bearer: str | None
 
-    if enabled:
+
+def save_tenant_jira_config(tenant_id: str, update: JiraTenantConfigUpdate) -> dict[str, object]:
+    normalized_url = str(update.base_url or "").strip() or None
+    normalized_email = str(update.email or "").strip() or None
+    normalized_api_token = str(update.api_token or "").strip() or None
+    normalized_bearer = str(update.bearer or "").strip() or None
+
+    if update.enabled:
         if not is_safe_http_url(normalized_url):
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Jira base URL is missing or invalid")
         if not (normalized_bearer or (normalized_email and normalized_api_token)):
@@ -250,7 +252,7 @@ def save_tenant_jira_config(
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
         settings = _tenant_settings_copy(tenant)
         jira_cfg: JSONDict = {
-            "enabled": bool(enabled),
+            "enabled": bool(update.enabled),
             "base_url": normalized_url,
             "email": normalized_email,
             "api_token": encrypt_tenant_secret(normalized_api_token),

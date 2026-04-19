@@ -110,17 +110,15 @@ def _sanitize_recipients(recipients: list[str]) -> list[str]:
     return valid
 
 
-def build_smtp_message(
-    subject: str, body: str, smtp_from: str, recipients: list[str], html_body: str | None = None
-) -> EmailMessage:
-    recipients = _sanitize_recipients(recipients)
+def build_smtp_message(payload: EmailDeliveryPayload) -> EmailMessage:
+    recipients = _sanitize_recipients(payload.recipients)
     msg = EmailMessage()
-    msg["Subject"] = subject
-    msg["From"] = smtp_from
+    msg["Subject"] = payload.subject
+    msg["From"] = payload.smtp_from
     msg["To"] = ", ".join(recipients)
-    msg.set_content(body)
-    if html_body:
-        msg.add_alternative(html_body, subtype="html")
+    msg.set_content(payload.body)
+    if payload.html_body:
+        msg.add_alternative(payload.html_body, subtype="html")
     return msg
 
 
@@ -152,11 +150,13 @@ async def send_via_sendgrid(
 
     try:
         await transport.post_with_retry(
-            client,
-            "https://api.sendgrid.com/v3/mail/send",
-            json=request_payload,
-            headers=headers,
-            retry_on_status={429, 500, 502, 503, 504},
+            transport.HttpPostRequest(
+                client=client,
+                url="https://api.sendgrid.com/v3/mail/send",
+                json=request_payload,
+                headers=headers,
+                retry_on_status={429, 500, 502, 503, 504},
+            )
         )
         return True
     except httpx.HTTPStatusError as e:
@@ -195,11 +195,13 @@ async def send_via_resend(
 
     try:
         await transport.post_with_retry(
-            client,
-            "https://api.resend.com/emails",
-            json=request_payload,
-            headers=headers,
-            retry_on_status={429, 500, 502, 503, 504},
+            transport.HttpPostRequest(
+                client=client,
+                url="https://api.resend.com/emails",
+                json=request_payload,
+                headers=headers,
+                retry_on_status={429, 500, 502, 503, 504},
+            )
         )
         return True
     except httpx.HTTPStatusError as e:

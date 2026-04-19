@@ -152,7 +152,10 @@ def test_dependencies_public_allowlist_edges(monkeypatch):
     monkeypatch.setattr(config, "require_client_ip_for_public_endpoints", True)
     monkeypatch.setattr(dependencies, "client_ip", lambda _req: "unknown")
     with pytest.raises(HTTPException) as exc:
-        dependencies.enforce_public_endpoint_security(_request(), scope="public", limit=1, window_seconds=60)
+        dependencies.enforce_public_endpoint_security(
+            _request(),
+            dependencies.PublicEndpointSecurityConfig(scope="public", limit=1, window_seconds=60),
+        )
     assert exc.value.status_code == 403
 
     monkeypatch.setattr(config, "require_client_ip_for_public_endpoints", False)

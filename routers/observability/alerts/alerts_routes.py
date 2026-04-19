@@ -2,6 +2,7 @@ from typing import cast
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from fastapi.concurrency import run_in_threadpool
+from pydantic import BaseModel, Field
 
 from custom_types.json import JSONDict
 from middleware.dependencies import require_any_permission_with_scope, require_permission_with_scope
@@ -13,6 +14,14 @@ from models.alerting.alerts import Alert, AlertGroup
 from .shared import INVALID_FILTER_LABELS_JSON, alertmanager_service, storage_service, sync_incidents
 
 router = APIRouter(tags=["alertmanager"])
+
+
+class AlertListQuery(BaseModel):
+    active: bool | None = Field(default=None)
+    silenced: bool | None = Field(default=None)
+    inhibited: bool | None = Field(default=None)
+    filter_labels: str | None = Field(default=None)
+    show_hidden: bool = Field(default=False)
 
 
 def _json_dict(value: object) -> dict[str, object]:
@@ -29,16 +38,15 @@ def _json_dict(value: object) -> dict[str, object]:
 )
 @handle_route_errors(bad_request_detail=INVALID_FILTER_LABELS_JSON)
 async def list_alerts(
-    active: bool | None = Query(None),
-    silenced: bool | None = Query(None),
-    inhibited: bool | None = Query(None),
-    filter_labels: str | None = Query(None),
-    show_hidden: bool = Query(False),
+    query: AlertListQuery = Depends(),
     current_user: TokenData = Depends(require_permission_with_scope(Permission.READ_ALERTS, "alertmanager")),
 ) -> list[Alert]:
-    labels = alertmanager_service.parse_filter_labels(filter_labels)
+    labels = alertmanager_service.parse_filter_labels(query.filter_labels)
     alerts = await alertmanager_service.get_alerts(
-        filter_labels=labels, active=active, silenced=silenced, inhibited=inhibited
+        filter_labels=labels or {},
+        active=query.active,
+        silenced=query.silenced,
+        inhibited=query.inhibited,
     )
     alert_dicts = [alert.model_dump(by_alias=True) for alert in alerts]
     await sync_incidents(current_user.tenant_id, alert_dicts, log_context="get_alerts")
@@ -50,7 +58,7 @@ async def list_alerts(
         getattr(current_user, "group_ids", []) or [],
         alert_dicts,
     )
-    if not show_hidden:
+    if not query.show_hidden:
         hidden_rule_names = set(
             await run_in_threadpool(
                 storage_service.get_hidden_rule_names,

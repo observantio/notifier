@@ -68,6 +68,12 @@ async def test_notify_for_alerts_covers_skip_suppressed_and_dispatch_paths(monke
 
     notification_service.send_notification = fake_send_notification
     monkeypatch.setattr(channels_ops, "is_suppressed_status", lambda raw_status: raw_status == {"state": "suppressed"})
+    context = channels_ops.NotificationDispatchContext(
+        service=service,
+        tenant_id="tenant",
+        storage_service=storage_service,
+        notification_service=notification_service,
+    )
 
     alerts = [
         {},
@@ -89,7 +95,7 @@ async def test_notify_for_alerts_covers_skip_suppressed_and_dispatch_paths(monke
         },
     ]
 
-    await channels_ops.notify_for_alerts(service, "tenant", alerts, storage_service, notification_service)
+    await channels_ops.notify_for_alerts(context, alerts)
     assert len(sent) == 4
     assert sent[0][2] == "firing"
     assert sent[0][1].annotations["WatchdogCorrelationId"] == "infra"
@@ -98,7 +104,7 @@ async def test_notify_for_alerts_covers_skip_suppressed_and_dispatch_paths(monke
     assert sent[2][2] == "resolved"
 
     storage_service.get_notification_channels_for_rule_name = lambda *_args, **_kwargs: []
-    await channels_ops.notify_for_alerts(service, "tenant", alerts, storage_service, notification_service)
+    await channels_ops.notify_for_alerts(context, alerts)
 
     # cover matched-rule optional annotation branches and unmatched-rule path
     sent.clear()
@@ -108,11 +114,8 @@ async def test_notify_for_alerts_covers_skip_suppressed_and_dispatch_paths(monke
     ]
     storage_service.get_alert_rule_by_name_for_delivery = lambda *_args, **_kwargs: sparse_rule
     await channels_ops.notify_for_alerts(
-        service,
-        "tenant",
+        context,
         [{"labels": {"alertname": "CPUHigh"}, "annotations": {}, "status": {"state": "active"}}],
-        storage_service,
-        notification_service,
     )
     assert sent and "WatchdogCreatedByUsername" not in sent[-1][1].annotations
     assert "WatchdogProductName" not in sent[-1][1].annotations
@@ -120,11 +123,8 @@ async def test_notify_for_alerts_covers_skip_suppressed_and_dispatch_paths(monke
     sent.clear()
     storage_service.get_alert_rule_by_name_for_delivery = lambda *_args, **_kwargs: None
     await channels_ops.notify_for_alerts(
-        service,
-        "tenant",
+        context,
         [{"labels": {"alertname": "CPUHigh"}, "annotations": {}, "status": "resolved"}],
-        storage_service,
-        notification_service,
     )
     assert sent and sent[-1][2] == "resolved"
 

@@ -26,6 +26,7 @@ from models.access.auth_models import Role, TokenData
 from models.alerting.alerts import Alert
 from models.alerting.rules import AlertRule
 from services.alerting import alerts_ops, rules_ops
+from services.alerting.alerts_ops import AlertQuery
 from services.notification import transport as transport_mod
 
 
@@ -94,7 +95,10 @@ async def test_alerts_ops_cover_success_and_failure_branches(monkeypatch):
         )
 
     monkeypatch.setattr(service.alertmanager_http_client, "get", fake_alert_get, raising=False)
-    alerts = await alerts_ops.get_alerts(service, {"service": "api"}, active=True, silenced=False, inhibited=False)
+    alerts = await alerts_ops.get_alerts(
+        service,
+        AlertQuery(filter_labels={"service": "api"}, active=True, silenced=False, inhibited=False),
+    )
     assert alerts[0].labels["alertname"] == "CPUHigh"
 
     async def fake_group_get(*_args, **_kwargs):
@@ -270,11 +274,16 @@ async def test_transport_helpers_cover_transient_checks_and_send_paths(monkeypat
 
     response = FakeResponse(status_code=200)
     assert (
-        await transport_mod.post_with_retry(FakeClient(response), "https://example.test", json={"ok": True}) is response
+        await transport_mod.post_with_retry(
+            transport_mod.HttpPostRequest(FakeClient(response), "https://example.test", json={"ok": True})
+        )
+        is response
     )
 
     with pytest.raises(httpx.HTTPStatusError):
-        await transport_mod.post_with_retry(FakeClient(FakeResponse(status_code=500)), "https://example.test")
+        await transport_mod.post_with_retry(
+            transport_mod.HttpPostRequest(FakeClient(FakeResponse(status_code=500)), "https://example.test")
+        )
 
     sent = []
 

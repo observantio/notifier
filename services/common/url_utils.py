@@ -19,35 +19,25 @@ MAX_URL_LENGTH = 2048
 
 
 def is_safe_http_url(value: str | None) -> bool:
-    if not value or not isinstance(value, str):
-        return False
+    raw_value = value.strip() if isinstance(value, str) else ""
+    is_valid = bool(raw_value and len(raw_value) <= MAX_URL_LENGTH)
+    parsed = None
+    if is_valid:
+        try:
+            parsed = urlparse(raw_value)
+        except ValueError:
+            is_valid = False
 
-    if len(value) > MAX_URL_LENGTH:
-        return False
+    hostname = parsed.hostname if parsed else None
+    if is_valid and parsed:
+        is_valid = bool(parsed.scheme in ALLOWED_SCHEMES and hostname and parsed.netloc and "." in hostname)
+    if is_valid and hostname:
+        is_valid = hostname not in ("localhost",) and not hostname.endswith(".local")
 
-    try:
-        parsed = urlparse(value.strip())
-    except ValueError:
-        return False
-
-    if parsed.scheme not in ALLOWED_SCHEMES:
-        return False
-
-    hostname = parsed.hostname
-    if not hostname:
-        return False
-
-    if hostname in ("localhost",) or hostname.endswith(".local"):
-        return False
-
-    try:
-        ip = ipaddress.ip_address(hostname)
-        if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved:
-            return False
-    except ValueError:
-        pass
-
-    if not parsed.netloc or "." not in hostname:
-        return False
-
-    return True
+    if is_valid and hostname:
+        try:
+            ip = ipaddress.ip_address(hostname)
+            is_valid = not (ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved)
+        except ValueError:
+            pass
+    return is_valid

@@ -166,7 +166,7 @@ exclude = [
 ]
 
 [tool.pylint.main]
-jobs = 1
+jobs = 4
 extension-pkg-allow-list = ["sqlalchemy"]
 ignore = [".git", "__pycache__", ".mypy_cache", ".pytest_cache", ".ruff_cache", ".venv", "venv", "build", "dist", "tmp", "vendor", "tests", "mutants"]
 ignore-paths = ["^tests/", "^mutants/"]
@@ -186,13 +186,13 @@ max-line-length = 120
 max-module-lines = 800
 
 [tool.pylint.design]
-max-args = 6
-max-positional-arguments = 6
-max-attributes = 35
-max-public-methods = 25
-max-returns = 10
+max-args = 5
+max-positional-arguments = 4
+max-attributes = 20
+max-public-methods = 15
+max-returns = 5
 max-nested-blocks = 5
-max-statements = 80
+max-statements = 50
 min-public-methods = 0
 
 [tool.pylint.basic]

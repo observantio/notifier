@@ -72,8 +72,8 @@ def test_send_email_delegates_to_email_providers(monkeypatch):
         called["rs"] = (api_key, recipients)
         return True
 
-    async def fake_send_via_smtp(message, hostname, port, username, password, start_tls, use_tls):
-        called["smtp"] = (hostname, port)
+    async def fake_send_via_smtp(message, smtp=None, **_kwargs):
+        called["smtp"] = (smtp.hostname, smtp.port)
         return True
 
     monkeypatch.setattr(notification_email, "send_via_sendgrid", fake_send_via_sendgrid)
@@ -116,7 +116,7 @@ def test_format_helpers_delegate_to_payloads(monkeypatch):
     monkeypatch.setattr(notification_payloads, "format_alert_body", fake_format)
 
     # avoid real email transport so test stays fast
-    async def fake_send_smtp(message, hostname, port, username=None, password=None, start_tls=False, use_tls=False):
+    async def fake_send_smtp(message, smtp=None, **_kwargs):
         return True
 
     monkeypatch.setattr(notification_email, "send_via_smtp", fake_send_smtp)
@@ -135,16 +135,16 @@ def test_format_helpers_delegate_to_payloads(monkeypatch):
 def test_send_email_uses_build_smtp_message(monkeypatch):
     captured = {}
 
-    def fake_build(subject, body, smtp_from, recipients, html_body=None):
-        captured["built"] = (subject, body, smtp_from, recipients, html_body)
+    def fake_build(payload):
+        captured["built"] = (payload.subject, payload.body, payload.smtp_from, payload.recipients, payload.html_body)
         from email.message import EmailMessage
 
         m = EmailMessage()
-        m["Subject"] = subject
+        m["Subject"] = payload.subject
         return m
 
-    async def fake_send_smtp(message, hostname, port, username=None, password=None, start_tls=False, use_tls=False):
-        captured["sent"] = (hostname, port)
+    async def fake_send_smtp(message, smtp=None, **_kwargs):
+        captured["sent"] = (smtp.hostname, smtp.port)
         return True
 
     monkeypatch.setattr(notification_email, "build_smtp_message", fake_build)

@@ -28,11 +28,16 @@ async def test_notify_for_alerts_skips_suppressed_alerts():
         get_alert_rule_by_name_for_delivery=lambda *args, **kwargs: None,
     )
     notification_service = SimpleNamespace(send_notification=AsyncMock(return_value=True))
-
-    await channels_ops.notify_for_alerts(
+    context = channels_ops.NotificationDispatchContext(
         service=SimpleNamespace(),
         tenant_id="t1",
-        alerts_list=[
+        storage_service=storage_service,
+        notification_service=notification_service,
+    )
+
+    await channels_ops.notify_for_alerts(
+        context,
+        [
             {
                 "labels": {"alertname": "DiskFull", "severity": "critical"},
                 "annotations": {"summary": "Disk almost full"},
@@ -41,8 +46,6 @@ async def test_notify_for_alerts_skips_suppressed_alerts():
                 "fingerprint": "fp-1",
             }
         ],
-        storage_service=storage_service,
-        notification_service=notification_service,
     )
 
     notification_service.send_notification.assert_not_called()

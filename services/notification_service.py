@@ -11,6 +11,7 @@ http://www.apache.org/licenses/LICENSE-2.0
 
 import logging
 import re
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from email.message import EmailMessage
 from html import escape as html_escape
@@ -33,6 +34,15 @@ from services.notification import validators as notification_validators
 
 logger = logging.getLogger(__name__)
 _EMAIL_TEMPLATE_ROOT = Path(__file__).resolve().parents[1] / "templates" / "emails"
+
+
+@dataclass(frozen=True)
+class IncidentAssignmentEmail:
+    recipient_email: str
+    incident_title: str
+    incident_status: str
+    incident_severity: str
+    actor: str
 
 
 def _render_html_template(template_name: str, values: dict[str, str]) -> str | None:
@@ -154,57 +164,56 @@ class NotificationService:
             return False
         return await sender(channel, alert, action)
 
-    async def send_incident_assignment_email(
-        self,
-        recipient_email: str,
-        incident_title: str,
-        incident_status: str,
-        incident_severity: str,
-        actor: str,
-    ) -> bool:
+    def _incident_assignment_email_enabled(self) -> bool:
         enabled = str(config.get_secret("INCIDENT_ASSIGNMENT_EMAIL_ENABLED") or "false").strip().lower() in {
             "1",
             "true",
             "yes",
             "on",
         }
-        if not enabled:
-            return False
+        return enabled
+
+    def _incident_assignment_smtp_config(self) -> notification_transport.SmtpDeliveryConfig | None:
         smtp_host = (config.get_secret("INCIDENT_ASSIGNMENT_SMTP_HOST") or "").strip()
         if not smtp_host:
-            logger.info("Incident assignment email skipped: INCIDENT_ASSIGNMENT_SMTP_HOST not set")
-            return False
+            return None
         try:
             smtp_port = int(config.get_secret("INCIDENT_ASSIGNMENT_SMTP_PORT") or "587")
         except ValueError:
             smtp_port = 587
-        smtp_user = config.get_secret("INCIDENT_ASSIGNMENT_SMTP_USERNAME")
-        smtp_pass = config.get_secret("INCIDENT_ASSIGNMENT_SMTP_PASSWORD")
+        return notification_transport.SmtpDeliveryConfig(
+            hostname=smtp_host,
+            port=smtp_port,
+            username=config.get_secret("INCIDENT_ASSIGNMENT_SMTP_USERNAME"),
+            password=config.get_secret("INCIDENT_ASSIGNMENT_SMTP_PASSWORD"),
+            start_tls=self._as_bool(config.get_secret("INCIDENT_ASSIGNMENT_SMTP_STARTTLS") or "true"),
+            use_tls=self._as_bool(config.get_secret("INCIDENT_ASSIGNMENT_SMTP_USE_SSL") or "false"),
+        )
+
+    def _build_incident_assignment_message(self, payload: IncidentAssignmentEmail) -> EmailMessage:
         smtp_from = config.get_secret("INCIDENT_ASSIGNMENT_FROM") or config.default_admin_email
-        use_starttls = self._as_bool(config.get_secret("INCIDENT_ASSIGNMENT_SMTP_STARTTLS") or "true")
-        use_ssl = self._as_bool(config.get_secret("INCIDENT_ASSIGNMENT_SMTP_USE_SSL") or "false")
         msg = EmailMessage()
-        msg["Subject"] = f"[Incident Assigned] {incident_title}"
+        msg["Subject"] = f"[Incident Assigned] {payload.incident_title}"
         msg["From"] = smtp_from
-        msg["To"] = recipient_email
+        msg["To"] = payload.recipient_email
         timestamp = datetime.now(UTC).isoformat()
         msg.set_content(
             f"You have been assigned an incident in Watchdog.\n\n"
-            f"Title: {incident_title}\n"
-            f"Status: {incident_status}\n"
-            f"Severity: {incident_severity}\n"
-            f"Updated by: {actor}\n"
+            f"Title: {payload.incident_title}\n"
+            f"Status: {payload.incident_status}\n"
+            f"Severity: {payload.incident_severity}\n"
+            f"Updated by: {payload.actor}\n"
             f"Timestamp: {timestamp}\n"
         )
-        theme = _incident_severity_theme(incident_severity)
+        theme = _incident_severity_theme(payload.incident_severity)
         html_body = _render_html_template(
             "incident_assignment.html",
             {
-                "incident_title": incident_title,
-                "incident_status": incident_status,
-                "incident_severity": incident_severity,
-                "incident_severity_upper": str(incident_severity or "info").upper(),
-                "actor": actor,
+                "incident_title": payload.incident_title,
+                "incident_status": payload.incident_status,
+                "incident_severity": payload.incident_severity,
+                "incident_severity_upper": str(payload.incident_severity or "info").upper(),
+                "actor": payload.actor,
                 "timestamp": timestamp,
                 "header_bg": theme["header_bg"],
                 "header_fg": theme["header_fg"],
@@ -214,39 +223,60 @@ class NotificationService:
         )
         if html_body:
             msg.add_alternative(html_body, subtype="html")
+        return msg
+
+    async def send_incident_assignment_email(self, payload: IncidentAssignmentEmail) -> bool:
+        enabled = self._incident_assignment_email_enabled()
+        if not enabled:
+            return False
+        smtp_config = self._incident_assignment_smtp_config()
+        if smtp_config is None:
+            logger.info("Incident assignment email skipped: INCIDENT_ASSIGNMENT_SMTP_HOST not set")
+            return False
+        msg = self._build_incident_assignment_message(payload)
         try:
-            await self._send_smtp_with_retry(
-                message=msg,
-                hostname=smtp_host,
-                port=smtp_port,
-                username=smtp_user,
-                password=smtp_pass,
-                start_tls=use_starttls,
-                use_tls=use_ssl,
-            )
-            logger.info("Incident assignment email sent to %s", recipient_email)
+            await self._send_smtp_with_retry(message=msg, smtp=smtp_config)
+            logger.info("Incident assignment email sent to %s", payload.recipient_email)
             return True
         except (ValueError, TimeoutError, OSError, aiosmtplib.errors.SMTPException) as exc:
-            logger.warning("Failed to send incident assignment email to %s: %s", recipient_email, exc)
+            logger.warning("Failed to send incident assignment email to %s: %s", payload.recipient_email, exc)
             return False
 
-    async def _send_email(self, channel: NotificationChannel, alert: Alert, action: str) -> bool:
+    @staticmethod
+    def _email_delivery(
+        channel: NotificationChannel,
+        alert: Alert,
+        action: str,
+    ) -> tuple[notification_email.EmailDeliveryPayload, str]:
         cfg = channel.config or {}
         to_field = cfg.get("to") or cfg.get("recipient")
-        if not to_field:
-            logger.error("Email channel '%s' has no 'to' address configured", channel.name)
-            return False
-        recipients = [r.strip() for r in re.split(r"[,;\s]+", str(to_field)) if r.strip()]
-        if not recipients:
-            logger.error("No valid recipient addresses for channel %s", channel.name)
-            return False
+        recipients = [item.strip() for item in re.split(r"[,;\s]+", str(to_field or "")) if item.strip()]
         subject = f"[{action.upper()}] {alert.labels.get('alertname', 'Alert')}"
         body = notification_payloads.format_alert_body(alert, action)
         html_body = notification_payloads.format_alert_html(alert, action)
-        provider_value = cfg.get("email_provider") or cfg.get("emailProvider") or "smtp"
-        provider = str(provider_value).strip().lower()
-        smtp_from = str(cfg.get("smtp_from") or cfg.get("smtpFrom") or cfg.get("from") or config.default_admin_email)
+        smtp_from = str(
+            cfg.get("smtp_from") or cfg.get("smtpFrom") or cfg.get("from") or config.default_admin_email
+        )
+        return (
+            notification_email.EmailDeliveryPayload(
+                subject=subject,
+                body=body,
+                recipients=recipients,
+                smtp_from=smtp_from,
+                html_body=html_body,
+            ),
+            str(cfg.get("email_provider") or cfg.get("emailProvider") or "smtp").strip().lower(),
+        )
 
+    async def _send_via_http_email_provider(
+        self,
+        provider: str,
+        channel: NotificationChannel,
+        email_payload: notification_email.EmailDeliveryPayload,
+    ) -> bool | None:
+        cfg = channel.config or {}
+        api_key = ""
+        sender = None
         if provider == "sendgrid":
             api_key = str(
                 cfg.get("sendgrid_api_key")
@@ -255,55 +285,36 @@ class NotificationService:
                 or cfg.get("apiKey")
                 or ""
             )
-            if not api_key:
-                logger.error("SendGrid API key not configured for email channel %s", channel.name)
-                return False
-            sent = await notification_email.send_via_sendgrid(
-                self._client,
-                api_key,
-                notification_email.EmailDeliveryPayload(
-                    subject=subject,
-                    body=body,
-                    recipients=recipients,
-                    smtp_from=smtp_from,
-                    html_body=html_body,
-                ),
-            )
-            if sent:
-                logger.info("Email notification sent via SendGrid (channel=%s)", channel.name)
-            else:
-                logger.error("Failed SendGrid email for channel %s", channel.name)
-            return sent
-
+            sender = notification_email.send_via_sendgrid
         if provider == "resend":
             api_key = str(
-                cfg.get("resend_api_key") or cfg.get("resendApiKey") or cfg.get("api_key") or cfg.get("apiKey") or ""
+                cfg.get("resend_api_key")
+                or cfg.get("resendApiKey")
+                or cfg.get("api_key")
+                or cfg.get("apiKey")
+                or ""
             )
-            if not api_key:
-                logger.error("Resend API key not configured for email channel %s", channel.name)
-                return False
-            sent = await notification_email.send_via_resend(
-                self._client,
-                api_key,
-                notification_email.EmailDeliveryPayload(
-                    subject=subject,
-                    body=body,
-                    recipients=recipients,
-                    smtp_from=smtp_from,
-                    html_body=html_body,
-                ),
-            )
-            if sent:
-                logger.info("Email notification sent via Resend (channel=%s)", channel.name)
-            else:
-                logger.error("Failed Resend email for channel %s", channel.name)
-            return sent
-
-        if provider != "smtp":
-            logger.error("Unsupported email provider '%s' for channel %s", provider, channel.name)
+            sender = notification_email.send_via_resend
+        if sender is None:
+            return None
+        if not api_key:
+            logger.error("%s API key not configured for email channel %s", provider.title(), channel.name)
             return False
+        sent = await sender(self._client, api_key, email_payload)
+        if sent:
+            logger.info("Email notification sent via %s (channel=%s)", provider.title(), channel.name)
+        else:
+            logger.error("Failed %s email for channel %s", provider.title(), channel.name)
+        return sent
 
+    def _smtp_delivery_config(
+        self,
+        channel: NotificationChannel,
+    ) -> notification_transport.SmtpDeliveryConfig | None:
+        cfg = channel.config or {}
         smtp_host = str(cfg.get("smtp_host") or cfg.get("smtpHost") or "")
+        if not smtp_host:
+            return None
         smtp_port = int(str(cfg.get("smtp_port") or cfg.get("smtpPort") or 0))
         smtp_user = str(cfg.get("smtp_username") or cfg.get("smtpUsername") or cfg.get("username") or "") or None
         smtp_pass = str(cfg.get("smtp_password") or cfg.get("smtpPassword") or cfg.get("password") or "") or None
@@ -316,13 +327,8 @@ class NotificationService:
             cfg.get("smtp_starttls") or cfg.get("smtpStartTLS") or cfg.get("starttls") or False
         )
         use_ssl = self._as_bool(cfg.get("smtp_use_ssl") or cfg.get("smtpUseSSL") or False)
-
-        if not smtp_host:
-            logger.error("SMTP host not configured for email channel %s", channel.name)
-            return False
         if smtp_port == 0:
             smtp_port = 465 if use_ssl else 587 if use_starttls else 25
-
         if smtp_auth_type == "none":
             smtp_user = None
             smtp_pass = None
@@ -330,21 +336,44 @@ class NotificationService:
             smtp_user = smtp_user or "apikey"
             smtp_pass = smtp_api_key
             if not smtp_pass:
-                logger.error("SMTP API key not configured for email channel %s", channel.name)
-                return False
+                return None
         elif smtp_user and not smtp_pass and smtp_api_key:
             smtp_pass = smtp_api_key
+        return notification_transport.SmtpDeliveryConfig(
+            hostname=smtp_host,
+            port=smtp_port,
+            username=smtp_user,
+            password=smtp_pass,
+            start_tls=use_starttls,
+            use_tls=use_ssl,
+        )
 
-        msg = notification_email.build_smtp_message(subject, body, smtp_from, recipients, html_body)
-        logger.info("Sending email to %s via %s:%s (channel=%s)", recipients, smtp_host, smtp_port, channel.name)
+    async def _send_email(self, channel: NotificationChannel, alert: Alert, action: str) -> bool:
+        email_payload, provider = self._email_delivery(channel, alert, action)
+        if not email_payload.recipients:
+            logger.error("Email channel '%s' has no 'to' address configured", channel.name)
+            return False
+        provider_result = await self._send_via_http_email_provider(provider, channel, email_payload)
+        if provider_result is not None:
+            return provider_result
+        if provider != "smtp":
+            logger.error("Unsupported email provider '%s' for channel %s", provider, channel.name)
+            return False
+        smtp_config = self._smtp_delivery_config(channel)
+        if smtp_config is None:
+            logger.error("SMTP configuration is invalid for email channel %s", channel.name)
+            return False
+        msg = notification_email.build_smtp_message(email_payload)
+        logger.info(
+            "Sending email to %s via %s:%s (channel=%s)",
+            email_payload.recipients,
+            smtp_config.hostname,
+            smtp_config.port,
+            channel.name,
+        )
         sent = await notification_email.send_via_smtp(
             msg,
-            smtp_host,
-            smtp_port,
-            smtp_user,
-            smtp_pass,
-            use_starttls,
-            use_ssl,
+            smtp=smtp_config,
         )
         if sent:
             logger.info("Email notification sent (channel=%s)", channel.name)

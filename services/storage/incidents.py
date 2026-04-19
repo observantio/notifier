@@ -26,7 +26,7 @@ from database import get_db_session
 from db_models import AlertIncident as AlertIncidentDB
 from db_models import AlertRule as AlertRuleDB
 from models.alerting.incidents import AlertIncident, AlertIncidentUpdateRequest
-from services.common.access import has_access
+from services.common.access import AccessCheck, has_access
 from services.common.meta import INCIDENT_META_KEY, _safe_group_ids, parse_meta
 from services.common.pagination import cap_pagination
 from services.common.tenants import ensure_tenant_exists
@@ -38,6 +38,7 @@ from services.storage.incidents_core import (
     _shared_group_ids,
 )
 from services.storage.incidents_sync import (
+    AlertSyncContext,
     _resolve_incidents_without_active_alerts,
     _sync_single_alert_into_incidents,
 )
@@ -66,6 +67,13 @@ class IncidentActorContext:
     user_id: str
     group_ids: list[str] = field(default_factory=list)
     user_email: str | None = None
+
+
+@dataclass(frozen=True)
+class IncidentAccessContext:
+    user_id: str
+    group_ids: list[str] = field(default_factory=list)
+    require_write: bool = False
 
 
 def _coerce_incident_list_filters(
@@ -111,8 +119,8 @@ def _coerce_incident_list_filters(
 
 
 class IncidentStorageService:
+    @staticmethod
     def unlink_jira_integration_from_incidents(
-        self,
         tenant_id: str,
         integration_id: str,
     ) -> int:
@@ -141,8 +149,8 @@ class IncidentStorageService:
 
         return updated_count
 
+    @staticmethod
     def get_incident_summary(
-        self,
         tenant_id: str,
         user_id: str,
         group_ids: list[str] | None = None,
@@ -166,11 +174,13 @@ class IncidentStorageService:
 
                 creator_id = str(meta.get("created_by") or "") or None
                 if not _incident_access_allowed(
-                    visibility=inc_visibility,
-                    creator_id=creator_id,
-                    user_id=user_id,
-                    shared_group_ids=_safe_group_ids(meta),
-                    user_group_ids=group_ids,
+                    AccessCheck(
+                        visibility=inc_visibility,
+                        created_by=creator_id,
+                        user_id=user_id,
+                        shared_group_ids=_safe_group_ids(meta),
+                        user_group_ids=group_ids,
+                    )
                 ):
                     continue
 
@@ -201,19 +211,24 @@ class IncidentStorageService:
             "by_visibility": by_visibility,
         }
 
-    def sync_incidents_from_alerts(self, tenant_id: str, alerts: list[JSONDict], resolve_missing: bool = True) -> None:
+    @staticmethod
+    def sync_incidents_from_alerts(tenant_id: str, alerts: list[JSONDict], resolve_missing: bool = True) -> None:
         now = datetime.now(UTC)
         active_incident_tokens: set[str] = set()
 
         with get_db_session() as db:
             ensure_tenant_exists(db, tenant_id)
             for alert in alerts or []:
-                _sync_single_alert_into_incidents(db, tenant_id, now, alert, active_incident_tokens)
+                _sync_single_alert_into_incidents(
+                    db,
+                    AlertSyncContext(tenant_id=tenant_id, now=now, alert=alert),
+                    active_incident_tokens,
+                )
             if resolve_missing:
                 _resolve_incidents_without_active_alerts(db, tenant_id, now, active_incident_tokens)
 
+    @staticmethod
     def list_incidents(
-        self,
         tenant_id: str,
         user_id: str,
         filters_or_group_ids: IncidentListFilters | list[str] | None = None,
@@ -254,11 +269,13 @@ class IncidentStorageService:
                         continue
 
                 if not _incident_access_allowed(
-                    visibility=inc_visibility,
-                    creator_id=str(creator_id or "") or None,
-                    user_id=user_id,
-                    shared_group_ids=shared_group_ids,
-                    user_group_ids=group_ids,
+                    AccessCheck(
+                        visibility=inc_visibility,
+                        created_by=str(creator_id or "") or None,
+                        user_id=user_id,
+                        shared_group_ids=shared_group_ids,
+                        user_group_ids=group_ids,
+                    )
                 ):
                     continue
 
@@ -266,15 +283,15 @@ class IncidentStorageService:
 
             return result
 
+    @staticmethod
     def get_incident_for_user(
-        self,
         incident_id: str,
         tenant_id: str,
-        user_id: str | None = None,
-        group_ids: list[str] | None = None,
-        require_write: bool = False,
+        context: IncidentAccessContext | None = None,
     ) -> AlertIncident | None:
-        group_ids = group_ids or []
+        user_id = context.user_id if context is not None else None
+        group_ids = context.group_ids if context is not None else []
+        require_write = context.require_write if context is not None else False
         with get_db_session() as db:
             incident = (
                 db.query(AlertIncidentDB)
@@ -290,23 +307,24 @@ class IncidentStorageService:
                     inc_visibility = "public"
                 creator_id = str(meta.get("created_by") or "") or None
                 if not _incident_access_allowed(
-                    visibility=inc_visibility,
-                    creator_id=creator_id,
-                    user_id=user_id,
-                    shared_group_ids=_safe_group_ids(meta),
-                    user_group_ids=group_ids,
-                    require_write=require_write,
+                    AccessCheck(
+                        visibility=inc_visibility,
+                        created_by=creator_id,
+                        user_id=user_id,
+                        shared_group_ids=_safe_group_ids(meta),
+                        user_group_ids=group_ids,
+                        require_write=require_write,
+                    )
                 ):
                     return None
             return incident_to_pydantic(incident)
 
+    @staticmethod
     def _apply_incident_assignee(
-        self,
         payload: AlertIncidentUpdateRequest,
         incident: AlertIncidentDB,
         visibility: str,
-        user_id: str,
-        user_email: str | None,
+        actor: IncidentActorContext,
     ) -> None:
         fields_set = set(getattr(payload, "model_fields_set", set()) or [])
         if "assignee" not in fields_set:
@@ -314,8 +332,8 @@ class IncidentStorageService:
 
         requested_assignee = str(payload.assignee or "").strip() or None
         normalized_assignee = str(requested_assignee or "").strip().lower()
-        normalized_user_id = str(user_id or "").strip().lower()
-        normalized_user_email = str(user_email or "").strip().lower()
+        normalized_user_id = str(actor.user_id or "").strip().lower()
+        normalized_user_email = str(actor.user_email or "").strip().lower()
         allowed_self_values = {v for v in (normalized_user_id, normalized_user_email) if v}
         if requested_assignee and visibility == "private" and normalized_assignee not in allowed_self_values:
             raise HTTPException(
@@ -324,8 +342,8 @@ class IncidentStorageService:
             )
         incident.assignee = requested_assignee
 
+    @staticmethod
     def _apply_incident_status(
-        self,
         payload: AlertIncidentUpdateRequest,
         incident: AlertIncidentDB,
         previous_status: str,
@@ -355,7 +373,8 @@ class IncidentStorageService:
 
         return manual_manage_flag, resolved_note_text
 
-    def _apply_jira_meta_fields(self, payload: AlertIncidentUpdateRequest, meta: JSONDict) -> None:
+    @staticmethod
+    def _apply_jira_meta_fields(payload: AlertIncidentUpdateRequest, meta: JSONDict) -> None:
         for meta_key, payload_attr in [
             ("jira_ticket_key", "jira_ticket_key"),
             ("jira_ticket_url", "jira_ticket_url"),
@@ -370,8 +389,8 @@ class IncidentStorageService:
             else:
                 meta.pop(meta_key, None)
 
+    @staticmethod
     def _apply_incident_metadata(
-        self,
         payload: AlertIncidentUpdateRequest,
         incident: AlertIncidentDB,
         user_id: str,
@@ -393,13 +412,13 @@ class IncidentStorageService:
         elif hide_flag is False:
             meta.pop("hide_when_resolved", None)
 
-        self._apply_jira_meta_fields(payload, meta)
+        IncidentStorageService._apply_jira_meta_fields(payload, meta)
 
         meta["updated_by"] = user_id
         incident.annotations = {**annotations, INCIDENT_META_KEY: json.dumps(meta)}
 
+    @staticmethod
     def _apply_incident_notes(
-        self,
         payload: AlertIncidentUpdateRequest,
         incident: AlertIncidentDB,
         user_id: str,
@@ -453,27 +472,30 @@ class IncidentStorageService:
             visibility = normalize_storage_visibility(str(meta.get("visibility") or "public"))
             creator_id = str(meta.get("created_by") or "") or None
             if not _incident_access_allowed(
-                visibility=visibility,
-                creator_id=creator_id,
-                user_id=user_id,
-                shared_group_ids=_safe_group_ids(meta),
-                user_group_ids=user_group_ids,
-                require_write=True,
+                AccessCheck(
+                    visibility=visibility,
+                    created_by=creator_id,
+                    user_id=user_id,
+                    shared_group_ids=_safe_group_ids(meta),
+                    user_group_ids=user_group_ids,
+                    require_write=True,
+                )
             ):
                 return None
 
-            self._apply_incident_assignee(payload, incident, visibility, user_id, user_email)
-            manual_manage_flag, resolved_note_text = self._apply_incident_status(
+            actor_context = IncidentActorContext(user_id=user_id, group_ids=user_group_ids, user_email=user_email)
+            IncidentStorageService._apply_incident_assignee(payload, incident, visibility, actor_context)
+            manual_manage_flag, resolved_note_text = IncidentStorageService._apply_incident_status(
                 payload, incident, previous_status, user_id
             )
-            self._apply_incident_metadata(payload, incident, user_id, manual_manage_flag)
-            self._apply_incident_notes(payload, incident, user_id, resolved_note_text)
+            IncidentStorageService._apply_incident_metadata(payload, incident, user_id, manual_manage_flag)
+            IncidentStorageService._apply_incident_notes(payload, incident, user_id, resolved_note_text)
 
             db.flush()
             return incident_to_pydantic(incident)
 
+    @staticmethod
     def filter_alerts_for_user(
-        self,
         tenant_id: str,
         user_id: str,
         group_ids: list[str] | None,
@@ -515,11 +537,13 @@ class IncidentStorageService:
 
                 if any(
                     has_access(
-                        normalize_storage_visibility(getattr(r, "visibility", None)),
-                        getattr(r, "created_by", None),
-                        user_id,
-                        _shared_group_ids(r),
-                        user_group_ids,
+                        AccessCheck(
+                            visibility=normalize_storage_visibility(getattr(r, "visibility", None)),
+                            created_by=getattr(r, "created_by", None),
+                            user_id=user_id,
+                            shared_group_ids=_shared_group_ids(r),
+                            user_group_ids=user_group_ids,
+                        )
                     )
                     for r in candidates
                 ):

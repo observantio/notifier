@@ -43,6 +43,16 @@ class SmtpDeliveryConfig:
     use_tls: bool = False
 
 
+@dataclass(frozen=True)
+class HttpPostRequest:
+    client: httpx.AsyncClient
+    url: str
+    json: Mapping[str, JSONValue] | None = None
+    headers: dict[str, str] | None = None
+    params: dict[str, QueryParamValue] | None = None
+    retry_on_status: frozenset[int] | set[int] = DEFAULT_RETRY_ON_STATUS
+
+
 def _coerce_smtp_config(
     smtp: SmtpDeliveryConfig | object | None,
     legacy_args: tuple[object, ...],
@@ -101,15 +111,8 @@ def _is_transient_smtp(exc: BaseException) -> bool:
     return False
 
 
-async def post_with_retry(
-    client: httpx.AsyncClient,
-    url: str,
-    json: Mapping[str, JSONValue] | None = None,
-    headers: dict[str, str] | None = None,
-    params: dict[str, QueryParamValue] | None = None,
-    retry_on_status: frozenset[int] | set[int] = DEFAULT_RETRY_ON_STATUS,
-) -> httpx.Response:
-    retry_set = frozenset(retry_on_status)
+async def post_with_retry(request: HttpPostRequest) -> httpx.Response:
+    retry_set = frozenset(request.retry_on_status)
 
     @retry(
         retry=retry_if_exception(lambda exc: _is_transient_http(exc, retry_set)),
@@ -119,11 +122,17 @@ async def post_with_retry(
     )
     async def _attempt() -> httpx.Response:
         try:
-            resp = await client.post(url, json=json, headers=headers, params=params, timeout=config.default_timeout)
+            resp = await request.client.post(
+                request.url,
+                json=request.json,
+                headers=request.headers,
+                params=request.params,
+                timeout=config.default_timeout,
+            )
             resp.raise_for_status()
             return resp
         except Exception as exc:
-            logger.warning("HTTP POST failed, retrying: %s", url, exc_info=exc)
+            logger.warning("HTTP POST failed, retrying: %s", request.url, exc_info=exc)
             raise
 
     return await _attempt()

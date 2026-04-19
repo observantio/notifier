@@ -24,6 +24,7 @@ from db_models import Tenant
 from models.alerting.channels import ChannelType, NotificationChannelCreate
 from models.alerting.incidents import AlertIncidentUpdateRequest
 from models.alerting.rules import AlertRuleCreate, RuleSeverity
+from services.storage.incidents import IncidentAccessContext
 from services.storage_db_service import DatabaseStorageService
 
 
@@ -91,7 +92,14 @@ def test_incident_tenant_isolation_matrix():
     assert all(inc.alert_name == "BOnlyAlert" for inc in incidents_b)
 
     incident_a_id = incidents_a[0].id
-    assert service.get_incident_for_user(incident_a_id, tenant_b, user_b, []) is None
+    assert (
+        service.get_incident_for_user(
+            incident_a_id,
+            tenant_b,
+            IncidentAccessContext(user_id=user_b, group_ids=[]),
+        )
+        is None
+    )
     assert (
         service.update_incident(
             incident_a_id,
@@ -351,7 +359,14 @@ def test_group_incident_requires_active_group_membership_even_for_creator():
     hidden_without_group = service.list_incidents(tenant_id, owner_id, group_ids=[])
     assert hidden_without_group == []
 
-    assert service.get_incident_for_user(incident_id, tenant_id, owner_id, group_ids=[]) is None
+    assert (
+        service.get_incident_for_user(
+            incident_id,
+            tenant_id,
+            IncidentAccessContext(user_id=owner_id, group_ids=[]),
+        )
+        is None
+    )
     assert (
         service.update_incident(
             incident_id,

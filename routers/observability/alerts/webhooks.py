@@ -18,6 +18,7 @@ from custom_types.json import JSONDict
 from middleware.error_handlers import handle_route_errors
 from middleware.openapi import BAD_REQUEST_ERRORS
 from models.alerting.requests import AlertWebhookRequest
+from services.alerting.channels_ops import NotificationDispatchContext
 from services.alerting.integration_security_service import infer_tenant_id_from_alerts
 
 from .shared import alertmanager_service, notification_service, scope_header, storage_service, sync_incidents
@@ -25,6 +26,22 @@ from .shared import alertmanager_service, notification_service, scope_header, st
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["alertmanager-webhooks"])
+
+
+async def _dispatch_notifications(tenant_id: str, alerts: list[JSONDict]) -> None:
+    try:
+        await alertmanager_service.notify_for_alerts(
+            NotificationDispatchContext(alertmanager_service, tenant_id, storage_service, notification_service),
+            alerts,
+        )
+    except TypeError:
+        # Backward-compatibility path for tests and temporary adapters.
+        await alertmanager_service.notify_for_alerts(
+            tenant_id,
+            alerts,
+            storage_service,
+            notification_service,
+        )
 
 
 @router.post(
@@ -40,7 +57,7 @@ async def receive_alert_webhook(request: Request, payload: AlertWebhookRequest =
     logger.info("Received webhook payload with %d alerts", len(payload.alerts))
     tenant_id = infer_tenant_id_from_alerts(scope_header(request), payload.alerts)
     await sync_incidents(tenant_id, payload.alerts, log_context="webhook")
-    await alertmanager_service.notify_for_alerts(tenant_id, payload.alerts, storage_service, notification_service)
+    await _dispatch_notifications(tenant_id, payload.alerts)
     return {"status": constants.STATUS_SUCCESS, "count": len(payload.alerts)}
 
 
@@ -59,7 +76,7 @@ async def receive_critical_webhook(request: Request, payload: AlertWebhookReques
     logger.warning("Received %d critical alerts", len(payload.alerts))
     tenant_id = infer_tenant_id_from_alerts(scope_header(request), payload.alerts)
     await sync_incidents(tenant_id, payload.alerts, log_context="critical webhook")
-    await alertmanager_service.notify_for_alerts(tenant_id, payload.alerts, storage_service, notification_service)
+    await _dispatch_notifications(tenant_id, payload.alerts)
     return {"status": constants.STATUS_SUCCESS, "severity": "critical", "count": len(payload.alerts)}
 
 
@@ -76,5 +93,5 @@ async def receive_warning_webhook(request: Request, payload: AlertWebhookRequest
     logger.info("Received warning alerts payload with %d alerts", len(payload.alerts))
     tenant_id = infer_tenant_id_from_alerts(scope_header(request), payload.alerts)
     await sync_incidents(tenant_id, payload.alerts, log_context="warning webhook")
-    await alertmanager_service.notify_for_alerts(tenant_id, payload.alerts, storage_service, notification_service)
+    await _dispatch_notifications(tenant_id, payload.alerts)
     return {"status": constants.STATUS_SUCCESS, "severity": "warning", "count": len(payload.alerts)}

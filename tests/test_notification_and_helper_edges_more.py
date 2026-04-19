@@ -264,7 +264,9 @@ async def test_email_providers_and_payload_helpers(monkeypatch):
     with pytest.raises(ValueError, match="No valid recipient"):
         email_providers._sanitize_recipients(["bad", " "])
 
-    msg = email_providers.build_smtp_message("Subject", "Body", "from@example.com", [" ops@example.com "])
+    msg = email_providers.build_smtp_message(
+        email_providers.EmailDeliveryPayload("Subject", "Body", [" ops@example.com "], "from@example.com")
+    )
     assert msg["To"] == "ops@example.com"
 
     request = httpx.Request("POST", "https://example.com")
@@ -694,7 +696,9 @@ async def test_notification_provider_sender_validator_transport_more_edges(monke
     async def smtp_os_error(*args, **kwargs):
         raise OSError("smtp down")
 
-    msg = email_providers.build_smtp_message("Subject", "Body", "from@example.com", ["ops@example.com"])
+    msg = email_providers.build_smtp_message(
+        email_providers.EmailDeliveryPayload("Subject", "Body", ["ops@example.com"], "from@example.com")
+    )
     original_send_smtp_with_retry = transport.send_smtp_with_retry
     monkeypatch.setattr(email_providers.transport, "send_smtp_with_retry", smtp_os_error)
     assert await email_providers.send_via_smtp(msg, "smtp.example.com", 587, None, None, True, False) is False

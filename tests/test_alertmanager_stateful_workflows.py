@@ -83,10 +83,21 @@ class _FakeStorage:
         self._rule_counter = 0
         self.incident_sync_calls = 0
 
+    @staticmethod
+    def _access_parts(access: object) -> tuple[str, list[str]]:
+        if hasattr(access, "user_id"):
+            return str(getattr(access, "user_id", "")), list(getattr(access, "group_ids", []) or [])
+        return str(access), []
+
     def create_notification_channel(
-        self, channel_create: NotificationChannelCreate, tenant_id: str, user_id: str, group_ids
+        self,
+        channel_create: NotificationChannelCreate,
+        tenant_id: str,
+        access: object,
+        group_ids: list[str] | None = None,
     ):
-        _ = group_ids
+        user_id, context_groups = self._access_parts(access)
+        _ = group_ids, context_groups
         self._channel_counter += 1
         channel_id = f"ch-{self._channel_counter}"
         channel = NotificationChannel.model_validate(
@@ -104,8 +115,15 @@ class _FakeStorage:
         self.channels[f"{tenant_id}:{channel_id}"] = channel
         return channel
 
-    def create_alert_rule(self, rule_create: AlertRuleCreate, tenant_id: str, user_id: str, group_ids):
-        _ = group_ids
+    def create_alert_rule(
+        self,
+        rule_create: AlertRuleCreate,
+        tenant_id: str,
+        access: object,
+        group_ids: list[str] | None = None,
+    ):
+        user_id, context_groups = self._access_parts(access)
+        _ = group_ids, context_groups
         self._rule_counter += 1
         rule_id = f"rule-{self._rule_counter}"
         rule = AlertRule.model_validate(
@@ -131,8 +149,8 @@ class _FakeStorage:
         self.rules[f"{tenant_id}:{rule_id}"] = rule
         return rule
 
-    def get_alert_rule(self, rule_id: str, tenant_id: str, user_id: str, group_ids):
-        _ = user_id, group_ids
+    def get_alert_rule(self, rule_id: str, tenant_id: str, access: object, group_ids: list[str] | None = None):
+        _ = access, group_ids
         return self.rules.get(f"{tenant_id}:{rule_id}")
 
     def get_alert_rules_for_org(self, tenant_id: str, org_id: str):
@@ -197,7 +215,10 @@ async def test_stateful_channel_rule_test_and_webhook_workflow(monkeypatch):
     fake_notification = _FakeNotificationService()
     current_user = _user()
 
-    async def _notify_for_alerts(tenant_id: str, alerts_list: list[dict[str, Any]], storage, notification):
+    async def _notify_for_alerts(context, alerts_list: list[dict[str, Any]]):
+        tenant_id = context.tenant_id
+        storage = context.storage_service
+        notification = context.notification_service
         for incoming in alerts_list:
             labels = incoming.get("labels") or {}
             alertname = str(labels.get("alertname") or "")

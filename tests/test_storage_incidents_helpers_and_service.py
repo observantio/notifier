@@ -180,11 +180,13 @@ def test_incident_storage_helper_functions(monkeypatch):
     assert incidents_core_mod._is_alert_suppressed({"status": {"state": "suppressed"}}) is True
     assert (
         incidents_mod._incident_access_allowed(
-            visibility="group",
-            creator_id="owner",
-            user_id="user",
-            shared_group_ids=["g1"],
-            user_group_ids=["g1"],
+            incidents_mod.AccessCheck(
+                visibility="group",
+                created_by="owner",
+                user_id="user",
+                shared_group_ids=["g1"],
+                user_group_ids=["g1"],
+            )
         )
         is True
     )
@@ -434,8 +436,8 @@ def test_incident_service_summary_list_get_update_and_filter(monkeypatch):
     monkeypatch.setattr(
         incidents_mod,
         "has_access",
-        lambda visibility, creator_id, user_id, shared_group_ids, user_group_ids, require_write=False: (
-            visibility != "private" or creator_id == user_id
+        lambda check: (
+            check.visibility != "private" or check.created_by == check.user_id
         ),
     )
 
@@ -449,9 +451,20 @@ def test_incident_service_summary_list_get_update_and_filter(monkeypatch):
     assert [item.id for item in listed] == ["public-open", "private-open", "group-open"]
     assert service.list_incidents("tenant-a", "user-1", ["g1"], visibility="group", group_id="g1")[0].id == "group-open"
 
-    fetched = service.get_incident_for_user("private-open", "tenant-a", user_id="user-1", group_ids=[])
+    fetched = service.get_incident_for_user(
+        "private-open",
+        "tenant-a",
+        incidents_mod.IncidentAccessContext(user_id="user-1", group_ids=[]),
+    )
     assert fetched is not None
-    assert service.get_incident_for_user("private-open", "tenant-a", user_id="other", group_ids=[]) is None
+    assert (
+        service.get_incident_for_user(
+            "private-open",
+            "tenant-a",
+            incidents_mod.IncidentAccessContext(user_id="other", group_ids=[]),
+        )
+        is None
+    )
 
     update_payload = AlertIncidentUpdateRequest(
         assignee="user-1",
@@ -555,7 +568,7 @@ def test_incident_service_unlink_and_update_edge_paths(monkeypatch):
     db = _FakeDB([row])
     monkeypatch.setattr(incidents_mod, "get_db_session", lambda: _db_session(db))
     monkeypatch.setattr(incidents_mod, "normalize_storage_visibility", lambda value: value)
-    monkeypatch.setattr(incidents_mod, "_incident_access_allowed", lambda **_kwargs: True)
+    monkeypatch.setattr(incidents_mod, "_incident_access_allowed", lambda _check: True)
     monkeypatch.setattr(
         incidents_mod,
         "incident_to_pydantic",
@@ -586,7 +599,7 @@ def test_incident_service_unlink_and_update_edge_paths(monkeypatch):
     assert "jira_ticket_key" not in meta
     assert any(note["text"] == "note-1" for note in row.notes)
 
-    monkeypatch.setattr(incidents_mod, "_incident_access_allowed", lambda **_kwargs: False)
+    monkeypatch.setattr(incidents_mod, "_incident_access_allowed", lambda _check: False)
     assert service.update_incident("inc-u", "tenant-a", "u1", AlertIncidentUpdateRequest(), ["g1"]) is None
 
     missing_db = _FakeDB([])
@@ -605,7 +618,7 @@ def test_incident_list_and_filter_additional_edges(monkeypatch):
     db = _FakeDB(rows, [])
     monkeypatch.setattr(incidents_mod, "get_db_session", lambda: _db_session(db))
     monkeypatch.setattr(incidents_mod, "cap_pagination", lambda limit, offset: (limit or 50, offset))
-    monkeypatch.setattr(incidents_mod, "_incident_access_allowed", lambda **_kwargs: True)
+    monkeypatch.setattr(incidents_mod, "_incident_access_allowed", lambda _check: True)
     monkeypatch.setattr(
         incidents_mod,
         "incident_to_pydantic",
@@ -621,14 +634,25 @@ def test_incident_list_and_filter_additional_edges(monkeypatch):
     # get_incident_for_user not found and access denied branches
     missing_db = _FakeDB([])
     monkeypatch.setattr(incidents_mod, "get_db_session", lambda: _db_session(missing_db))
-    assert service.get_incident_for_user("missing", "tenant-a", user_id="u1", group_ids=["g1"]) is None
+    assert (
+        service.get_incident_for_user(
+            "missing",
+            "tenant-a",
+            incidents_mod.IncidentAccessContext(user_id="u1", group_ids=["g1"]),
+        )
+        is None
+    )
 
     denied_row = _incident_row("inc-denied", visibility="private", created_by="u2")
     denied_db = _FakeDB([denied_row])
     monkeypatch.setattr(incidents_mod, "get_db_session", lambda: _db_session(denied_db))
-    monkeypatch.setattr(incidents_mod, "_incident_access_allowed", lambda **_kwargs: False)
+    monkeypatch.setattr(incidents_mod, "_incident_access_allowed", lambda _check: False)
     assert (
-        service.get_incident_for_user("inc-denied", "tenant-a", user_id="u1", group_ids=["g1"], require_write=True)
+        service.get_incident_for_user(
+            "inc-denied",
+            "tenant-a",
+            incidents_mod.IncidentAccessContext(user_id="u1", group_ids=["g1"], require_write=True),
+        )
         is None
     )
 
@@ -753,7 +777,7 @@ def test_incident_get_update_filter_remaining_branches(monkeypatch):
     monkeypatch.setattr(incidents_mod, "get_db_session", lambda: _db_session(db))
     access_called = {"value": False}
 
-    def _access_probe(**_kwargs):
+    def _access_probe(_check):
         access_called["value"] = True
         return True
 
@@ -763,7 +787,14 @@ def test_incident_get_update_filter_remaining_branches(monkeypatch):
         "incident_to_pydantic",
         lambda incident: SimpleNamespace(id=incident.id),
     )
-    assert service.get_incident_for_user("inc-1", "tenant-a", user_id="", group_ids=["g1"]) is not None
+    assert (
+        service.get_incident_for_user(
+            "inc-1",
+            "tenant-a",
+            incidents_mod.IncidentAccessContext(user_id="", group_ids=["g1"]),
+        )
+        is not None
+    )
     assert access_called["value"] is False
 
 
@@ -773,7 +804,7 @@ def test_update_incident_actor_context_and_legacy_args_require_payload(monkeypat
     db = _FakeDB([row])
     monkeypatch.setattr(incidents_mod, "get_db_session", lambda: _db_session(db))
     monkeypatch.setattr(incidents_mod, "normalize_storage_visibility", lambda value: value)
-    monkeypatch.setattr(incidents_mod, "_incident_access_allowed", lambda **_kwargs: True)
+    monkeypatch.setattr(incidents_mod, "_incident_access_allowed", lambda _check: True)
     monkeypatch.setattr(
         incidents_mod,
         "incident_to_pydantic",
@@ -800,7 +831,7 @@ def test_update_incident_actor_context_and_legacy_args_require_payload(monkeypat
     db = _FakeDB([resolved_row])
     monkeypatch.setattr(incidents_mod, "get_db_session", lambda: _db_session(db))
     monkeypatch.setattr(incidents_mod, "normalize_storage_visibility", lambda value: value)
-    monkeypatch.setattr(incidents_mod, "_incident_access_allowed", lambda **_kwargs: True)
+    monkeypatch.setattr(incidents_mod, "_incident_access_allowed", lambda _check: True)
     monkeypatch.setattr(
         incidents_mod,
         "incident_to_pydantic",

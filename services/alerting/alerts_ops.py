@@ -12,6 +12,7 @@ http://www.apache.org/licenses/LICENSE-2.0
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
@@ -26,6 +27,14 @@ if TYPE_CHECKING:
 
 QueryParamValue = str | int | float | bool | None
 QueryParamMapping = Mapping[str, QueryParamValue | Sequence[QueryParamValue]]
+
+
+@dataclass(frozen=True)
+class AlertQuery:
+    filter_labels: dict[str, str] = field(default_factory=dict)
+    active: bool | None = None
+    silenced: bool | None = None
+    inhibited: bool | None = None
 
 
 async def list_metric_names(service: AlertManagerService, org_id: str) -> list[str]:
@@ -162,21 +171,19 @@ async def evaluate_promql(
 
 async def get_alerts(
     service: AlertManagerService,
-    filter_labels: dict[str, str] | None = None,
-    active: bool | None = None,
-    silenced: bool | None = None,
-    inhibited: bool | None = None,
+    query: AlertQuery | None = None,
 ) -> list[Alert]:
+    effective_query = query or AlertQuery()
     params: dict[str, QueryParamValue | Sequence[QueryParamValue]] = {}
 
-    if filter_labels:
-        params["filter"] = [f'{k}="{v}"' for k, v in filter_labels.items()]
-    if active is not None:
-        params["active"] = str(active).lower()
-    if silenced is not None:
-        params["silenced"] = str(silenced).lower()
-    if inhibited is not None:
-        params["inhibited"] = str(inhibited).lower()
+    if effective_query.filter_labels:
+        params["filter"] = [f'{key}="{value}"' for key, value in effective_query.filter_labels.items()]
+    if effective_query.active is not None:
+        params["active"] = str(effective_query.active).lower()
+    if effective_query.silenced is not None:
+        params["silenced"] = str(effective_query.silenced).lower()
+    if effective_query.inhibited is not None:
+        params["inhibited"] = str(effective_query.inhibited).lower()
 
     try:
         response = await service.alertmanager_http_client.get(

@@ -40,6 +40,30 @@ class JiraIssueCreateOptions:
     priority: str | None = None
 
 
+@dataclass(frozen=True)
+class JiraRequest:
+    method: Literal["GET", "POST"]
+    path: str
+    credentials: Credentials = None
+    params: QueryParams | None = None
+    payload: JSONDict | None = None
+
+
+@dataclass(frozen=True)
+class JiraTransitionTarget:
+    target_names: set[str]
+    transition_names: set[str]
+    status_category_key: str
+
+
+@dataclass(frozen=True)
+class JiraIssueCreateRequest:
+    project_key: str
+    summary: str
+    options: JiraIssueCreateOptions = JiraIssueCreateOptions()
+    credentials: Credentials = None
+
+
 def _string_value(value: object) -> str:
     return value.strip() if isinstance(value, str) else ""
 
@@ -144,76 +168,62 @@ class JiraService:
             raise JiraError("JIRA_BASE_URL not configured or invalid")
         return f"{base_url}{path}"
 
-    async def _request(
-        self,
-        method: Literal["GET", "POST"],
-        path: str,
-        credentials: Credentials = None,
-        params: QueryParams | None = None,
-        payload: JSONDict | None = None,
-    ) -> JSONValue:
-        url = self._build_url(path, credentials)
-        headers = self._headers(credentials)
+    async def _request(self, request: JiraRequest) -> JSONValue:
+        url = self._build_url(request.path, request.credentials)
+        headers = self._headers(request.credentials)
         try:
-            if method == "GET":
-                response = await self._client.get(url, headers=headers, params=params)
+            if request.method == "GET":
+                response = await self._client.get(url, headers=headers, params=request.params)
             else:
-                response = await self._client.post(url, json=payload, headers=headers)
+                response = await self._client.post(url, json=request.payload, headers=headers)
             response.raise_for_status()
             result = response.json() if response.content else {}
             return result
         except httpx.HTTPStatusError as exc:
-            logger.warning("Jira %s failed: %s %s", method, exc.response.status_code, exc.response.text[:240])
+            logger.warning("Jira %s failed: %s %s", request.method, exc.response.status_code, exc.response.text[:240])
             detail = (exc.response.text or "").strip()
             if detail:
                 raise JiraError(f"Jira API error: {exc.response.status_code} - {detail[:240]}") from exc
             raise JiraError(f"Jira API error: {exc.response.status_code}") from exc
         except httpx.TimeoutException as exc:
             host = urlparse(url).netloc or "jira"
-            logger.warning("Jira %s timeout contacting %s", method, host)
+            logger.warning("Jira %s timeout contacting %s", request.method, host)
             raise JiraError(f"Jira request timed out while contacting {host}") from exc
         except httpx.RequestError as exc:
             host = urlparse(url).netloc or "jira"
-            logger.warning("Jira %s connection failure contacting %s: %s", method, host, exc)
+            logger.warning("Jira %s connection failure contacting %s: %s", request.method, host, exc)
             raise JiraError(f"Unable to connect to Jira host {host}") from exc
         except RuntimeError as exc:
             host = urlparse(url).netloc or "jira"
-            logger.warning("Jira %s runtime transport failure contacting %s: %s", method, host, exc)
+            logger.warning("Jira %s runtime transport failure contacting %s: %s", request.method, host, exc)
             raise JiraError(f"Unable to connect to Jira host {host}") from exc
         except JiraError:
             raise
         except Exception as exc:
-            logger.exception("Unexpected Jira %s error", method)
+            logger.exception("Unexpected Jira %s error", request.method)
             raise JiraError("Failed to contact Jira API") from exc
 
     async def _get(self, path: str, credentials: Credentials = None, params: QueryParams | None = None) -> JSONValue:
-        return await self._request("GET", path, credentials, params=params)
+        return await self._request(JiraRequest(method="GET", path=path, credentials=credentials, params=params))
 
     async def _post(self, path: str, payload: JSONDict, credentials: Credentials = None) -> JSONValue:
-        return await self._request("POST", path, credentials, payload=payload)
+        return await self._request(JiraRequest(method="POST", path=path, credentials=credentials, payload=payload))
 
-    async def create_issue(
-        self,
-        project_key: str,
-        summary: str,
-        issue: JiraIssueCreateOptions | str | None = None,
-        credentials: Credentials = None,
-        **legacy_kwargs: object,
-    ) -> JSONDict:
-        options = _coerce_issue_options(issue, dict(legacy_kwargs))
+    async def create_issue(self, request: JiraIssueCreateRequest) -> JSONDict:
+        issue_options = _coerce_issue_options(request.options, {})
         fields: JSONDict = {
-            "project": {"key": project_key},
-            "summary": summary,
-            "description": options.description or "",
-            "issuetype": {"name": options.issue_type},
+            "project": {"key": request.project_key},
+            "summary": request.summary,
+            "description": issue_options.description or "",
+            "issuetype": {"name": issue_options.issue_type},
         }
-        if options.priority:
-            fields["priority"] = {"name": str(options.priority).strip()}
+        if issue_options.priority:
+            fields["priority"] = {"name": str(issue_options.priority).strip()}
         payload: JSONDict = {"fields": fields}
-        data = await self._post("/rest/api/2/issue", payload, credentials)
+        data = await self._post("/rest/api/2/issue", payload, request.credentials)
         data_dict = _json_dict(data)
         key = data_dict.get("key")
-        base_url = self._resolve_base_url(credentials)
+        base_url = self._resolve_base_url(request.credentials)
         return {
             "key": key,
             "url": f"{base_url}/browse/{key}" if key else None,
@@ -255,38 +265,41 @@ class JiraService:
     async def transition_issue_to_todo(self, issue_key: str, credentials: Credentials = None) -> bool:
         return await self._transition_issue_by_target(
             issue_key,
-            credentials=credentials,
-            target_names={"to do", "todo"},
-            transition_names={"to do", "todo"},
-            status_category_key="new",
+            JiraTransitionTarget(
+                target_names={"to do", "todo"},
+                transition_names={"to do", "todo"},
+                status_category_key="new",
+            ),
+            credentials,
         )
 
     async def transition_issue_to_in_progress(self, issue_key: str, credentials: Credentials = None) -> bool:
         return await self._transition_issue_by_target(
             issue_key,
-            credentials=credentials,
-            target_names={"in progress", "in-progress", "doing"},
-            transition_names={"start progress", "in progress", "start"},
-            status_category_key="indeterminate",
+            JiraTransitionTarget(
+                target_names={"in progress", "in-progress", "doing"},
+                transition_names={"start progress", "in progress", "start"},
+                status_category_key="indeterminate",
+            ),
+            credentials,
         )
 
     async def transition_issue_to_done(self, issue_key: str, credentials: Credentials = None) -> bool:
         return await self._transition_issue_by_target(
             issue_key,
-            credentials=credentials,
-            target_names={"done", "closed", "resolved"},
-            transition_names={"done", "close issue", "resolve issue", "resolve"},
-            status_category_key="done",
+            JiraTransitionTarget(
+                target_names={"done", "closed", "resolved"},
+                transition_names={"done", "close issue", "resolve issue", "resolve"},
+                status_category_key="done",
+            ),
+            credentials,
         )
 
     async def _transition_issue_by_target(
         self,
         issue_key: str,
-        *,
+        target: JiraTransitionTarget,
         credentials: Credentials = None,
-        target_names: set[str],
-        transition_names: set[str],
-        status_category_key: str,
     ) -> bool:
         transitions = await self.list_transitions(issue_key, credentials)
         if not transitions:
@@ -307,11 +320,20 @@ class JiraService:
             category: JSONDict = raw_category if isinstance(raw_category, dict) else {}
             return str(category.get("key") or "").strip().lower()
 
-        preferred: JSONDict | None = next((item for item in transitions if _target_name(item) in target_names), None)
+        preferred: JSONDict | None = next(
+            (item for item in transitions if _target_name(item) in target.target_names),
+            None,
+        )
         if not preferred:
-            preferred = next((item for item in transitions if _name(item) in transition_names), None)
+            preferred = next(
+                (item for item in transitions if _name(item) in target.transition_names),
+                None,
+            )
         if not preferred:
-            preferred = next((item for item in transitions if _status_category(item) == status_category_key), None)
+            preferred = next(
+                (item for item in transitions if _status_category(item) == target.status_category_key),
+                None,
+            )
         if not preferred:
             return False
 

@@ -12,6 +12,7 @@ http://www.apache.org/licenses/LICENSE-2.0
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
@@ -19,6 +20,7 @@ import httpx
 
 from custom_types.json import JSONDict
 from models.alerting.alerts import Alert, AlertState, AlertStatus
+from models.alerting.channels import NotificationChannel
 from models.alerting.receivers import AlertManagerStatus
 from services.alerting.suppression import is_suppressed_status
 from services.notification_service import NotificationService
@@ -51,14 +53,99 @@ def _optional_string(value: object) -> str | None:
     return text or None
 
 
-async def notify_for_alerts(
-    service: AlertManagerService,
-    tenant_id: str,
-    alerts_list: list[JSONDict],
-    storage_service: DatabaseStorageService,
-    notification_service: NotificationService,
+@dataclass(frozen=True)
+class NotificationDispatchContext:
+    service: AlertManagerService
+    tenant_id: str
+    storage_service: DatabaseStorageService
+    notification_service: NotificationService
+
+
+def _resolve_channels_and_rule(
+    context: NotificationDispatchContext,
+    alertname: str,
+    org_id: str | None,
+) -> tuple[list[NotificationChannel], object | None]:
+    channels = context.storage_service.get_notification_channels_for_rule_name(
+        context.tenant_id,
+        alertname,
+        org_id=org_id,
+    )
+    matched_rule = context.storage_service.get_alert_rule_by_name_for_delivery(
+        context.tenant_id,
+        alertname,
+        org_id=org_id,
+    )
+    return channels, matched_rule
+
+
+def _status_object(raw_status: object) -> tuple[AlertStatus, bool]:
+    silenced: list[str] = []
+    inhibited: list[str] = []
+    if isinstance(raw_status, dict):
+        state_value = raw_status.get("state")
+        silenced = _string_list(raw_status.get("silencedBy"))
+        inhibited = _string_list(raw_status.get("inhibitedBy"))
+    else:
+        state_value = raw_status if isinstance(raw_status, str) else None
+    is_active = bool(state_value) and str(state_value).lower() in {"active", "firing"}
+    state_enum = AlertState.ACTIVE if is_active else AlertState.UNPROCESSED
+    return AlertStatus(state=state_enum, silencedBy=silenced, inhibitedBy=inhibited), is_active
+
+
+def _enriched_alert_annotations(
+    annotations: dict[str, str],
+    labels: dict[str, str],
+    matched_rule: object | None,
+) -> dict[str, str]:
+    if not matched_rule:
+        return annotations
+    enriched_annotations = dict(annotations)
+    corr = str(getattr(matched_rule, "group", "") or "")
+    enriched_annotations.setdefault("watchdogCorrelationId", corr)
+    enriched_annotations.setdefault("WatchdogCorrelationId", corr)
+    created_by = str(getattr(matched_rule, "created_by", "") or "")
+    enriched_annotations.setdefault("watchdogCreatedBy", created_by)
+    enriched_annotations.setdefault("WatchdogCreatedBy", created_by)
+    rule_annotations = _string_dict(getattr(matched_rule, "annotations", {}) or {})
+    created_by_username = (
+        rule_annotations.get("watchdogCreatedByUsername")
+        or rule_annotations.get("createdByUsername")
+        or rule_annotations.get("created_by_username")
+    )
+    if created_by_username:
+        enriched_annotations.setdefault("watchdogCreatedByUsername", str(created_by_username))
+        enriched_annotations.setdefault("WatchdogCreatedByUsername", str(created_by_username))
+    rule_name = str(getattr(matched_rule, "name", "") or "")
+    enriched_annotations.setdefault("watchdogRuleName", rule_name)
+    enriched_annotations.setdefault("WatchdogRuleName", rule_name)
+    product_name = (
+        rule_annotations.get("watchdogProductName")
+        or rule_annotations.get("productName")
+        or rule_annotations.get("product_name")
+        or labels.get("product")
+    )
+    if product_name:
+        enriched_annotations.setdefault("watchdogProductName", str(product_name))
+        enriched_annotations.setdefault("WatchdogProductName", str(product_name))
+    return enriched_annotations
+
+
+async def _dispatch_alert_to_channels(
+    context: NotificationDispatchContext,
+    channels: list[NotificationChannel],
+    alert_model: Alert,
+    action: str,
 ) -> None:
-    _ = service
+    for channel in channels:
+        sent = await context.notification_service.send_notification(channel, alert_model, action)
+        logger.info("Sent notification to channel %s ok=%s", channel.name, sent)
+
+
+async def notify_for_alerts(
+    context: NotificationDispatchContext,
+    alerts_list: list[JSONDict],
+) -> None:
     for incoming_alert in alerts_list:
         labels = _string_dict(incoming_alert.get("labels") or {})
         alertname = labels.get("alertname")
@@ -67,16 +154,7 @@ async def notify_for_alerts(
             continue
 
         org_id = labels.get("org_id") or labels.get("orgId") or labels.get("tenant") or labels.get("product")
-        channels = storage_service.get_notification_channels_for_rule_name(
-            tenant_id,
-            alertname,
-            org_id=org_id,
-        )
-        matched_rule = storage_service.get_alert_rule_by_name_for_delivery(
-            tenant_id,
-            alertname,
-            org_id=org_id,
-        )
+        channels, matched_rule = _resolve_channels_and_rule(context, alertname, org_id)
         if not channels:
             logger.info(
                 "No deliverable notification channels for rule=%s org=%s "
@@ -91,53 +169,13 @@ async def notify_for_alerts(
 
         raw_status = incoming_alert.get("status") or {}
         if _is_suppressed(raw_status):
-            logger.info("Skipping notification for suppressed alert=%s tenant=%s", alertname, tenant_id)
+            logger.info("Skipping notification for suppressed alert=%s tenant=%s", alertname, context.tenant_id)
             continue
-        silenced: list[str] = []
-        inhibited: list[str] = []
-        if isinstance(raw_status, dict):
-            state_value = raw_status.get("state")
-            silenced = _string_list(raw_status.get("silencedBy"))
-            inhibited = _string_list(raw_status.get("inhibitedBy"))
-        else:
-            state_value = raw_status if isinstance(raw_status, str) else None
-
-        is_active = state_value and str(state_value).lower() in {"active", "firing"}
-        state_enum = AlertState.ACTIVE if is_active else AlertState.UNPROCESSED
-        status_obj = AlertStatus(state=state_enum, silencedBy=silenced, inhibitedBy=inhibited)
+        status_obj, is_active = _status_object(raw_status)
 
         labels = _string_dict(incoming_alert.get("labels") or {})
         annotations = _string_dict(incoming_alert.get("annotations") or {})
-        if matched_rule:
-            enriched_annotations = dict(annotations)
-            corr = str(getattr(matched_rule, "group", "") or "")
-            enriched_annotations.setdefault("watchdogCorrelationId", corr)
-            enriched_annotations.setdefault("WatchdogCorrelationId", corr)
-            created_by = str(getattr(matched_rule, "created_by", "") or "")
-            enriched_annotations.setdefault("watchdogCreatedBy", created_by)
-            enriched_annotations.setdefault("WatchdogCreatedBy", created_by)
-            rule_annotations = _string_dict(getattr(matched_rule, "annotations", {}) or {})
-            created_by_username = (
-                rule_annotations.get("watchdogCreatedByUsername")
-                or rule_annotations.get("createdByUsername")
-                or rule_annotations.get("created_by_username")
-            )
-            if created_by_username:
-                enriched_annotations.setdefault("watchdogCreatedByUsername", str(created_by_username))
-                enriched_annotations.setdefault("WatchdogCreatedByUsername", str(created_by_username))
-            rule_name = str(getattr(matched_rule, "name", "") or "")
-            enriched_annotations.setdefault("watchdogRuleName", rule_name)
-            enriched_annotations.setdefault("WatchdogRuleName", rule_name)
-            product_name = (
-                rule_annotations.get("watchdogProductName")
-                or rule_annotations.get("productName")
-                or rule_annotations.get("product_name")
-                or labels.get("product")
-            )
-            if product_name:
-                enriched_annotations.setdefault("watchdogProductName", str(product_name))
-                enriched_annotations.setdefault("WatchdogProductName", str(product_name))
-            annotations = enriched_annotations
+        annotations = _enriched_alert_annotations(annotations, labels, matched_rule)
 
         alert_model = Alert(
             labels=labels,
@@ -151,9 +189,7 @@ async def notify_for_alerts(
         )
 
         action = "firing" if is_active else "resolved"
-        for channel in channels:
-            sent = await notification_service.send_notification(channel, alert_model, action)
-            logger.info("Sent notification to channel %s ok=%s", channel.name, sent)
+        await _dispatch_alert_to_channels(context, channels, alert_model, action)
 
 
 async def get_status(service: AlertManagerService) -> AlertManagerStatus | None:

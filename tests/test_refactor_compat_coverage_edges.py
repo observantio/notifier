@@ -23,7 +23,7 @@ ensure_test_env()
 
 from middleware.error_handlers import handle_route_errors
 from services import notification_service as notification_mod
-from services.jira_service import JiraIssueCreateOptions, JiraService
+from services.jira_service import JiraIssueCreateOptions, JiraIssueCreateRequest, JiraService
 from services.notification import email_providers, transport
 from services.notification_service import NotificationService
 from services.storage import incidents as incidents_mod
@@ -41,7 +41,7 @@ async def test_handle_route_errors_invalid_legacy_status_uses_default() -> None:
 
 
 @pytest.mark.asyncio
-async def test_jira_create_issue_dataclass_and_legacy_overrides() -> None:
+async def test_jira_create_issue_dataclass_request() -> None:
     service = JiraService(timeout=1)
     captured: dict[str, object] = {}
 
@@ -54,16 +54,16 @@ async def test_jira_create_issue_dataclass_and_legacy_overrides() -> None:
     service._resolve_base_url = lambda credentials=None: "https://jira.example.com"
 
     created = await service.create_issue(
-        "OPS",
-        "Summary",
-        issue=JiraIssueCreateOptions(description="from-dataclass", issue_type="Task", priority="High"),
-        description=None,
-        issue_type="Bug",
+        JiraIssueCreateRequest(
+            project_key="OPS",
+            summary="Summary",
+            options=JiraIssueCreateOptions(description="from-dataclass", issue_type="Task", priority="High"),
+        )
     )
 
     fields = captured["payload"]["fields"]
-    assert fields["description"] == ""
-    assert fields["issuetype"]["name"] == "Bug"
+    assert fields["description"] == "from-dataclass"
+    assert fields["issuetype"]["name"] == "Task"
     assert fields["priority"]["name"] == "High"
     assert created["url"] == "https://jira.example.com/browse/OPS-42"
 

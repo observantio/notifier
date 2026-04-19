@@ -22,6 +22,7 @@ ensure_test_env()
 
 from models.alerting.alerts import Alert
 from services.alerting import alerts_ops
+from services.alerting.alerts_ops import AlertQuery
 
 
 class _Response:
@@ -214,7 +215,8 @@ async def test_alert_and_group_get_post_delete_paths():
     )
 
     alerts = await alerts_ops.get_alerts(
-        service, filter_labels={"alertname": "CPUHigh"}, active=True, silenced=False, inhibited=False
+        service,
+        AlertQuery(filter_labels={"alertname": "CPUHigh"}, active=True, silenced=False, inhibited=False),
     )
     assert alerts and alerts[0].labels["alertname"] == "CPUHigh"
 
@@ -243,7 +245,7 @@ async def test_alert_and_group_get_post_delete_paths():
     assert await alerts_ops.delete_alerts(service, {"alertname": "CPUHigh"}) is True
 
     client.mode = "error"
-    assert await alerts_ops.get_alerts(service, {"a": "b"}) == []
+    assert await alerts_ops.get_alerts(service, AlertQuery(filter_labels={"a": "b"})) == []
     assert await alerts_ops.get_alert_groups(service, {"a": "b"}) == []
     assert await alerts_ops.post_alerts(service, []) is False
 

@@ -19,7 +19,7 @@ from custom_types.json import JSONDict
 from db_models import AlertIncident as AlertIncidentDB
 from db_models import AlertRule as AlertRuleDB
 from services.alerting.suppression import is_suppressed_status
-from services.common.access import has_access
+from services.common.access import AccessCheck, has_access
 from services.common.meta import parse_meta
 
 logger = logging.getLogger(__name__)
@@ -117,25 +117,18 @@ def _is_alert_suppressed(alert: JSONDict) -> bool:
     return is_suppressed_status(alert.get("status") or {})
 
 
-def _incident_access_allowed(
-    *,
-    visibility: str,
-    creator_id: str | None,
-    user_id: str,
-    shared_group_ids: list[str],
-    user_group_ids: list[str],
-    require_write: bool = False,
-) -> bool:
-    _ = require_write
-    if visibility == "group":
-        return bool(set(shared_group_ids) & set(user_group_ids))
+def _incident_access_allowed(check: AccessCheck) -> bool:
+    if check.visibility == "group":
+        return bool(set(check.shared_group_ids) & set(check.user_group_ids))
     return has_access(
-        visibility,
-        creator_id,
-        user_id,
-        shared_group_ids,
-        user_group_ids,
-        require_write=False,
+        AccessCheck(
+            visibility=check.visibility,
+            created_by=check.created_by,
+            user_id=check.user_id,
+            shared_group_ids=check.shared_group_ids,
+            user_group_ids=check.user_group_ids,
+            require_write=False,
+        )
     )
 
 

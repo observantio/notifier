@@ -10,6 +10,7 @@ http://www.apache.org/licenses/LICENSE-2.0
 """
 
 import logging
+from dataclasses import dataclass
 from email.utils import parseaddr
 from typing import cast
 
@@ -31,9 +32,10 @@ from services.incidents.helpers import (
     move_incident_ticket_to_todo,
     sync_note_to_jira_comment,
 )
-from services.notification_service import NotificationService
+from services.notification_service import IncidentAssignmentEmail, NotificationService
 from services.storage.incidents import incident_key_from_labels
 from services.storage.incidents import IncidentActorContext
+from services.storage.incidents import IncidentAccessContext
 from services.storage_db_service import DatabaseStorageService
 
 logger = logging.getLogger(__name__)
@@ -45,6 +47,15 @@ storage_service = DatabaseStorageService()
 notification_service = NotificationService()
 
 
+@dataclass(frozen=True)
+class IncidentListQuery:
+    status: str | None = Query(None)
+    visibility: str | None = Query(None)
+    group_id: str | None = Query(None)
+    limit: int = Query(100, ge=1, le=500)
+    offset: int = Query(0, ge=0)
+
+
 def _recipient_email(value: object) -> str | None:
     if value is None:
         return None
@@ -53,6 +64,163 @@ def _recipient_email(value: object) -> str | None:
         return None
     parsed = parseaddr(text)[1].strip()
     return parsed if "@" in parsed else None
+
+
+def _status_value(value: object) -> str:
+    status_value = value.value if hasattr(value, "value") else str(value)
+    return status_value.lower()
+
+
+async def _send_incident_assignment_email_task(
+    payload: IncidentAssignmentEmail | None = None,
+    **legacy_kwargs: object,
+) -> bool:
+    if payload is None:
+        payload = IncidentAssignmentEmail(
+            recipient_email=str(legacy_kwargs.get("recipient_email") or ""),
+            incident_title=str(legacy_kwargs.get("incident_title") or ""),
+            incident_status=str(legacy_kwargs.get("incident_status") or ""),
+            incident_severity=str(legacy_kwargs.get("incident_severity") or ""),
+            actor=str(legacy_kwargs.get("actor") or ""),
+        )
+    return await notification_service.send_incident_assignment_email(
+        payload
+    )
+
+
+async def _ensure_resolve_allowed(payload: AlertIncidentUpdateRequest, existing: AlertIncident) -> None:
+    if payload.status is None or _status_value(payload.status) != "resolved":
+        return
+
+    existing_incident_key = incident_key_from_labels(existing.labels or {})
+    try:
+        if existing_incident_key:
+            active_alerts = [
+                alert
+                for alert in (await alertmanager_service.get_alerts(active=True))
+                if incident_key_from_labels(getattr(alert, "labels", {}) or {}) == existing_incident_key
+            ]
+        else:
+            active_alerts = await alertmanager_service.get_alerts(
+                filter_labels={"fingerprint": existing.fingerprint},
+                active=True,
+            )
+    except httpx.HTTPError:
+        active_alerts = []
+    if active_alerts:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot mark resolved: underlying alert is still active",
+        )
+
+
+async def _record_assignment_change(
+    updated: AlertIncident,
+    existing: AlertIncident,
+    current_user: TokenData,
+    background_tasks: BackgroundTasks,
+) -> None:
+    previous_assignee = str(getattr(existing, "assignee", "") or "").strip()
+    next_assignee = str(getattr(updated, "assignee", "") or "").strip()
+    if previous_assignee == next_assignee:
+        return
+
+    actor_label = current_user.username or current_user.user_id
+    assignment_note = (
+        f"{actor_label} assigned incident to {next_assignee}"
+        if next_assignee
+        else f"{actor_label} unassigned this incident"
+    )
+    group_ids = getattr(current_user, "group_ids", []) or []
+    incident_id = str(updated.id)
+    try:
+        await run_in_threadpool(
+            storage_service.update_incident,
+            incident_id,
+            current_user.tenant_id,
+            AlertIncidentUpdateRequest.model_validate({"note": assignment_note}),
+            actor=IncidentActorContext(
+                user_id=current_user.user_id,
+                group_ids=group_ids,
+            ),
+        )
+    except SQLAlchemyError:
+        logger.exception("Failed to record assignment note for incident %s", incident_id)
+
+    await sync_note_to_jira_comment(
+        updated,
+        tenant_id=current_user.tenant_id,
+        current_user=current_user,
+        note_text=assignment_note,
+    )
+    if not next_assignee:
+        return
+
+    await move_incident_ticket_to_in_progress(
+        updated,
+        tenant_id=current_user.tenant_id,
+        current_user=current_user,
+    )
+    recipient_email = _recipient_email(next_assignee)
+    if recipient_email:
+        background_tasks.add_task(
+            _send_incident_assignment_email_task,
+            recipient_email=recipient_email,
+            incident_title=updated.alert_name,
+            incident_status=updated.status,
+            incident_severity=updated.severity,
+            actor=actor_label,
+        )
+        return
+    logger.warning(
+        "Skipping assignment email for incident=%s because assignee is not an email address: %s",
+        incident_id,
+        next_assignee,
+    )
+
+
+async def _sync_status_side_effects(
+    payload: AlertIncidentUpdateRequest,
+    existing: AlertIncident,
+    updated: AlertIncident,
+    current_user: TokenData,
+) -> None:
+    if payload.note:
+        await sync_note_to_jira_comment(
+            updated,
+            tenant_id=current_user.tenant_id,
+            current_user=current_user,
+            note_text=payload.note,
+        )
+
+    previous_status = str(existing.status or "").lower()
+    updated_status = str(updated.status or "").lower()
+    actor_label = current_user.username or current_user.user_id
+    if previous_status != updated_status:
+        status_note = None
+        if updated_status == "resolved":
+            status_note = f"{actor_label} marked this incident as resolved"
+        elif updated_status == "open":
+            status_note = f"{actor_label} reopened this incident"
+        if status_note:
+            await sync_note_to_jira_comment(
+                updated,
+                tenant_id=current_user.tenant_id,
+                current_user=current_user,
+                note_text=status_note,
+            )
+    if updated_status == "resolved":
+        await move_incident_ticket_to_done(
+            updated,
+            tenant_id=current_user.tenant_id,
+            current_user=current_user,
+        )
+    if previous_status == "resolved" and updated_status == "open":
+        await move_incident_ticket_to_todo(
+            updated,
+            tenant_id=current_user.tenant_id,
+            current_user=current_user,
+        )
 
 
 @router.get(
@@ -66,11 +234,7 @@ def _recipient_email(value: object) -> str | None:
     responses=BAD_REQUEST_ERRORS,
 )
 async def list_incidents(
-    status_filter: str | None = Query(None, alias="status"),
-    visibility_filter: str | None = Query(None, alias="visibility"),
-    group_id_filter: str | None = Query(None, alias="group_id"),
-    limit: int = Query(100, ge=1, le=500),
-    offset: int = Query(0, ge=0),
+    query: IncidentListQuery = Depends(),
     current_user: TokenData = Depends(require_permission_with_scope(Permission.READ_INCIDENTS, "alertmanager")),
 ) -> list[AlertIncident]:
     return await run_in_threadpool(
@@ -78,11 +242,11 @@ async def list_incidents(
         tenant_id=current_user.tenant_id,
         user_id=current_user.user_id,
         group_ids=getattr(current_user, "group_ids", []) or [],
-        status=status_filter,
-        visibility=visibility_filter,
-        group_id=group_id_filter,
-        limit=limit,
-        offset=offset,
+        status=query.status,
+        visibility=query.visibility,
+        group_id=query.group_id,
+        limit=query.limit,
+        offset=query.offset,
     )
 
 
@@ -125,36 +289,16 @@ async def update_incident(
         storage_service.get_incident_for_user,
         incident_id,
         current_user.tenant_id,
-        current_user.user_id,
-        group_ids,
-        True,
+        IncidentAccessContext(
+            user_id=current_user.user_id,
+            group_ids=group_ids,
+            require_write=True,
+        ),
     )
     if not existing:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Incident not found")
 
-    if payload.status is not None:
-        status_str = payload.status.value if hasattr(payload.status, "value") else str(payload.status)
-        if status_str.lower() == "resolved":
-            existing_incident_key = incident_key_from_labels(existing.labels or {})
-            try:
-                if existing_incident_key:
-                    active_alerts = [
-                        alert
-                        for alert in (await alertmanager_service.get_alerts(active=True))
-                        if incident_key_from_labels(getattr(alert, "labels", {}) or {}) == existing_incident_key
-                    ]
-                else:
-                    active_alerts = await alertmanager_service.get_alerts(
-                        filter_labels={"fingerprint": existing.fingerprint},
-                        active=True,
-                    )
-            except httpx.HTTPError:
-                active_alerts = []
-            if active_alerts:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Cannot mark resolved: underlying alert is still active",
-                )
+    await _ensure_resolve_allowed(payload, existing)
 
     enriched_payload = payload.model_copy(update={"actorUsername": current_user.username or current_user.user_id})
 
@@ -172,95 +316,7 @@ async def update_incident(
     if not updated:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Incident not found")
 
-    previous_assignee = str(getattr(existing, "assignee", "") or "").strip()
-    next_assignee = str(getattr(updated, "assignee", "") or "").strip()
-    assignee_changed = previous_assignee != next_assignee
-    if assignee_changed:
-        actor_label = current_user.username or current_user.user_id
-        assignment_note = (
-            f"{actor_label} assigned incident to {next_assignee}"
-            if next_assignee
-            else f"{actor_label} unassigned this incident"
-        )
-        try:
-            await run_in_threadpool(
-                storage_service.update_incident,
-                incident_id,
-                current_user.tenant_id,
-                AlertIncidentUpdateRequest.model_validate({"note": assignment_note}),
-                actor=IncidentActorContext(
-                    user_id=current_user.user_id,
-                    group_ids=group_ids,
-                ),
-            )
-        except SQLAlchemyError:
-            logger.exception("Failed to record assignment note for incident %s", incident_id)
-        await sync_note_to_jira_comment(
-            updated,
-            tenant_id=current_user.tenant_id,
-            current_user=current_user,
-            note_text=assignment_note,
-        )
-        if next_assignee:
-            await move_incident_ticket_to_in_progress(
-                updated,
-                tenant_id=current_user.tenant_id,
-                current_user=current_user,
-            )
-
-            recipient_email = _recipient_email(next_assignee)
-            if recipient_email:
-                background_tasks.add_task(
-                    notification_service.send_incident_assignment_email,
-                    recipient_email=recipient_email,
-                    incident_title=updated.alert_name,
-                    incident_status=updated.status,
-                    incident_severity=updated.severity,
-                    actor=current_user.username or current_user.user_id,
-                )
-            else:
-                logger.warning(
-                    "Skipping assignment email for incident=%s because assignee is not an email address: %s",
-                    incident_id,
-                    next_assignee,
-                )
-
-    if payload.note:
-        await sync_note_to_jira_comment(
-            updated,
-            tenant_id=current_user.tenant_id,
-            current_user=current_user,
-            note_text=payload.note,
-        )
-
-    previous_status = str(existing.status or "").lower()
-    updated_status = str(updated.status or "").lower()
-    actor_label = current_user.username or current_user.user_id
-    if previous_status != updated_status:
-        status_note = None
-        if updated_status == "resolved":
-            status_note = f"{actor_label} marked this incident as resolved"
-        elif updated_status == "open":
-            status_note = f"{actor_label} reopened this incident"
-        if status_note:
-            await sync_note_to_jira_comment(
-                updated,
-                tenant_id=current_user.tenant_id,
-                current_user=current_user,
-                note_text=status_note,
-            )
-    if updated_status == "resolved":
-        await move_incident_ticket_to_done(
-            updated,
-            tenant_id=current_user.tenant_id,
-            current_user=current_user,
-        )
-
-    if previous_status == "resolved" and updated_status == "open":
-        await move_incident_ticket_to_todo(
-            updated,
-            tenant_id=current_user.tenant_id,
-            current_user=current_user,
-        )
+    await _record_assignment_change(updated, existing, current_user, background_tasks)
+    await _sync_status_side_effects(payload, existing, updated, current_user)
 
     return cast(AlertIncident, updated)

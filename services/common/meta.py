@@ -21,20 +21,19 @@ INCIDENT_META_KEY = "watchdog_meta"
 
 
 def parse_meta(annotations: object) -> JSONDict:
-    if not isinstance(annotations, dict):
-        return {}
-    raw = annotations.get(INCIDENT_META_KEY)
-    if is_json_object(raw):
-        return raw
-    if isinstance(raw, str):
-        try:
-            payload = json.loads(raw)
+    parsed: JSONDict = {}
+    if isinstance(annotations, dict):
+        raw = annotations.get(INCIDENT_META_KEY)
+        if is_json_object(raw):
+            parsed = raw
+        elif isinstance(raw, str):
+            try:
+                payload = json.loads(raw)
+            except JSONDecodeError:
+                payload = None
             if is_json_object(payload):
-                return payload
-            return {}
-        except JSONDecodeError:
-            return {}
-    return {}
+                parsed = payload
+    return parsed
 
 
 def _safe_group_ids(meta: Mapping[str, object]) -> list[str]:
