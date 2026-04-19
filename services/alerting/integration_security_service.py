@@ -195,7 +195,7 @@ def decrypt_tenant_secret(value: str | None) -> str | None:
         return None
     text = str(value)
     if not text.startswith("enc:"):
-        logger.warning("Encountered legacy plaintext Jira secret; migration is required")
+        logger.warning("Encountered plaintext Jira secret; migration is required")
         return text
     if not config.data_encryption_key:
         return None

@@ -330,7 +330,7 @@ def test_integration_security_uncovered_paths(monkeypatch):
     monkeypatch.setattr(sec_mod, "Fernet", _DecryptFailFernet)
     assert sec_mod.decrypt_tenant_secret("enc:abc") is None
 
-    tenant = SimpleNamespace(settings={"jira": "legacy"})
+    tenant = SimpleNamespace(settings={"jira": "stale-format"})
     db = _SeqDB(tenant)
     monkeypatch.setattr(sec_mod, "get_db_session", lambda: _DBCtx(db))
     loaded = sec_mod.load_tenant_jira_config("tenant-a")
