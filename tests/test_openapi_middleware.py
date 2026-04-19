@@ -103,18 +103,18 @@ def test_project_version_uses_pyproject_and_fallbacks(monkeypatch) -> None:
     monkeypatch.setattr(
         openapi_middleware.Path,
         "read_text",
-        lambda self, encoding="utf-8": "[project]\nversion = '1.2.3'\n",
+        lambda *args, **kwargs: "[project]\nversion = '1.2.3'\n",
     )
     assert openapi_middleware._project_version() == "1.2.3"
 
     monkeypatch.setattr(
         openapi_middleware.Path,
         "read_text",
-        lambda self, encoding="utf-8": "[project]\nversion = ''\n",
+        lambda *args, **kwargs: "[project]\nversion = ''\n",
     )
     assert openapi_middleware._project_version() == openapi_middleware.DEFAULT_APP_VERSION
 
-    def _raise_oserror(self, encoding="utf-8"):
+    def _raise_oserror(*args, **kwargs):
         raise OSError("missing")
 
     monkeypatch.setattr(openapi_middleware.Path, "read_text", _raise_oserror)

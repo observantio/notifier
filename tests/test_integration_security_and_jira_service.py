@@ -76,7 +76,7 @@ class FakeCtx:
     def __enter__(self):
         return self.db
 
-    def __exit__(self, exc_type, exc, tb):
+    def __exit__(self, *args):
         return False
 
 
@@ -140,7 +140,7 @@ def test_tenant_resolution_and_inference(monkeypatch):
 
     assert sec_mod._alert_label_value({"a": "1", "b": "2"}, "x", "b") == "2"
 
-    monkeypatch.setattr(sec_mod, "tenant_id_from_scope_header", lambda header: "base-tenant")
+    monkeypatch.setattr(sec_mod, "tenant_id_from_scope_header", lambda *args, **kwargs: "base-tenant")
     assert sec_mod.infer_tenant_id_from_alerts("explicit", []) == "base-tenant"
 
     db = FakeDB([("tenant-a",)], [("tenant-b",), ("tenant-c",)])

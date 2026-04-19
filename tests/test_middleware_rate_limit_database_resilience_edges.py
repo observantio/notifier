@@ -97,7 +97,7 @@ class _FakeConn:
     def __enter__(self):
         return self
 
-    def __exit__(self, exc_type, exc, tb):
+    def __exit__(self, *args):
         return False
 
     def execute(self, stmt, params=None):

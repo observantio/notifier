@@ -54,7 +54,7 @@ class IntegrationSecurityServiceTests(unittest.TestCase):
         def __enter__(self):
             return self._db
 
-        def __exit__(self, exc_type, exc, tb):
+        def __exit__(self, *args):
             return False
 
     def test_normalize_visibility_maps_public_to_tenant(self):

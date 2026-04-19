@@ -103,7 +103,7 @@ class _DBCtx:
     def __enter__(self):
         return self.db
 
-    def __exit__(self, exc_type, exc, tb):
+    def __exit__(self, *args):
         return False
 
 
@@ -656,13 +656,13 @@ def test_notification_service_uncovered_paths(monkeypatch):
     assert captured["username"] == "mailer"
     assert captured["password"] == "fallback-token"
 
-    async def fake_teams(client, cfg, alert_obj, action):
+    async def fake_teams(*args, **kwargs):
         return True
 
-    async def fake_webhook(client, cfg, alert_obj, action):
+    async def fake_webhook(*args, **kwargs):
         return True
 
-    async def fake_pagerduty(client, cfg, alert_obj, action):
+    async def fake_pagerduty(*args, **kwargs):
         return True
 
     monkeypatch.setattr(notif_mod.notification_senders, "send_teams", fake_teams)
