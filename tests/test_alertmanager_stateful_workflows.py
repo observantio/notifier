@@ -239,12 +239,10 @@ async def test_stateful_channel_rule_test_and_webhook_workflow(monkeypatch):
         _ = log_context
         fake_storage.sync_incidents_from_alerts(tenant_id, alerts, False)
 
-    # shared router mechanics
     monkeypatch.setattr(channels_router, "run_in_threadpool", _run_in_threadpool)
     monkeypatch.setattr(rules_router, "run_in_threadpool", _run_in_threadpool)
     monkeypatch.setattr(channels_router, "validate_channel", lambda *_args, **_kwargs: "slack")
 
-    # channel/rule routes share these collaborators
     monkeypatch.setattr(channels_router, "storage_service", fake_storage)
     monkeypatch.setattr(rules_router, "storage_service", fake_storage)
     monkeypatch.setattr(rules_router, "notification_service", fake_notification)
@@ -260,7 +258,6 @@ async def test_stateful_channel_rule_test_and_webhook_workflow(monkeypatch):
     )
     monkeypatch.setattr(rules_router.alertmanager_service, "sync_mimir_rules_for_org", _sync_mimir)
 
-    # webhooks integration points
     monkeypatch.setattr(webhooks_router, "storage_service", fake_storage)
     monkeypatch.setattr(webhooks_router, "notification_service", fake_notification)
     monkeypatch.setattr(
