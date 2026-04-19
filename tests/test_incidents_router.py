@@ -155,10 +155,12 @@ async def test_patch_incident_requests_write_access_for_existing_incident(monkey
     existing_write_access = getattr(existing_context, "require_write", False)
     assert existing_write_access is True
 
-    actor = captured["update_kwargs"].get("actor")
-    assert actor is not None
-    update_group_ids = getattr(actor, "group_ids", None)
-    assert update_group_ids == ["g1"]
+    assert captured["update_kwargs"] == {}
+    assert captured["update_args"][0] == "i2"
+    assert captured["update_args"][1] == "t1"
+    assert captured["update_args"][2] == "u1"
+    assert captured["update_args"][4] == ["g1"]
+    assert captured["update_args"][5] is None
 
 
 @pytest.mark.asyncio

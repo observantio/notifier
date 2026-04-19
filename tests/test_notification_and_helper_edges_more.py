@@ -284,21 +284,38 @@ async def test_email_providers_and_payload_helpers(monkeypatch):
     monkeypatch.setattr(email_providers.transport, "post_with_retry", raise_http_status)
     assert (
         await email_providers.send_via_sendgrid(
-            SimpleNamespace(), "key", "subj", "body", ["ops@example.com"], "from@example.com"
+            SimpleNamespace(),
+            "key",
+            email_providers.EmailDeliveryPayload("subj", "body", ["ops@example.com"], "from@example.com"),
         )
         is False
     )
     monkeypatch.setattr(email_providers.transport, "post_with_retry", raise_http_error)
     assert (
         await email_providers.send_via_resend(
-            SimpleNamespace(), "key", "subj", "body", ["ops@example.com"], "from@example.com"
+            SimpleNamespace(),
+            "key",
+            email_providers.EmailDeliveryPayload("subj", "body", ["ops@example.com"], "from@example.com"),
         )
         is False
     )
     monkeypatch.setattr(email_providers.transport, "send_smtp_with_retry", raise_unexpected)
-    assert await email_providers.send_via_smtp(msg, "smtp.example.com", 587, None, None, False, False) is False
+    assert await email_providers.send_via_smtp(
+        msg,
+        smtp=transport.SmtpDeliveryConfig(hostname="smtp.example.com", port=587),
+    ) is False
     with pytest.raises(ValueError, match="without TLS"):
-        await email_providers.send_via_smtp(msg, "smtp.example.com", 25, "user", "pass", False, False)
+        await email_providers.send_via_smtp(
+            msg,
+            smtp=transport.SmtpDeliveryConfig(
+                hostname="smtp.example.com",
+                port=25,
+                username="user",
+                password="pass",
+                start_tls=False,
+                use_tls=False,
+            ),
+        )
 
     alert = _alert()
     assert payloads._status_text("test") == "TEST"
@@ -511,12 +528,15 @@ async def test_notification_validators_senders_and_transport(monkeypatch):
     assert transport._is_transient_smtp(smtp_transient) is True
     assert transport._is_transient_smtp(smtp_permanent) is False
 
-    async def fail_send(**kwargs):
+    async def fail_send(*_args, **_kwargs):
         raise RuntimeError("smtp down")
 
     monkeypatch.setattr(transport.aiosmtplib, "send", fail_send)
     with pytest.raises(RuntimeError, match="smtp down"):
-        await transport.send_smtp_with_retry(SimpleNamespace(), "smtp.example.com", 25)
+        await transport.send_smtp_with_retry(
+            SimpleNamespace(),
+            smtp=transport.SmtpDeliveryConfig(hostname="smtp.example.com", port=25),
+        )
 
 
 def test_rule_import_ruler_and_rules_ops_more_edges():
@@ -681,14 +701,18 @@ async def test_notification_provider_sender_validator_transport_more_edges(monke
     monkeypatch.setattr(email_providers.transport, "post_with_retry", raise_request_error)
     assert (
         await email_providers.send_via_sendgrid(
-            SimpleNamespace(), "key", "subj", "body", ["ops@example.com"], "from@example.com"
+            SimpleNamespace(),
+            "key",
+            email_providers.EmailDeliveryPayload("subj", "body", ["ops@example.com"], "from@example.com"),
         )
         is False
     )
     monkeypatch.setattr(email_providers.transport, "post_with_retry", raise_status_error)
     assert (
         await email_providers.send_via_resend(
-            SimpleNamespace(), "key", "subj", "body", ["ops@example.com"], "from@example.com"
+            SimpleNamespace(),
+            "key",
+            email_providers.EmailDeliveryPayload("subj", "body", ["ops@example.com"], "from@example.com"),
         )
         is False
     )
@@ -701,7 +725,10 @@ async def test_notification_provider_sender_validator_transport_more_edges(monke
     )
     original_send_smtp_with_retry = transport.send_smtp_with_retry
     monkeypatch.setattr(email_providers.transport, "send_smtp_with_retry", smtp_os_error)
-    assert await email_providers.send_via_smtp(msg, "smtp.example.com", 587, None, None, True, False) is False
+    assert await email_providers.send_via_smtp(
+        msg,
+        smtp=transport.SmtpDeliveryConfig(hostname="smtp.example.com", port=587, start_tls=True),
+    ) is False
     monkeypatch.setattr(transport, "send_smtp_with_retry", original_send_smtp_with_retry)
 
     assert senders._is_allowed_host(None, allowed_hosts=senders.SLACK_ALLOWED_HOSTS) is False  # type: ignore[arg-type]
@@ -743,7 +770,10 @@ async def test_notification_provider_sender_validator_transport_more_edges(monke
 
     monkeypatch.setattr(transport.aiosmtplib, "send", smtp_type_error)
     with pytest.raises(TypeError, match="unexpected type"):
-        await transport.send_smtp_with_retry(SimpleNamespace(), "smtp.example.com", 25)
+        await transport.send_smtp_with_retry(
+            SimpleNamespace(),
+            smtp=transport.SmtpDeliveryConfig(hostname="smtp.example.com", port=25),
+        )
 
 
 def test_payloads_remaining_line_paths():

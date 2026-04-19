@@ -21,6 +21,7 @@ ensure_test_env()
 
 from config import config
 from services import notification_service as notification_mod
+from services.notification import transport
 from services.notification_service import IncidentAssignmentEmail
 from services.notification_service import NotificationService
 
@@ -41,10 +42,15 @@ async def test_notification_service_support_helpers(monkeypatch):
     assert svc.validate_channel_config("email", {}) == ["err"]
 
     msg = EmailMessage()
-    result = await svc._send_smtp_with_retry(
-        msg, "smtp.example.com", 25, username="user", password="pw", start_tls=True
+    smtp = transport.SmtpDeliveryConfig(
+        hostname="smtp.example.com",
+        port=25,
+        username="user",
+        password="pw",
+        start_tls=True,
     )
-    assert result["kwargs"]["hostname"] == "smtp.example.com"
+    result = await svc._send_smtp_with_retry(msg, smtp=smtp)
+    assert result["kwargs"]["smtp"].hostname == "smtp.example.com"
 
 
 @pytest.mark.asyncio

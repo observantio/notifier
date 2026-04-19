@@ -287,14 +287,19 @@ async def test_transport_helpers_cover_transient_checks_and_send_paths(monkeypat
 
     sent = []
 
-    async def fake_send(**kwargs):
+    async def fake_send(*_args, **kwargs):
         sent.append(kwargs)
         return {"accepted": ["user@example.com"]}
 
     monkeypatch.setattr(transport_mod.aiosmtplib, "send", fake_send)
     message = EmailMessage()
     message["To"] = "user@example.com"
-    assert (await transport_mod.send_smtp_with_retry(message, "smtp.example.com", 587))["accepted"] == [
+    assert (
+        await transport_mod.send_smtp_with_retry(
+            message,
+            smtp=transport_mod.SmtpDeliveryConfig(hostname="smtp.example.com", port=587),
+        )
+    )["accepted"] == [
         "user@example.com"
     ]
     assert sent[0]["hostname"] == "smtp.example.com"

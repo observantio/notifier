@@ -28,7 +28,7 @@ from middleware.dependencies import (
     require_any_permission_with_scope,
     require_permission_with_scope,
 )
-from middleware.error_handlers import handle_route_errors
+from middleware.error_handlers import RouteErrorResponse, handle_route_errors
 from middleware.openapi import BAD_REQUEST_ERRORS, BAD_REQUEST_NOT_FOUND_ERRORS, COMMON_ERRORS, NOT_FOUND_ERRORS
 from models.access.auth_models import Permission, TokenData
 from models.alerting.alerts import Alert
@@ -213,7 +213,9 @@ async def list_public_rules(request: Request) -> list[AlertRule]:
     response_description="The resolved organization identifier and metric names.",
     responses=BAD_REQUEST_ERRORS,
 )
-@handle_route_errors(bad_gateway_detail="Failed to fetch metrics from Mimir")
+@handle_route_errors(
+    bad_gateway=RouteErrorResponse(detail="Failed to fetch metrics from Mimir", status_code=502)
+)
 async def list_metric_names(
     org_id: str | None = Query(None, alias="orgId"),
     current_user: TokenData = Depends(
@@ -239,7 +241,9 @@ async def list_metric_names(
     response_description="The evaluated query result returned from Mimir.",
     responses=BAD_REQUEST_ERRORS,
 )
-@handle_route_errors(bad_gateway_detail="Failed to evaluate PromQL against Mimir")
+@handle_route_errors(
+    bad_gateway=RouteErrorResponse(detail="Failed to evaluate PromQL against Mimir", status_code=502)
+)
 async def query_metrics(
     query: str = Query(..., min_length=1),
     org_id: str | None = Query(None, alias="orgId"),
@@ -268,7 +272,9 @@ async def query_metrics(
     response_description="The resolved organization identifier and metric label names.",
     responses=BAD_REQUEST_ERRORS,
 )
-@handle_route_errors(bad_gateway_detail="Failed to fetch label names from Mimir")
+@handle_route_errors(
+    bad_gateway=RouteErrorResponse(detail="Failed to fetch label names from Mimir", status_code=502)
+)
 async def list_metric_labels(
     org_id: str | None = Query(None, alias="orgId"),
     current_user: TokenData = Depends(
@@ -295,8 +301,7 @@ async def list_metric_labels(
     responses=BAD_REQUEST_ERRORS,
 )
 @handle_route_errors(
-    bad_gateway_detail="Failed to fetch label values from Mimir",
-    bad_gateway_status_code=400,
+    bad_gateway=RouteErrorResponse(detail="Failed to fetch label values from Mimir", status_code=400),
 )
 async def list_metric_label_values(
     label: str,
@@ -393,7 +398,7 @@ async def hide_rule(
 )
 @handle_route_errors(
     bad_request_exceptions=(ValueError, UnicodeError, TypeError),
-    bad_gateway_status_code=400,
+    bad_gateway=RouteErrorResponse(detail="Upstream request failed", status_code=400),
 )
 async def create_rule(
     rule: AlertRuleCreate = Body(...),
@@ -429,7 +434,7 @@ async def create_rule(
 )
 @handle_route_errors(
     bad_request_exceptions=(ValueError, UnicodeError, TypeError),
-    bad_gateway_status_code=400,
+    bad_gateway=RouteErrorResponse(detail="Upstream request failed", status_code=400),
 )
 async def update_rule(
     rule_id: str,

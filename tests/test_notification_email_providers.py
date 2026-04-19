@@ -40,27 +40,28 @@ def test_send_via_sendgrid_and_resend_success_and_failure(monkeypatch):
 
     monkeypatch.setattr(transport, "post_with_retry", ok_post)
     client = httpx.AsyncClient()
-    assert asyncio.run(email_providers.send_via_sendgrid(client, "key", "s", "b", ["x@x"], "from@f")) is True
-    assert asyncio.run(email_providers.send_via_resend(client, "key", "s", "b", ["x@x"], "from@f")) is True
+    payload = email_providers.EmailDeliveryPayload("s", "b", ["x@x"], "from@f")
+    assert asyncio.run(email_providers.send_via_sendgrid(client, "key", payload)) is True
+    assert asyncio.run(email_providers.send_via_resend(client, "key", payload)) is True
 
     monkeypatch.setattr(transport, "post_with_retry", fail_post)
-    assert asyncio.run(email_providers.send_via_sendgrid(client, "key", "s", "b", ["x@x"], "from@f")) is False
-    assert asyncio.run(email_providers.send_via_resend(client, "key", "s", "b", ["x@x"], "from@f")) is False
+    assert asyncio.run(email_providers.send_via_sendgrid(client, "key", payload)) is False
+    assert asyncio.run(email_providers.send_via_resend(client, "key", payload)) is False
 
 
 def test_send_via_smtp_calls_transport(monkeypatch):
-    async def fake_send(message, hostname, port, username=None, password=None, start_tls=False, use_tls=False):
+    async def fake_send(message, smtp):
         return True
 
     monkeypatch.setattr(transport, "send_smtp_with_retry", fake_send)
-    # updated helper no longer accepts a timeout parameter
-    assert asyncio.run(email_providers.send_via_smtp("m", "h", 25, None, None, False, False)) is True
+    smtp = transport.SmtpDeliveryConfig(hostname="h", port=25)
+    assert asyncio.run(email_providers.send_via_smtp("m", smtp=smtp)) is True
 
     async def fake_send_err(*args, **kwargs):
         raise Exception("fail")
 
     monkeypatch.setattr(transport, "send_smtp_with_retry", fake_send_err)
-    assert asyncio.run(email_providers.send_via_smtp("m", "h", 25, None, None, False, False)) is False
+    assert asyncio.run(email_providers.send_via_smtp("m", smtp=smtp)) is False
 
 
 def test_sendgrid_and_resend_include_html_payload_when_provided(monkeypatch):
@@ -78,11 +79,13 @@ def test_sendgrid_and_resend_include_html_payload_when_provided(monkeypatch):
             email_providers.send_via_sendgrid(
                 client,
                 "key",
-                "subject",
-                "body",
-                ["x@x.com"],
-                "from@example.com",
-                "<b>html</b>",
+                email_providers.EmailDeliveryPayload(
+                    subject="subject",
+                    body="body",
+                    recipients=["x@x.com"],
+                    smtp_from="from@example.com",
+                    html_body="<b>html</b>",
+                ),
             )
         )
         is True
@@ -94,11 +97,13 @@ def test_sendgrid_and_resend_include_html_payload_when_provided(monkeypatch):
             email_providers.send_via_resend(
                 client,
                 "key",
-                "subject",
-                "body",
-                ["x@x.com"],
-                "from@example.com",
-                "<b>html</b>",
+                email_providers.EmailDeliveryPayload(
+                    subject="subject",
+                    body="body",
+                    recipients=["x@x.com"],
+                    smtp_from="from@example.com",
+                    html_body="<b>html</b>",
+                ),
             )
         )
         is True
@@ -114,10 +119,5 @@ def test_coerce_email_delivery_payload_accepts_payload_object():
         smtp_from="from@example.com",
         html_body="<p>hello</p>",
     )
-    result = email_providers._coerce_email_delivery_payload(payload, ())
+    result = email_providers._coerce_email_delivery_payload(payload)
     assert result is payload
-
-
-def test_coerce_email_delivery_payload_requires_legacy_arguments():
-    with pytest.raises(ValueError, match="subject, body, recipients, and smtp_from are required"):
-        email_providers._coerce_email_delivery_payload(None, ("subj", "body", ["a@example.com"]))

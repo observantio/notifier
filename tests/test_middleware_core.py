@@ -26,6 +26,7 @@ from middleware.error_handlers import (
     general_exception_handler,
     handle_route_errors,
     http_exception_handler,
+    RouteErrorResponse,
     validation_exception_handler,
 )
 from middleware.headers import _is_https_request, security_headers_middleware
@@ -53,11 +54,11 @@ async def test_handle_route_errors_variants():
     async def bad_request() -> str:
         raise ValueError("ignored")
 
-    @handle_route_errors(bad_gateway_detail="upstream")
+    @handle_route_errors(bad_gateway=RouteErrorResponse(detail="upstream", status_code=502))
     async def bad_gateway() -> str:
         raise httpx.ReadError("boom")
 
-    @handle_route_errors(internal_detail=None)
+    @handle_route_errors(internal=RouteErrorResponse(detail=None, status_code=500))
     async def raw_internal() -> str:
         raise RuntimeError("raw")
 

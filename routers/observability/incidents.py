@@ -35,7 +35,6 @@ from services.incidents.helpers import (
 )
 from services.notification_service import IncidentAssignmentEmail, NotificationService
 from services.storage.incidents import incident_key_from_labels
-from services.storage.incidents import IncidentActorContext
 from services.storage.incidents import IncidentAccessContext
 from services.storage_db_service import DatabaseStorageService
 
@@ -132,11 +131,10 @@ async def _record_assignment_change(
             storage_service.update_incident,
             incident_id,
             current_user.tenant_id,
+            current_user.user_id,
             AlertIncidentUpdateRequest.model_validate({"note": assignment_note}),
-            actor=IncidentActorContext(
-                user_id=current_user.user_id,
-                group_ids=group_ids,
-            ),
+            group_ids,
+            getattr(current_user, "email", None),
         )
     except SQLAlchemyError:
         logger.exception("Failed to record assignment note for incident %s", incident_id)
@@ -302,12 +300,10 @@ async def update_incident(
         storage_service.update_incident,
         incident_id,
         current_user.tenant_id,
+        current_user.user_id,
         enriched_payload,
-        actor=IncidentActorContext(
-            user_id=current_user.user_id,
-            group_ids=group_ids,
-            user_email=getattr(current_user, "email", None),
-        ),
+        group_ids,
+        getattr(current_user, "email", None),
     )
     if not updated:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Incident not found")

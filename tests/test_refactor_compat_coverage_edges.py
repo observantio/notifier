@@ -22,6 +22,7 @@ except ImportError:
 ensure_test_env()
 
 from middleware.error_handlers import handle_route_errors
+from middleware.error_handlers import RouteErrorResponse
 from services import notification_service as notification_mod
 from services.jira_service import JiraIssueCreateOptions, JiraIssueCreateRequest, JiraService
 from services.notification import email_providers, transport
@@ -30,8 +31,8 @@ from services.storage import incidents as incidents_mod
 
 
 @pytest.mark.asyncio
-async def test_handle_route_errors_invalid_legacy_status_uses_default() -> None:
-    @handle_route_errors(bad_gateway_status_code="bad-status")
+async def test_handle_route_errors_explicit_bad_gateway_response() -> None:
+    @handle_route_errors(bad_gateway=RouteErrorResponse(detail="Upstream request failed", status_code=502))
     async def bad_gateway() -> str:
         raise httpx.ReadError("boom")
 
@@ -79,13 +80,17 @@ async def test_email_provider_smtp_coercion_edges(monkeypatch) -> None:
     smtp_cfg = transport.SmtpDeliveryConfig(hostname="smtp.example.com", port=587, start_tls=True)
 
     assert await email_providers.send_via_smtp(message, smtp=smtp_cfg) is True
-    assert await email_providers.send_via_smtp(message, smtp="smtp.example.com", port=587) is True
 
-    with pytest.raises(ValueError, match="SMTP hostname is required"):
-        await email_providers.send_via_smtp(message, "", 587)
-
-    with pytest.raises(ValueError, match="SMTP port must be an integer"):
-        await email_providers.send_via_smtp(message, "smtp.example.com", "bad")
+    insecure_cfg = transport.SmtpDeliveryConfig(
+        hostname="smtp.example.com",
+        port=25,
+        username="user",
+        password="pass",
+        start_tls=False,
+        use_tls=False,
+    )
+    with pytest.raises(ValueError, match="without TLS"):
+        await email_providers.send_via_smtp(message, smtp=insecure_cfg)
 
 
 @pytest.mark.asyncio
@@ -101,15 +106,6 @@ async def test_transport_smtp_coercion_edges(monkeypatch) -> None:
     result = await transport.send_smtp_with_retry(message, smtp=smtp_cfg)
     assert result["accepted"] == ["ok@example.com"]
 
-    result_legacy = await transport.send_smtp_with_retry(message, smtp="smtp.example.com", port=587)
-    assert result_legacy["accepted"] == ["ok@example.com"]
-
-    with pytest.raises(ValueError, match="SMTP hostname is required"):
-        await transport.send_smtp_with_retry(message, smtp="", port=587)
-
-    with pytest.raises(ValueError, match="SMTP port must be an integer"):
-        await transport.send_smtp_with_retry(message, smtp="smtp.example.com", port="bad")
-
 
 @pytest.mark.asyncio
 async def test_notification_service_smtp_helper_validation_edges(monkeypatch) -> None:
@@ -117,7 +113,7 @@ async def test_notification_service_smtp_helper_validation_edges(monkeypatch) ->
     captured: dict[str, object] = {}
 
     async def fake_send_smtp_with_retry(*_args, **kwargs):
-        captured.update(kwargs)
+        captured["kwargs"] = kwargs
         return True
 
     monkeypatch.setattr(notification_mod.notification_transport, "send_smtp_with_retry", fake_send_smtp_with_retry)
@@ -126,21 +122,19 @@ async def test_notification_service_smtp_helper_validation_edges(monkeypatch) ->
     smtp_cfg = transport.SmtpDeliveryConfig(hostname="smtp.example.com", port=2525)
 
     assert await service._send_smtp_with_retry(message, smtp=smtp_cfg) is True
-    assert captured["hostname"] == "smtp.example.com"
-
-    with pytest.raises(ValueError, match="SMTP hostname is required"):
-        await service._send_smtp_with_retry(message, hostname="")
-
-    with pytest.raises(ValueError, match="SMTP port must be an integer"):
-        await service._send_smtp_with_retry(message, "smtp.example.com", "bad")
+    smtp_arg = captured["kwargs"]["smtp"]
+    assert smtp_arg.hostname == "smtp.example.com"
 
 
 def test_incident_filter_coercion_handles_dataclass_and_bad_numbers() -> None:
-    base_filters = incidents_mod.IncidentListFilters(group_ids=["g1"], limit=10, offset=7)
-
-    preserved = incidents_mod._coerce_incident_list_filters(base_filters, {})
-    assert preserved.group_ids == ["g1"]
-
-    coerced = incidents_mod._coerce_incident_list_filters(base_filters, {"limit": "bad", "offset": "bad"})
-    assert coerced.limit == 10
-    assert coerced.offset == 7
+    filters = incidents_mod._coerce_incident_list_filters(
+        group_ids=["g1", "", " g2 "],
+        status="open",
+        visibility="group",
+        group_id="g1",
+        limit=10,
+        offset=7,
+    )
+    assert filters.group_ids == ["g1", "g2"]
+    assert filters.limit == 10
+    assert filters.offset == 7

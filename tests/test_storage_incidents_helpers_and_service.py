@@ -798,7 +798,7 @@ def test_incident_get_update_filter_remaining_branches(monkeypatch):
     assert access_called["value"] is False
 
 
-def test_update_incident_actor_context_and_legacy_args_require_payload(monkeypatch):
+def test_update_incident_uses_explicit_actor_inputs(monkeypatch):
     service = incidents_mod.IncidentStorageService()
     row = _incident_row("inc-actor", annotations={})
     db = _FakeDB([row])
@@ -815,14 +815,13 @@ def test_update_incident_actor_context_and_legacy_args_require_payload(monkeypat
     updated = service.update_incident(
         "inc-actor",
         "tenant-a",
+        "u1",
         payload,
-        actor=incidents_mod.IncidentActorContext(user_id="u1", group_ids=["g1"], user_email="u1@example.com"),
+        ["g1"],
+        "u1@example.com",
     )
     assert updated is not None
     assert row.status == "open"
-
-    with pytest.raises(TypeError, match="payload is required"):
-        service.update_incident("inc-actor", "tenant-a", "u1")
 
     resolved_row = _incident_row(
         "inc-resolved", status="resolved", visibility="public", created_by="u1", annotations={}

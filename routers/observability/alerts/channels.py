@@ -19,7 +19,7 @@ from pydantic import BaseModel, Field
 from config import config
 from custom_types.json import JSONDict
 from middleware.dependencies import require_any_permission_with_scope, require_permission_with_scope
-from middleware.error_handlers import handle_route_errors
+from middleware.error_handlers import RouteErrorResponse, handle_route_errors
 from middleware.openapi import BAD_REQUEST_ERRORS, BAD_REQUEST_NOT_FOUND_ERRORS, NOT_FOUND_ERRORS
 from models.access.auth_models import Permission, TokenData
 from models.alerting.alerts import Alert
@@ -225,7 +225,7 @@ async def delete_channel(
     response_description="The test delivery result for the notification channel.",
     responses=BAD_REQUEST_NOT_FOUND_ERRORS,
 )
-@handle_route_errors(internal_detail="Failed to send test notification")
+@handle_route_errors(internal=RouteErrorResponse(detail="Failed to send test notification", status_code=500))
 async def test_channel(
     channel_id: str,
     current_user: TokenData = Depends(

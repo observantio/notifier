@@ -14,7 +14,7 @@ from pydantic import BaseModel, Field
 
 from custom_types.json import JSONDict
 from middleware.dependencies import require_any_permission_with_scope, require_permission_with_scope
-from middleware.error_handlers import handle_route_errors
+from middleware.error_handlers import RouteErrorResponse, handle_route_errors
 from middleware.openapi import BAD_REQUEST_ERRORS, BAD_REQUEST_NOT_FOUND_ERRORS
 from models.access.auth_models import Permission, TokenData
 from models.alerting.silences import Silence, SilenceCreateRequest
@@ -92,8 +92,7 @@ async def list_silences(
 )
 @handle_route_errors(
     bad_request_exceptions=(ValueError, UnicodeError, TypeError),
-    internal_detail="Invalid silence identifier",
-    internal_status_code=400,
+    internal=RouteErrorResponse(detail="Invalid silence identifier", status_code=400),
 )
 async def get_silence(
     silence_id: str,
@@ -182,8 +181,7 @@ async def update_silence(
 )
 @handle_route_errors(
     bad_request_exceptions=(ValueError, UnicodeError, TypeError),
-    internal_detail="Invalid silence identifier",
-    internal_status_code=400,
+    internal=RouteErrorResponse(detail="Invalid silence identifier", status_code=400),
 )
 async def delete_silence(
     silence_id: str,
