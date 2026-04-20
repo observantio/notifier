@@ -202,7 +202,7 @@ def test_database_module_paths(monkeypatch):
     finally:
         monkeypatch.undo()
         db_mod.dispose_database()
-        if active_database_url:
+        if active_database_url.startswith("sqlite"):
             db_mod.init_database(active_database_url)
             db_mod.init_db()
 
