@@ -41,6 +41,9 @@ _SESSION_LOCAL: _SessionFactory | None = None
 
 def ensure_database_exists(database_url: str) -> None:
     url = make_url(database_url)
+    drivername = str(getattr(url, "drivername", "postgresql"))
+    if not drivername.startswith("postgresql"):
+        return
     db_name = url.database
     if not db_name:
         raise RuntimeError("Database URL must include a database name")
