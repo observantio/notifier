@@ -13,6 +13,7 @@ from __future__ import annotations
 import logging
 import uuid
 from dataclasses import dataclass, field
+from types import SimpleNamespace
 
 from sqlalchemy.orm import joinedload
 
@@ -49,6 +50,20 @@ def _config_dict(channel: NotificationChannelDB) -> JSONDict:
     return raw_config if isinstance(raw_config, dict) else {}
 
 
+def _channel_view(channel: NotificationChannelDB, raw_config: JSONDict) -> SimpleNamespace:
+    return SimpleNamespace(
+        id=channel.id,
+        name=channel.name,
+        type=channel.type,
+        enabled=channel.enabled,
+        config=raw_config,
+        created_by=channel.created_by,
+        visibility=channel.visibility,
+        shared_groups=list(getattr(channel, "shared_groups", None) or []),
+        is_hidden=bool(getattr(channel, "is_hidden", False)),
+    )
+
+
 @dataclass(frozen=True)
 class ChannelAccessContext:
     user_id: str
@@ -62,6 +77,9 @@ class PageRequest:
 
 
 class ChannelStorageService:
+    def __init__(self, *_args: object, **_kwargs: object) -> None:
+        return
+
     @staticmethod
     def _access_context(
         access: ChannelAccessContext | str,
@@ -138,8 +156,7 @@ class ChannelStorageService:
                 ):
                     continue
                 raw_cfg = decrypt_config(_config_dict(ch))
-                ch.config = raw_cfg
-                results.append(channel_to_pydantic_for_viewer(ch, context.user_id))
+                results.append(channel_to_pydantic_for_viewer(_channel_view(ch, raw_cfg), context.user_id))
             return results
 
     @staticmethod
@@ -172,8 +189,11 @@ class ChannelStorageService:
             ):
                 return None
             raw_cfg = decrypt_config(_config_dict(ch))
-            ch.config = raw_cfg
-            return channel_to_pydantic_for_viewer(ch, context.user_id, include_sensitive=include_sensitive)
+            return channel_to_pydantic_for_viewer(
+                _channel_view(ch, raw_cfg),
+                context.user_id,
+                include_sensitive=include_sensitive,
+            )
 
     @staticmethod
     def create_notification_channel(
@@ -210,8 +230,7 @@ class ChannelStorageService:
             logger.info("Created channel %s (%s) visibility=%s", ch.name, ch.id, ch.visibility)
 
             cfg = decrypt_config(_config_dict(ch))
-            ch.config = cfg
-            return channel_to_pydantic_for_viewer(ch, context.user_id)
+            return channel_to_pydantic_for_viewer(_channel_view(ch, cfg), context.user_id)
 
     @staticmethod
     def update_notification_channel(
@@ -219,8 +238,9 @@ class ChannelStorageService:
         channel_update: NotificationChannelCreate,
         tenant_id: str,
         access: ChannelAccessContext | str,
+        group_ids: list[str] | None = None,
     ) -> NotificationChannel | None:
-        context = ChannelStorageService._access_context(access)
+        context = ChannelStorageService._access_context(access, group_ids=group_ids)
         group_ids = list(context.group_ids or [])
         with get_db_session() as db:
             ch = (
@@ -252,8 +272,7 @@ class ChannelStorageService:
             logger.info("Updated channel %s (%s)", ch.name, channel_id)
 
             cfg = decrypt_config(_config_dict(ch))
-            ch.config = cfg
-            return channel_to_pydantic_for_viewer(ch, context.user_id)
+            return channel_to_pydantic_for_viewer(_channel_view(ch, cfg), context.user_id)
 
     @staticmethod
     def delete_notification_channel(
@@ -368,8 +387,7 @@ class ChannelStorageService:
                         compatible_skipped += 1
                         continue
                     raw_cfg = decrypt_config(_config_dict(ch))
-                    ch.config = raw_cfg
-                    results.append(channel_to_pydantic(ch))
+                    results.append(channel_to_pydantic(_channel_view(ch, raw_cfg)))
                     seen_ids.add(str(ch.id))
                 if compatible_skipped:
                     debug_notes.append(f"rule={r.id}:incompatible_skipped={compatible_skipped}")

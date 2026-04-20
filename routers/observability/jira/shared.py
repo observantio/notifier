@@ -1,4 +1,9 @@
 """
+Shared models and utilities for Jira integration in the observability notifier router. This includes common data models, 
+constants, and helper functions that are used across multiple Jira-related endpoints, such as those for incident link 
+discovery and integration management. By centralizing these shared components, we can ensure consistency and reduce code 
+duplication across the Jira integration features in the notifier router.
+
 Copyright (c) 2026 Stefan Kumarasinghe.
 
 Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the

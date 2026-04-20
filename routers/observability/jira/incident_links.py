@@ -1,4 +1,12 @@
 """
+Incident link discovery endpoints for Jira integration in the observability notifier router. 
+These endpoints allow clients to list available Jira projects and issue types based on either 
+tenant-level Jira configuration or specific Jira integrations. The endpoints handle authentication 
+and permissions, and they return structured responses that indicate whether Jira is enabled for the 
+tenant and what projects and issue types are available. This functionality is essential for users to 
+configure their Jira integrations effectively when setting up incident management workflows in the 
+observability platform.
+
 Copyright (c) 2026 Stefan Kumarasinghe.
 
 Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
@@ -30,6 +38,7 @@ from services.incidents.helpers import (
 )
 from services.jira.helpers import resolve_incident_jira_credentials
 from services.jira_service import JiraError, JiraIssueCreateOptions, JiraIssueCreateRequest, jira_service
+from services.storage.incidents import IncidentAccessContext
 
 from .shared import SUPPORTED_INCIDENT_JIRA_ISSUE_TYPES, storage_service
 
@@ -57,9 +66,7 @@ async def create_incident_link(
         storage_service.get_incident_for_user,
         incident_id,
         current_user.tenant_id,
-        current_user.user_id,
-        group_ids,
-        True,
+        IncidentAccessContext(user_id=current_user.user_id, group_ids=group_ids, require_write=True),
     )
     if not incident:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Incident not found")
@@ -167,9 +174,7 @@ async def sync_incident_notes(
         storage_service.get_incident_for_user,
         incident_id,
         current_user.tenant_id,
-        current_user.user_id,
-        group_ids,
-        True,
+        IncidentAccessContext(user_id=current_user.user_id, group_ids=group_ids, require_write=True),
     )
     if not incident:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Incident not found")
@@ -227,8 +232,7 @@ async def list_incident_comments(
         storage_service.get_incident_for_user,
         incident_id,
         current_user.tenant_id,
-        current_user.user_id,
-        group_ids,
+        IncidentAccessContext(user_id=current_user.user_id, group_ids=group_ids),
     )
     if not incident:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Incident not found")

@@ -230,7 +230,10 @@ async def test_access_webhooks_and_status_routes(monkeypatch):
     async def _sync(tenant_id: str, _alerts, log_context: str):
         synced.append(f"{tenant_id}:{log_context}")
 
-    async def _notify(_tenant_id, _alerts, _storage, _notification):
+    async def _notify(context, _alerts):
+        assert context.tenant_id == "tenant-a"
+        assert context.storage_service is webhooks_router.storage_service
+        assert context.notification_service is webhooks_router.notification_service
         return None
 
     monkeypatch.setattr(webhooks_router.alertmanager_service, "enforce_webhook_security", _security)

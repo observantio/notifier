@@ -244,6 +244,8 @@ class AlertManagerService:
             raise AttributeError(f"{type(self).__name__!r} object has no attribute {name!r}")
 
         async def _async_bound(*args: object, **kwargs: object) -> Any:
+            if name == "notify_for_alerts":
+                return await op(*args, **kwargs)
             return await op(self, *args, **kwargs)
 
         return _async_bound
