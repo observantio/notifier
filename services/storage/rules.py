@@ -52,6 +52,9 @@ class PageRequest:
 
 
 class RuleStorageService:
+    def __init__(self, *_args: object, **_kwargs: object) -> None:
+        return
+
     @staticmethod
     def _access_context(
         access: RuleAccessContext | str,
@@ -346,8 +349,9 @@ class RuleStorageService:
         rule_update: AlertRuleCreate,
         tenant_id: str,
         access: RuleAccessContext | str,
+        group_ids: list[str] | None = None,
     ) -> AlertRule | None:
-        context = RuleStorageService._access_context(access)
+        context = RuleStorageService._access_context(access, group_ids=group_ids)
         group_ids = list(context.group_ids or [])
         with get_db_session() as db:
             r = (

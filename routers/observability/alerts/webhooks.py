@@ -28,19 +28,10 @@ router = APIRouter(tags=["alertmanager-webhooks"])
 
 
 async def _dispatch_notifications(tenant_id: str, alerts: list[JSONDict]) -> None:
-    try:
-        await alertmanager_service.notify_for_alerts(
-            NotificationDispatchContext(alertmanager_service, tenant_id, storage_service, notification_service),
-            alerts,
-        )
-    except TypeError:
-        # Backward-compatibility path for tests and temporary adapters.
-        await alertmanager_service.notify_for_alerts(
-            tenant_id,
-            alerts,
-            storage_service,
-            notification_service,
-        )
+    await alertmanager_service.notify_for_alerts(
+        NotificationDispatchContext(alertmanager_service, tenant_id, storage_service, notification_service),
+        alerts,
+    )
 
 
 @router.post(

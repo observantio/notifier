@@ -1,4 +1,10 @@
 """
+Config and helper functions for Jira integration in the observability notifier router. 
+This includes functions to determine if an alert is suppressed based on its status information,
+which is crucial for filtering out alerts that should not trigger notifications or actions in Jira.
+The logic checks for specific fields and values that indicate suppression, such as "state" being 
+"suppressed" or the presence of "silencedBy" or "inhibitedBy" fields in the alert status.
+
 Copyright (c) 2026 Stefan Kumarasinghe.
 
 Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the

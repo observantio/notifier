@@ -43,14 +43,14 @@ def test_encrypt_decrypt_config_roundtrip(monkeypatch):
 
 @pytest.mark.skipif(not __import__("database", fromlist=[""]).connection_test(), reason="DB not available")
 def test_create_channel_stores_encrypted_and_owner_sees_config(monkeypatch):
-    svc = ChannelStorageService(None)
+    svc = ChannelStorageService()
     prev = config.data_encryption_key
     try:
         config.data_encryption_key = Fernet.generate_key().decode()
         ch_in = NotificationChannelCreate(
             name="c1", type=ChannelType.SLACK, config={"webhook_url": "https://x"}, enabled=True, visibility="private"
         )
-        created = svc.create_notification_channel(ch_in, tenant_id="t-1", user_id="owner", group_ids=None)
+        created = svc.create_notification_channel(ch_in, tenant_id="t-1", access="owner", group_ids=None)
         assert created.config == {"webhook_url": "https://x"}
 
         with get_db_session() as db:
@@ -67,21 +67,21 @@ import pytest
 
 @pytest.mark.skipif(not __import__("database", fromlist=[""]).connection_test(), reason="DB not available")
 def test_get_notification_channel_access_control():
-    svc = ChannelStorageService(None)
+    svc = ChannelStorageService()
     ch_in = NotificationChannelCreate(
         name="c2", type=ChannelType.SLACK, config={"webhook_url": "https://x"}, enabled=True, visibility="private"
     )
-    created = svc.create_notification_channel(ch_in, tenant_id="t-2", user_id="owner2", group_ids=None)
-    fetched = svc.get_notification_channel(created.id, tenant_id="t-2", user_id="someone_else", group_ids=None)
+    created = svc.create_notification_channel(ch_in, tenant_id="t-2", access="owner2", group_ids=None)
+    fetched = svc.get_notification_channel(created.id, tenant_id="t-2", access="someone_else", group_ids=None)
     assert fetched is None
-    fetched_owner = svc.get_notification_channel(created.id, tenant_id="t-2", user_id="owner2", group_ids=None)
+    fetched_owner = svc.get_notification_channel(created.id, tenant_id="t-2", access="owner2", group_ids=None)
     assert fetched_owner is not None
     assert fetched_owner.config == {"webhook_url": "https://x"}
 
 
 @pytest.mark.skipif(not __import__("database", fromlist=[""]).connection_test(), reason="DB not available")
 def test_channel_update_delete_require_owner():
-    svc = ChannelStorageService(None)
+    svc = ChannelStorageService()
     ch_in = NotificationChannelCreate(
         name="shared-ch",
         type=ChannelType.SLACK,
@@ -89,7 +89,7 @@ def test_channel_update_delete_require_owner():
         enabled=True,
         visibility="tenant",
     )
-    created = svc.create_notification_channel(ch_in, tenant_id="t-3", user_id="owner3", group_ids=None)
+    created = svc.create_notification_channel(ch_in, tenant_id="t-3", access="owner3", group_ids=None)
     updated = svc.update_notification_channel(
         created.id,
         NotificationChannelCreate(
@@ -100,8 +100,8 @@ def test_channel_update_delete_require_owner():
             visibility="tenant",
         ),
         tenant_id="t-3",
-        user_id="viewer3",
+        access="viewer3",
         group_ids=None,
     )
     assert updated is None
-    assert svc.delete_notification_channel(created.id, tenant_id="t-3", user_id="viewer3") is False
+    assert svc.delete_notification_channel(created.id, tenant_id="t-3", access="viewer3") is False
