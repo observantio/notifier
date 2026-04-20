@@ -13,7 +13,6 @@ from __future__ import annotations
 import logging
 import uuid
 from dataclasses import dataclass, field
-from types import SimpleNamespace
 
 from sqlalchemy.orm import joinedload
 
@@ -33,6 +32,19 @@ from services.storage.serializers import channel_to_pydantic, channel_to_pydanti
 logger = logging.getLogger(__name__)
 
 
+@dataclass(frozen=True, slots=True)
+class _ChannelView:
+    id: str | None
+    name: str
+    type: object
+    enabled: bool
+    config: JSONDict
+    created_by: str | None
+    visibility: object
+    shared_groups: list[object]
+    is_hidden: bool
+
+
 def _shared_group_ids(db_obj: NotificationChannelDB) -> list[str]:
     return [g.id for g in db_obj.shared_groups] if db_obj.shared_groups else []
 
@@ -50,8 +62,8 @@ def _config_dict(channel: NotificationChannelDB) -> JSONDict:
     return raw_config if isinstance(raw_config, dict) else {}
 
 
-def _channel_view(channel: NotificationChannelDB, raw_config: JSONDict) -> SimpleNamespace:
-    return SimpleNamespace(
+def _channel_view(channel: NotificationChannelDB, raw_config: JSONDict) -> _ChannelView:
+    return _ChannelView(
         id=channel.id,
         name=channel.name,
         type=channel.type,
@@ -238,6 +250,7 @@ class ChannelStorageService:
         channel_update: NotificationChannelCreate,
         tenant_id: str,
         access: ChannelAccessContext | str,
+        *,
         group_ids: list[str] | None = None,
     ) -> NotificationChannel | None:
         context = ChannelStorageService._access_context(access, group_ids=group_ids)

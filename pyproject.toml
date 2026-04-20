@@ -163,6 +163,7 @@ files = ["."]
 exclude = [
   "^(build|dist|venv|\\.venv|__pycache__|migrations)/",
   "^tests/",
+  "^mutants/",
 ]
 
 [tool.pylint.main]

@@ -349,6 +349,7 @@ class RuleStorageService:
         rule_update: AlertRuleCreate,
         tenant_id: str,
         access: RuleAccessContext | str,
+        *,
         group_ids: list[str] | None = None,
     ) -> AlertRule | None:
         context = RuleStorageService._access_context(access, group_ids=group_ids)
