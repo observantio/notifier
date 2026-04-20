@@ -15,7 +15,6 @@ from datetime import UTC, datetime
 
 from db_models import AlertIncident as AlertIncidentDB
 from db_models import AlertRule as AlertRuleDB
-from db_models import NotificationChannel as NotificationChannelDB
 from models.alerting.channels import NotificationChannel as NotificationChannelPydantic
 from models.alerting.incidents import AlertIncident as AlertIncidentPydantic
 from models.alerting.incidents import IncidentStatus
@@ -47,6 +46,11 @@ def _sanitize_channel_config_for_response(raw_config: object) -> dict[str, objec
     return cleaned
 
 
+def _shared_group_ids(ch: object) -> list[str]:
+    shared_groups = getattr(ch, "shared_groups", None) or []
+    return [str(getattr(group, "id", "")) for group in shared_groups if str(getattr(group, "id", "")).strip()]
+
+
 def rule_to_pydantic(r: AlertRuleDB) -> AlertRulePydantic:
     payload = {
         "id": r.id,
@@ -68,9 +72,7 @@ def rule_to_pydantic(r: AlertRuleDB) -> AlertRulePydantic:
     return AlertRulePydantic.model_validate(payload)
 
 
-def channel_to_pydantic(
-    ch: NotificationChannelDB, *, include_sensitive: bool = True
-) -> NotificationChannelPydantic:
+def channel_to_pydantic(ch: object, *, include_sensitive: bool = True) -> NotificationChannelPydantic:
     return channel_to_pydantic_for_viewer(
         ch,
         viewer_user_id=getattr(ch, "created_by", None),
@@ -79,23 +81,32 @@ def channel_to_pydantic(
 
 
 def channel_to_pydantic_for_viewer(
-    ch: NotificationChannelDB,
+    ch: object,
     viewer_user_id: object,
     *,
     include_sensitive: bool = False,
 ) -> NotificationChannelPydantic:
-    raw_config = getattr(ch, "config", None) or {}
+    channel_id = getattr(ch, "id", None)
+    channel_name = getattr(ch, "name")
+    channel_type = getattr(ch, "type")
+    channel_enabled = bool(getattr(ch, "enabled", False))
+    channel_config = getattr(ch, "config", None) or {}
+    channel_created_by = getattr(ch, "created_by", None)
+    channel_visibility = getattr(ch, "visibility", None) or "private"
+    channel_is_hidden = bool(getattr(ch, "is_hidden", False))
+
+    raw_config = channel_config
     visible_config = raw_config if include_sensitive else _sanitize_channel_config_for_response(raw_config)
     payload = {
-        "id": ch.id,
-        "name": ch.name,
-        "type": ch.type,
-        "enabled": ch.enabled,
-        "config": visible_config if (getattr(ch, "created_by", None) and ch.created_by == viewer_user_id) else {},
-        "createdBy": ch.created_by,
-        "visibility": ch.visibility or "private",
-        "sharedGroupIds": [g.id for g in ch.shared_groups] if getattr(ch, "shared_groups", None) else [],
-        "isHidden": bool(getattr(ch, "is_hidden", False)),
+        "id": channel_id,
+        "name": channel_name,
+        "type": channel_type,
+        "enabled": channel_enabled,
+        "config": visible_config if (channel_created_by and channel_created_by == viewer_user_id) else {},
+        "createdBy": channel_created_by,
+        "visibility": channel_visibility,
+        "sharedGroupIds": _shared_group_ids(ch),
+        "isHidden": channel_is_hidden,
     }
     return NotificationChannelPydantic.model_validate(payload)
 
