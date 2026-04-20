@@ -2,7 +2,7 @@ openapi: 3.1.0
 info:
   title: Notifier
   description: Internal alerting service for Watchdog
-  version: 0.0.4
+  version: 0.0.5
 paths:
   /internal/v1/api/alertmanager/alerts:
     get:
