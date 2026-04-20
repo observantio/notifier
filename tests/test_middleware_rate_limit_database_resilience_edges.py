@@ -8,6 +8,7 @@ License. You may obtain a copy of the License at http://www.apache.org/licenses/
 from __future__ import annotations
 
 import asyncio
+import os
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from typing import Any, cast
@@ -121,81 +122,89 @@ class _FakeEngine:
 
 
 def test_database_module_paths(monkeypatch):
-    with pytest.raises(RuntimeError):
-        db_mod.ensure_database_exists("sqlite://")
+    active_database_url = os.environ.get("NOTIFIER_DATABASE_URL", os.environ.get("DATABASE_URL", ""))
+    try:
+        assert db_mod.ensure_database_exists("sqlite://") is None
 
-    class _Url:
-        database = "appdb"
+        class _Url:
+            database = "appdb"
 
-        def set(self, **_kwargs):
-            return "postgres-admin"
+            def set(self, **_kwargs):
+                return "postgres-admin"
 
-    fake_admin_conn = _FakeConn(exists=False)
-    fake_admin_engine = _FakeEngine(fake_admin_conn)
-    monkeypatch.setattr(db_mod, "make_url", lambda _u: _Url())
-    monkeypatch.setattr(db_mod, "create_engine", lambda *_args, **_kwargs: fake_admin_engine)
-    db_mod.ensure_database_exists("postgresql://user:pass@localhost:5432/appdb")
-    assert fake_admin_engine.disposed == 1
-    assert any("CREATE DATABASE" in str(stmt) for stmt, _ in fake_admin_conn.executed)
+        fake_admin_conn = _FakeConn(exists=False)
+        fake_admin_engine = _FakeEngine(fake_admin_conn)
+        monkeypatch.setattr(db_mod, "make_url", lambda _u: _Url())
+        monkeypatch.setattr(db_mod, "create_engine", lambda *_args, **_kwargs: fake_admin_engine)
+        db_mod.ensure_database_exists("postgresql://user:pass@localhost:5432/appdb")
+        assert fake_admin_engine.disposed == 1
+        assert any("CREATE DATABASE" in str(stmt) for stmt, _ in fake_admin_conn.executed)
 
-    db_mod.dispose_database()
-    engine = _FakeEngine(_FakeConn())
-    monkeypatch.setattr(db_mod, "create_engine", lambda *_args, **_kwargs: engine)
-    monkeypatch.setattr(db_mod, "sessionmaker", lambda **_kwargs: lambda: _FakeSession())
-    db_mod.init_database("postgresql://user:pass@localhost:5432/appdb")
-    db_mod.init_database("postgresql://user:pass@localhost:5432/appdb")
+        db_mod.dispose_database()
+        engine = _FakeEngine(_FakeConn())
+        monkeypatch.setattr(db_mod, "create_engine", lambda *_args, **_kwargs: engine)
+        monkeypatch.setattr(db_mod, "sessionmaker", lambda **_kwargs: lambda: _FakeSession())
+        db_mod.init_database("postgresql://user:pass@localhost:5432/appdb")
+        db_mod.init_database("postgresql://user:pass@localhost:5432/appdb")
 
-    with db_mod.get_db_session() as session:
+        with db_mod.get_db_session() as session:
+            assert isinstance(session, _FakeSession)
+
+        with pytest.raises(RuntimeError), db_mod.get_db_session() as _session:
+            raise RuntimeError("boom")
+
+        gen = db_mod.get_db()
+        session = next(gen)
         assert isinstance(session, _FakeSession)
+        with pytest.raises(StopIteration):
+            next(gen)
 
-    with pytest.raises(RuntimeError), db_mod.get_db_session() as _session:
-        raise RuntimeError("boom")
+        gen = db_mod.get_db()
+        _ = next(gen)
+        with pytest.raises(RuntimeError):
+            gen.throw(RuntimeError("fail"))
 
-    gen = db_mod.get_db()
-    session = next(gen)
-    assert isinstance(session, _FakeSession)
-    with pytest.raises(StopIteration):
-        next(gen)
+        assert db_mod.connection_test() is True
+        db_mod._ENGINE = _FakeEngine(_FakeConn(execute_error=SQLAlchemyError("db")))
+        assert db_mod.connection_test() is False
 
-    gen = db_mod.get_db()
-    _ = next(gen)
-    with pytest.raises(RuntimeError):
-        gen.throw(RuntimeError("fail"))
+        db_mod.dispose_database()
+        assert db_mod._ENGINE is None
+        db_mod.dispose_database()
 
-    assert db_mod.connection_test() is True
-    db_mod._ENGINE = _FakeEngine(_FakeConn(execute_error=SQLAlchemyError("db")))
-    assert db_mod.connection_test() is False
+        # Cover guard paths where one side of initialization is missing.
+        db_mod._ENGINE = object()
+        db_mod._SESSION_LOCAL = None
+        with pytest.raises(RuntimeError), db_mod.get_db_session():
+            pass
 
-    db_mod.dispose_database()
-    assert db_mod._ENGINE is None
+        db_mod._ENGINE = object()
+        db_mod._SESSION_LOCAL = None
+        with pytest.raises(RuntimeError):
+            next(db_mod.get_db())
 
-    # Cover guard paths where one side of initialization is missing.
-    db_mod._ENGINE = object()
-    db_mod._SESSION_LOCAL = None
-    with pytest.raises(RuntimeError), db_mod.get_db_session():
-        pass
+        with pytest.raises(RuntimeError):
+            db_mod.init_db()
 
-    db_mod._ENGINE = object()
-    db_mod._SESSION_LOCAL = None
-    with pytest.raises(RuntimeError):
-        next(db_mod.get_db())
+        class _Meta:
+            def __init__(self):
+                self.called = 0
 
-    with pytest.raises(RuntimeError):
+            def create_all(self, bind=None):
+                self.called += 1
+                assert bind is engine
+
+        meta = _Meta()
+        monkeypatch.setattr(db_mod.Base, "metadata", meta)
+        db_mod._ENGINE = engine
         db_mod.init_db()
-
-    class _Meta:
-        def __init__(self):
-            self.called = 0
-
-        def create_all(self, bind=None):
-            self.called += 1
-            assert bind is engine
-
-    meta = _Meta()
-    monkeypatch.setattr(db_mod.Base, "metadata", meta)
-    db_mod._ENGINE = engine
-    db_mod.init_db()
-    assert meta.called == 1
+        assert meta.called == 1
+    finally:
+        monkeypatch.undo()
+        db_mod.dispose_database()
+        if active_database_url:
+            db_mod.init_database(active_database_url)
+            db_mod.init_db()
 
 
 def test_in_memory_and_hybrid_rate_limiters(monkeypatch):
