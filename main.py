@@ -9,14 +9,17 @@ License. You may obtain a copy of the License at http://www.apache.org/licenses/
 
 from __future__ import annotations
 
+import asyncio
 import logging
+import os
 import secrets
+import time
 from collections.abc import Awaitable, Callable
 
-import uvicorn
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from sqlalchemy.exc import SQLAlchemyError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.responses import Response
 
@@ -33,6 +36,7 @@ from middleware.openapi import (
     openapi_tags,
 )
 from middleware.request_size_limit import RequestSizeLimitMiddleware
+from middleware.runtime_ssl import RuntimeSSLOptions, run_uvicorn
 from routers.observability.alerts import (
     router as alertmanager_alerts_router,
 )
@@ -51,9 +55,31 @@ logger = logging.getLogger("notifier")
 # Expose this name for route logic and tests that monkeypatch main.connection_test.
 connection_test = database_module.connection_test
 
-database_module.ensure_database_exists(config.notifier_database_url)
-database_module.init_database(config.notifier_database_url, config.log_level == "debug")
-database_module.init_db()
+def _bootstrap_database() -> None:
+    timeout_seconds = float(os.getenv("DATABASE_STARTUP_TIMEOUT", "180"))
+    retry_delay_seconds = float(os.getenv("DATABASE_STARTUP_RETRY_DELAY", "2"))
+    deadline = time.monotonic() + timeout_seconds
+    attempt = 0
+
+    while True:
+        attempt += 1
+        try:
+            database_module.ensure_database_exists(config.notifier_database_url)
+            database_module.init_database(config.notifier_database_url, config.log_level == "debug")
+            database_module.init_db()
+            logger.info("Notifier database initialization completed")
+            return
+        except SQLAlchemyError as exc:
+            if time.monotonic() >= deadline:
+                raise RuntimeError("Notifier database did not become ready before startup timeout") from exc
+            logger.warning(
+                "Notifier database not ready (attempt %d, retrying in %.1fs): %s",
+                attempt,
+                retry_delay_seconds,
+                exc,
+            )
+            time.sleep(retry_delay_seconds)
+
 
 APP_TITLE = "Notifier"
 APP_DESCRIPTION = "Internal alerting service for Watchdog"
@@ -88,6 +114,11 @@ app.add_middleware(
     max_concurrent=config.max_concurrent_requests,
     acquire_timeout=config.concurrency_acquire_timeout,
 )
+
+
+@app.on_event("startup")
+async def _startup_database() -> None:
+    await asyncio.to_thread(_bootstrap_database)
 
 
 @app.middleware("http")
@@ -166,15 +197,11 @@ ready = readiness
 
 
 if __name__ == "__main__":
-    if config.notifier_ssl_enabled:
-        uvicorn.run(
-            app,
-            host=config.host,
-            port=config.port,
-            loop="uvloop",
-            log_level=config.log_level,
-            ssl_certfile=config.notifier_ssl_certfile,
-            ssl_keyfile=config.notifier_ssl_keyfile,
-        )
-    else:
-        uvicorn.run(app, host=config.host, port=config.port, loop="uvloop", log_level=config.log_level)
+    run_uvicorn(
+        app,
+        host=config.host,
+        port=config.port,
+        loop="uvloop",
+        log_level=config.log_level,
+        ssl_options=RuntimeSSLOptions.from_config(config),
+    )
