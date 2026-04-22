@@ -37,7 +37,7 @@ def is_safe_http_url(value: str | None) -> bool:
     if is_valid and hostname:
         try:
             ip = ipaddress.ip_address(hostname)
-            is_valid = not (ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved)
+            is_valid = ip.is_global
         except ValueError:
             pass
     return is_valid
