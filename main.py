@@ -55,9 +55,17 @@ logger = logging.getLogger("notifier")
 # Expose this name for route logic and tests that monkeypatch main.connection_test.
 connection_test = database_module.connection_test
 
+
+def _get_float_env(var_name: str, default: str) -> float:
+    raw_value = os.getenv(var_name, default)
+    try:
+        return float(raw_value)
+    except ValueError as exc:
+        raise RuntimeError(f"Invalid value for {var_name}: {raw_value!r}. Expected a numeric value.") from exc
+
 def _bootstrap_database() -> None:
-    timeout_seconds = float(os.getenv("DATABASE_STARTUP_TIMEOUT", "180"))
-    retry_delay_seconds = float(os.getenv("DATABASE_STARTUP_RETRY_DELAY", "2"))
+    timeout_seconds = _get_float_env("DATABASE_STARTUP_TIMEOUT", "180")
+    retry_delay_seconds = _get_float_env("DATABASE_STARTUP_RETRY_DELAY", "2")
     deadline = time.monotonic() + timeout_seconds
     attempt = 0
 

@@ -1,5 +1,5 @@
 """
-Intergrations management endpoints for Jira integration in the observability notifier router. 
+Integrations management endpoints for Jira integration in the observability notifier router. 
 These endpoints allow users to create, update, delete, and list Jira integrations that are used 
 for incident management workflows. The endpoints handle authentication, permissions, and validation 
 of Jira credentials, and they ensure that sensitive information is encrypted when stored and masked 
