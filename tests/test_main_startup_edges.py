@@ -1,5 +1,5 @@
 """
-Copyright (c) 2026 Stefan Kumarasinghe
+Copyright (c) 2026 Stefan Kumarasinghe.
 
 Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
 License. You may obtain a copy of the License at
@@ -125,3 +125,14 @@ def test_bootstrap_database_times_out_on_sqlalchemy_error(monkeypatch):
         main_module._bootstrap_database()
 
     assert isinstance(exc_info.value.__cause__, SQLAlchemyError)
+
+
+@pytest.mark.parametrize("env_name", ["DATABASE_STARTUP_TIMEOUT", "DATABASE_STARTUP_RETRY_DELAY"])
+def test_bootstrap_database_rejects_invalid_float_env(monkeypatch, env_name):
+    main_module = _load_main()
+    monkeypatch.setenv("DATABASE_STARTUP_TIMEOUT", "30")
+    monkeypatch.setenv("DATABASE_STARTUP_RETRY_DELAY", "2")
+    monkeypatch.setenv(env_name, "not-a-number")
+
+    with pytest.raises(RuntimeError, match=rf"Invalid value for {env_name}: 'not-a-number'"):
+        main_module._bootstrap_database()
