@@ -36,6 +36,7 @@ class UrlUtilsTests(unittest.TestCase):
         self.assertFalse(is_safe_http_url("http://service.local/path"))
         self.assertFalse(is_safe_http_url("http://127.0.0.1/admin"))
         self.assertFalse(is_safe_http_url("http://10.0.0.10/api"))
+        self.assertFalse(is_safe_http_url("http://100.64.0.1/metadata"))
         self.assertFalse(is_safe_http_url("http://169.254.1.2/metadata"))
         self.assertFalse(is_safe_http_url("http://240.0.0.1/metadata"))
         self.assertFalse(is_safe_http_url("http://[::1]/health"))
