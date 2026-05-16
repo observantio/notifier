@@ -23,8 +23,8 @@ ensure_test_env()
 from models.alerting.alerts import Alert, AlertState, AlertStatus
 from models.alerting.channels import ChannelType, NotificationChannel
 from services import notification_service as notif_mod
-from services.notification_service import IncidentAssignmentEmail
 from services.common import encryption as enc_mod
+from services.notification_service import IncidentAssignmentEmail
 
 
 def _alert() -> Alert:

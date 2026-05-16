@@ -12,6 +12,7 @@ import os
 import sys
 import tempfile
 import types
+from pathlib import Path
 
 import pytest
 from cryptography.fernet import Fernet
@@ -24,7 +25,10 @@ ensure_test_env()
 
 if os.getenv("MUTANT_UNDER_TEST") is not None:
     pytest.skip(
-        "Skip config validation edge tests during mutmut stats collection to avoid unrelated config import mutant failures.",
+        (
+            "Skip config validation edge tests during mutmut stats collection to avoid "
+            "unrelated config import mutant failures."
+        ),
         allow_module_level=True,
     )
 
@@ -139,7 +143,7 @@ def test_config_helper_functions_and_secret_callbacks():
     try:
         assert module._file_secret_callback(temp_name)() == "file-secret"
     finally:
-        os.unlink(temp_name)
+        Path(temp_name).unlink()
 
     assert module._literal_secret_callback("literal")() == "literal"
 
@@ -212,7 +216,7 @@ def test_build_secret_provider_prefers_env_and_supports_role_secret_sources(monk
             with pytest.raises(RuntimeError, match="neither VAULT_SECRET_ID nor VAULT_SECRET_ID_FILE"):
                 module.build_secret_provider()
     finally:
-        os.unlink(temp_name)
+        Path(temp_name).unlink()
         sys.modules.pop("services.secrets.vault_client", None)
 
 
@@ -470,5 +474,5 @@ def test_load_vault_secrets_selects_file_and_literal_secret_callbacks(monkeypatc
             assert callable(captured[-1]["secret_id_fn"])
             assert captured[-1]["secret_id_fn"]() == "inline-secret"
     finally:
-        os.unlink(secret_file)
+        Path(secret_file).unlink()
         sys.modules.pop("services.secrets.vault_client", None)

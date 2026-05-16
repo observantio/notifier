@@ -7,7 +7,7 @@ Licensed under the Apache License, Version 2.0 (the "License"); you may not use 
 License. You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
 """
 
-from enum import Enum
+from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -29,7 +29,7 @@ DESC_RECEIVER_HANDLE_ALERTS = "Receiver that will handle these alerts"
 DESC_LIST_ALERTS_GROUP = "List of alerts in this group"
 
 
-class AlertState(str, Enum):
+class AlertState(StrEnum):
     UNPROCESSED = "unprocessed"
     ACTIVE = "active"
     SUPPRESSED = "suppressed"

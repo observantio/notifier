@@ -298,7 +298,5 @@ async def test_transport_helpers_cover_transient_checks_and_send_paths(monkeypat
             message,
             smtp=transport_mod.SmtpDeliveryConfig(hostname="smtp.example.com", port=587),
         )
-    )["accepted"] == [
-        "user@example.com"
-    ]
+    )["accepted"] == ["user@example.com"]
     assert sent[0]["hostname"] == "smtp.example.com"

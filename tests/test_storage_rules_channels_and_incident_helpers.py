@@ -210,16 +210,12 @@ def test_rule_storage_crud_and_visibility(monkeypatch):
         "tenant",
         rules_mod.RuleAccessContext(user_id="user", group_ids=["g1"]),
         rules_mod.PageRequest(limit=10, offset=2),
-    ) == [
-        {"id": "rule-1", "visibility": "public"}
-    ]
+    ) == [{"id": "rule-1", "visibility": "public"}]
     assert svc.get_alert_rules_with_owner(
         "tenant",
         rules_mod.RuleAccessContext(user_id="user", group_ids=["g1"]),
         rules_mod.PageRequest(limit=10, offset=2),
-    ) == [
-        ({"id": "rule-1", "visibility": "public"}, "owner")
-    ]
+    ) == [({"id": "rule-1", "visibility": "public"}, "owner")]
     assert svc.get_alert_rule_raw("rule-1", "tenant") is rule1
     assert svc.get_alert_rule("rule-2", "tenant", "user", ["g1"]) is None
     assert access_calls
@@ -287,12 +283,18 @@ def test_rule_storage_crud_and_visibility(monkeypatch):
     monkeypatch.setattr(rules_mod, "has_access", lambda check: not check.require_write)
     blocked_db = FakeDB(_rule(id="rule-2", visibility="private"))
     monkeypatch.setattr(rules_mod, "get_db_session", lambda: FakeCtx(blocked_db))
-    assert svc.delete_alert_rule("rule-2", "tenant", rules_mod.RuleAccessContext(user_id="owner", group_ids=["g1"])) is False
+    assert (
+        svc.delete_alert_rule("rule-2", "tenant", rules_mod.RuleAccessContext(user_id="owner", group_ids=["g1"]))
+        is False
+    )
 
     monkeypatch.setattr(rules_mod, "has_access", lambda _check: True)
     delete_db = FakeDB(_rule(id="rule-3", visibility="private"))
     monkeypatch.setattr(rules_mod, "get_db_session", lambda: FakeCtx(delete_db))
-    assert svc.delete_alert_rule("rule-3", "tenant", rules_mod.RuleAccessContext(user_id="owner", group_ids=["g1"])) is True
+    assert (
+        svc.delete_alert_rule("rule-3", "tenant", rules_mod.RuleAccessContext(user_id="owner", group_ids=["g1"]))
+        is True
+    )
     assert len(delete_db.deleted) == 1
 
 
@@ -417,13 +419,23 @@ def test_channel_helpers_and_storage_branches(monkeypatch):
         _channel(id="chan-4", created_by="owner"),
     )
     monkeypatch.setattr(channels_mod, "get_db_session", lambda: FakeCtx(delete_db))
-    assert svc.delete_notification_channel("chan-1", "tenant", channels_mod.ChannelAccessContext(user_id="owner")) is True
-    assert svc.delete_notification_channel("chan-3", "tenant", channels_mod.ChannelAccessContext(user_id="owner")) is False
+    assert (
+        svc.delete_notification_channel("chan-1", "tenant", channels_mod.ChannelAccessContext(user_id="owner")) is True
+    )
+    assert (
+        svc.delete_notification_channel("chan-3", "tenant", channels_mod.ChannelAccessContext(user_id="owner")) is False
+    )
 
     owner_db = FakeDB(_channel(id="chan-3", created_by="other"), _channel(id="chan-4", created_by="owner"))
     monkeypatch.setattr(channels_mod, "get_db_session", lambda: FakeCtx(owner_db))
-    assert svc.is_notification_channel_owner("chan-3", "tenant", channels_mod.ChannelAccessContext(user_id="owner")) is False
-    assert svc.is_notification_channel_owner("chan-4", "tenant", channels_mod.ChannelAccessContext(user_id="owner")) is True
+    assert (
+        svc.is_notification_channel_owner("chan-3", "tenant", channels_mod.ChannelAccessContext(user_id="owner"))
+        is False
+    )
+    assert (
+        svc.is_notification_channel_owner("chan-4", "tenant", channels_mod.ChannelAccessContext(user_id="owner"))
+        is True
+    )
 
     monkeypatch.setattr(
         channels_mod.ChannelStorageService,
@@ -439,9 +451,10 @@ def test_channel_helpers_and_storage_branches(monkeypatch):
         "get_notification_channel",
         staticmethod(lambda *_args, **_kwargs: SimpleNamespace(name="Slack", type="slack")),
     )
-    assert svc.test_notification_channel("chan-1", "tenant", channels_mod.ChannelAccessContext(user_id="owner"))[
-        "success"
-    ] is True
+    assert (
+        svc.test_notification_channel("chan-1", "tenant", channels_mod.ChannelAccessContext(user_id="owner"))["success"]
+        is True
+    )
 
     rule_with_specific = _rule(id="rule-a", notification_channels=["chan-1", "missing", "chan-2"], visibility="private")
     rule_no_specific = _rule(
@@ -541,7 +554,10 @@ def test_rule_storage_additional_edges(monkeypatch):
 
     db = FakeDB(None)
     monkeypatch.setattr(rules_mod, "get_db_session", lambda: FakeCtx(db))
-    assert svc.delete_alert_rule("missing", "tenant", rules_mod.RuleAccessContext(user_id="user", group_ids=["g1"])) is False
+    assert (
+        svc.delete_alert_rule("missing", "tenant", rules_mod.RuleAccessContext(user_id="user", group_ids=["g1"]))
+        is False
+    )
 
 
 def test_incident_run_async_falls_back_to_new_loop(monkeypatch):
@@ -810,9 +826,7 @@ def test_incident_storage_additional_edges(monkeypatch):
         "inc-invalid-visibility",
         "tenant",
         incidents_mod.IncidentAccessContext(user_id="user"),
-    ) == {
-        "id": "inc-invalid-visibility"
-    }
+    ) == {"id": "inc-invalid-visibility"}
 
     incident_for_update = SimpleNamespace(
         id="inc-update",

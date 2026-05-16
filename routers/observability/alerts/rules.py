@@ -212,9 +212,7 @@ async def list_public_rules(request: Request) -> list[AlertRule]:
     response_description="The resolved organization identifier and metric names.",
     responses=BAD_REQUEST_ERRORS,
 )
-@handle_route_errors(
-    bad_gateway=RouteErrorResponse(detail="Failed to fetch metrics from Mimir", status_code=502)
-)
+@handle_route_errors(bad_gateway=RouteErrorResponse(detail="Failed to fetch metrics from Mimir", status_code=502))
 async def list_metric_names(
     org_id: str | None = Query(None, alias="orgId"),
     current_user: TokenData = Depends(
@@ -240,9 +238,7 @@ async def list_metric_names(
     response_description="The evaluated query result returned from Mimir.",
     responses=BAD_REQUEST_ERRORS,
 )
-@handle_route_errors(
-    bad_gateway=RouteErrorResponse(detail="Failed to evaluate PromQL against Mimir", status_code=502)
-)
+@handle_route_errors(bad_gateway=RouteErrorResponse(detail="Failed to evaluate PromQL against Mimir", status_code=502))
 async def query_metrics(
     query: str = Query(..., min_length=1),
     org_id: str | None = Query(None, alias="orgId"),
@@ -271,9 +267,7 @@ async def query_metrics(
     response_description="The resolved organization identifier and metric label names.",
     responses=BAD_REQUEST_ERRORS,
 )
-@handle_route_errors(
-    bad_gateway=RouteErrorResponse(detail="Failed to fetch label names from Mimir", status_code=502)
-)
+@handle_route_errors(bad_gateway=RouteErrorResponse(detail="Failed to fetch label names from Mimir", status_code=502))
 async def list_metric_labels(
     org_id: str | None = Query(None, alias="orgId"),
     current_user: TokenData = Depends(

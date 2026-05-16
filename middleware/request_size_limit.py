@@ -25,7 +25,7 @@ def _inc_request_size_rejections() -> int:
     return total
 
 
-class _TooLarge(Exception):
+class _TooLargeError(Exception):
     def __init__(self, max_bytes: int) -> None:
         super().__init__(f"Request body exceeds {max_bytes} bytes")
         self.max_bytes = max_bytes
@@ -69,7 +69,7 @@ class RequestSizeLimitMiddleware:
                 body = message.get("body") or b""
                 received += len(body)
                 if received > self.max_bytes:
-                    raise _TooLarge(self.max_bytes)
+                    raise _TooLargeError(self.max_bytes)
             return message
 
         async def tracking_send(message: Message) -> None:
@@ -80,7 +80,7 @@ class RequestSizeLimitMiddleware:
 
         try:
             await self.app(scope, limited_receive, tracking_send)
-        except _TooLarge:
+        except _TooLargeError:
             total = _inc_request_size_rejections()
             logger.warning("request_size_rejected total=%s max_bytes=%s", total, self.max_bytes)
             if not response_started:

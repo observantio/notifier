@@ -46,8 +46,8 @@ def _is_allowed_host(
         host = httpx.URL(url).host
         if allowed_hosts and host in allowed_hosts:
             return True
-        if allowed_suffixes and host.endswith(allowed_suffixes):
-            return True
+        if allowed_suffixes:
+            return host.endswith(allowed_suffixes)
         return False
     except (TypeError, ValueError):
         return False

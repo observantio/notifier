@@ -7,7 +7,7 @@ Licensed under the Apache License, Version 2.0 (the "License"); you may not use 
 License. You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
 """
 
-from enum import Enum
+from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, Field, StrictBool
 
@@ -27,7 +27,7 @@ DESC_GROUP_IDS_SILENCE_SHARED_WITH = "Group IDs this silence is shared with"
 DESC_GROUP_IDS_SHARE_WITH = "Group IDs to share with"
 
 
-class Visibility(str, Enum):
+class Visibility(StrEnum):
     PRIVATE = "private"
     GROUP = "group"
     TENANT = "tenant"

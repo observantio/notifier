@@ -8,7 +8,7 @@ License. You may obtain a copy of the License at http://www.apache.org/licenses/
 """
 
 from datetime import UTC, datetime
-from enum import Enum
+from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, Field, field_serializer
 
@@ -19,12 +19,12 @@ def _to_rfc3339(value: datetime) -> str:
     return value.isoformat().replace("+00:00", "Z")
 
 
-class IncidentStatus(str, Enum):
+class IncidentStatus(StrEnum):
     OPEN = "open"
     RESOLVED = "resolved"
 
 
-class IncidentVisibility(str, Enum):
+class IncidentVisibility(StrEnum):
     PUBLIC = "public"
     PRIVATE = "private"
     GROUP = "group"

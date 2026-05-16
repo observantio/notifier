@@ -12,7 +12,6 @@ from __future__ import annotations
 import hashlib
 import logging
 import os
-from typing import Optional
 
 from fastapi import HTTPException, Request, status
 

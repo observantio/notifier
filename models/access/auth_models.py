@@ -7,19 +7,19 @@ Licensed under the Apache License, Version 2.0 (the "License"); you may not use 
 License. You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
 """
 
-from enum import Enum
+from enum import StrEnum
 
 from pydantic import BaseModel, Field
 
 
-class Role(str, Enum):
+class Role(StrEnum):
     PROVISIONING = "provisioning"
     ADMIN = "admin"
     USER = "user"
     VIEWER = "viewer"
 
 
-class Permission(str, Enum):
+class Permission(StrEnum):
     READ_ALERTS = "read:alerts"
     CREATE_ALERTS = "create:alerts"
     UPDATE_ALERTS = "update:alerts"

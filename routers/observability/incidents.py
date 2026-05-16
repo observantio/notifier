@@ -33,8 +33,7 @@ from services.incidents.helpers import (
     sync_note_to_jira_comment,
 )
 from services.notification_service import IncidentAssignmentEmail, NotificationService
-from services.storage.incidents import incident_key_from_labels
-from services.storage.incidents import IncidentAccessContext
+from services.storage.incidents import IncidentAccessContext, incident_key_from_labels
 from services.storage_db_service import DatabaseStorageService
 
 logger = logging.getLogger(__name__)
@@ -73,9 +72,7 @@ def _status_value(value: object) -> str:
 async def _send_incident_assignment_email_task(
     payload: IncidentAssignmentEmail,
 ) -> bool:
-    return await notification_service.send_incident_assignment_email(
-        payload
-    )
+    return await notification_service.send_incident_assignment_email(payload)
 
 
 async def _ensure_resolve_allowed(payload: AlertIncidentUpdateRequest, existing: AlertIncident) -> None:

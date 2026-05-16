@@ -29,19 +29,18 @@ from services.storage.incidents import (
 def session_local():
     engine = create_engine("sqlite:///:memory:")
     Base.metadata.create_all(engine)
-    SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
+    session_local = sessionmaker(bind=engine, expire_on_commit=False)
     try:
-        yield SessionLocal
+        yield session_local
     finally:
         engine.dispose()
 
 
 def test_sync_incidents_aggregates_multiple_fingerprints_into_single_incident(monkeypatch, session_local):
-    SessionLocal = session_local
 
     @contextmanager
     def fake_db_session():
-        db = SessionLocal()
+        db = session_local()
         try:
             yield db
             db.commit()
@@ -83,18 +82,17 @@ def test_sync_incidents_aggregates_multiple_fingerprints_into_single_incident(mo
         resolve_missing=False,
     )
 
-    with SessionLocal() as db:
+    with session_local() as db:
         incidents = db.query(AlertIncident).filter(AlertIncident.tenant_id == tenant_id).all()
         assert len(incidents) == 1
         assert incidents[0].status == "open"
 
 
 def test_sync_incidents_resolve_uses_incident_key_not_single_fingerprint(monkeypatch, session_local):
-    SessionLocal = session_local
 
     @contextmanager
     def fake_db_session():
-        db = SessionLocal()
+        db = session_local()
         try:
             yield db
             db.commit()
@@ -127,18 +125,17 @@ def test_sync_incidents_resolve_uses_incident_key_not_single_fingerprint(monkeyp
     )
     service.sync_incidents_from_alerts(tenant_id, [], resolve_missing=True)
 
-    with SessionLocal() as db:
+    with session_local() as db:
         incidents = db.query(AlertIncident).filter(AlertIncident.tenant_id == tenant_id).all()
         assert len(incidents) == 1
         assert incidents[0].status == "resolved"
 
 
 def test_sync_incidents_deduplicates_existing_open_rows_with_same_incident_key(monkeypatch, session_local):
-    SessionLocal = session_local
 
     @contextmanager
     def fake_db_session():
-        db = SessionLocal()
+        db = session_local()
         try:
             yield db
             db.commit()
@@ -154,7 +151,7 @@ def test_sync_incidents_deduplicates_existing_open_rows_with_same_incident_key(m
     now = datetime.now(UTC)
     key = "rule:Memory Boom|scope:*"
 
-    with SessionLocal() as db:
+    with session_local() as db:
         for fp in ("fp-a", "fp-b", "fp-c", "fp-d"):
             db.add(
                 AlertIncident(
@@ -191,7 +188,7 @@ def test_sync_incidents_deduplicates_existing_open_rows_with_same_incident_key(m
         resolve_missing=False,
     )
 
-    with SessionLocal() as db:
+    with session_local() as db:
         incidents = db.query(AlertIncident).filter(AlertIncident.tenant_id == tenant_id).all()
         open_incidents = [item for item in incidents if item.status == "open"]
         resolved_incidents = [item for item in incidents if item.status == "resolved"]
@@ -200,11 +197,10 @@ def test_sync_incidents_deduplicates_existing_open_rows_with_same_incident_key(m
 
 
 def test_sync_incidents_aggregates_metric_states_into_single_incident(monkeypatch, session_local):
-    SessionLocal = session_local
 
     @contextmanager
     def fake_db_session():
-        db = SessionLocal()
+        db = session_local()
         try:
             yield db
             db.commit()
@@ -253,7 +249,7 @@ def test_sync_incidents_aggregates_metric_states_into_single_incident(monkeypatc
         resolve_missing=False,
     )
 
-    with SessionLocal() as db:
+    with session_local() as db:
         incidents = db.query(AlertIncident).filter(AlertIncident.tenant_id == tenant_id).all()
         assert len(incidents) == 1
         merged = str((incidents[0].annotations or {}).get(METRIC_STATES_ANNOTATION_KEY) or "")
@@ -261,11 +257,10 @@ def test_sync_incidents_aggregates_metric_states_into_single_incident(monkeypatc
 
 
 def test_sync_incidents_skips_suppressed_alerts(monkeypatch, session_local):
-    SessionLocal = session_local
 
     @contextmanager
     def fake_db_session():
-        db = SessionLocal()
+        db = session_local()
         try:
             yield db
             db.commit()
@@ -297,6 +292,6 @@ def test_sync_incidents_skips_suppressed_alerts(monkeypatch, session_local):
         resolve_missing=False,
     )
 
-    with SessionLocal() as db:
+    with session_local() as db:
         incidents = db.query(AlertIncident).filter(AlertIncident.tenant_id == tenant_id).all()
         assert len(incidents) == 0

@@ -11,6 +11,7 @@ import importlib
 import sys
 import time
 import types
+from typing import ClassVar
 
 import pytest
 
@@ -27,10 +28,10 @@ def _import_vault_module_with_fake_hvac(
     original_import_module = importlib.import_module
     created_clients: list[object] = []
 
-    class FakeForbidden(Exception):
+    class FakeForbiddenError(Exception):
         pass
 
-    class FakeInvalidPath(Exception):
+    class FakeInvalidPathError(Exception):
         pass
 
     class FakeVaultError(Exception):
@@ -58,7 +59,7 @@ def _import_vault_module_with_fake_hvac(
             return self._client.v1_response
 
     class FakeClient:
-        auth_checks_default: list[bool] = [True]
+        auth_checks_default: ClassVar[list[bool]] = [True]
 
         def __init__(self, url, timeout, verify):
             self.url = url
@@ -92,8 +93,8 @@ def _import_vault_module_with_fake_hvac(
         fake_hvac_exceptions = types.SimpleNamespace(Forbidden="nope", InvalidPath=123, VaultError=None)
     else:
         fake_hvac_exceptions = types.SimpleNamespace(
-            Forbidden=FakeForbidden,
-            InvalidPath=FakeInvalidPath,
+            Forbidden=FakeForbiddenError,
+            InvalidPath=FakeInvalidPathError,
             VaultError=FakeVaultError,
         )
 
@@ -141,13 +142,13 @@ def test_vault_module_importerror_path_sets_fallbacks(monkeypatch):
 
 
 def test_vault_provider_init_validation_and_auth_modes(monkeypatch):
-    module, FakeClient, _ = _import_vault_module_with_fake_hvac(monkeypatch)
+    module, fake_client, _ = _import_vault_module_with_fake_hvac(monkeypatch)
 
     module.hvac = None
     with pytest.raises(module.VaultClientError, match="hvac library is required"):
         module.VaultSecretProvider(address="http://vault:8200", token="tok")
 
-    module, FakeClient, clients = _import_vault_module_with_fake_hvac(monkeypatch)
+    module, fake_client, clients = _import_vault_module_with_fake_hvac(monkeypatch)
     with pytest.raises(module.VaultClientError, match="VAULT_ADDR is required"):
         module.VaultSecretProvider(address="", token="tok")
 
@@ -169,7 +170,7 @@ def test_vault_provider_init_validation_and_auth_modes(monkeypatch):
     assert approle_provider._client.last_login == {"role_id": "role-1", "secret_id": "secret-1"}
     assert approle_provider._client.token == "approle-token"
 
-    FakeClient.auth_checks_default = [False]
+    fake_client.auth_checks_default = [False]
     with pytest.raises(module.VaultClientError, match="Vault authentication failed"):
         module.VaultSecretProvider(address="http://vault:8200", token="tok")
 

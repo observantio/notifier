@@ -289,12 +289,12 @@ class RuleStorageService:
             if not r:
                 return None
             if not has_access(
-                    AccessCheck(
-                        visibility=_visibility_of(r),
-                        created_by=_creator_of(r),
-                        user_id=context.user_id,
-                        shared_group_ids=_shared_group_ids(r),
-                        user_group_ids=group_ids,
+                AccessCheck(
+                    visibility=_visibility_of(r),
+                    created_by=_creator_of(r),
+                    user_id=context.user_id,
+                    shared_group_ids=_shared_group_ids(r),
+                    user_group_ids=group_ids,
                 )
             ):
                 return None
@@ -364,22 +364,22 @@ class RuleStorageService:
             if not r:
                 return None
             if not has_access(
-                    AccessCheck(
-                        visibility=_visibility_of(r),
-                        created_by=_creator_of(r),
-                        user_id=context.user_id,
-                        shared_group_ids=_shared_group_ids(r),
-                        user_group_ids=group_ids,
+                AccessCheck(
+                    visibility=_visibility_of(r),
+                    created_by=_creator_of(r),
+                    user_id=context.user_id,
+                    shared_group_ids=_shared_group_ids(r),
+                    user_group_ids=group_ids,
                 )
             ):
                 return None
             if not has_access(
-                    AccessCheck(
-                        visibility=_visibility_of(r),
-                        created_by=_creator_of(r),
-                        user_id=context.user_id,
-                        shared_group_ids=_shared_group_ids(r),
-                        user_group_ids=group_ids,
+                AccessCheck(
+                    visibility=_visibility_of(r),
+                    created_by=_creator_of(r),
+                    user_id=context.user_id,
+                    shared_group_ids=_shared_group_ids(r),
+                    user_group_ids=group_ids,
                     require_write=True,
                 )
             ):
@@ -430,12 +430,12 @@ class RuleStorageService:
             if not r:
                 return False
             if not has_access(
-                    AccessCheck(
-                        visibility=_visibility_of(r),
-                        created_by=_creator_of(r),
-                        user_id=context.user_id,
-                        shared_group_ids=_shared_group_ids(r),
-                        user_group_ids=group_ids,
+                AccessCheck(
+                    visibility=_visibility_of(r),
+                    created_by=_creator_of(r),
+                    user_id=context.user_id,
+                    shared_group_ids=_shared_group_ids(r),
+                    user_group_ids=group_ids,
                     require_write=True,
                 )
             ):

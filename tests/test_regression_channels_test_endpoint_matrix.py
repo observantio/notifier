@@ -23,7 +23,9 @@ from tests._regression_helpers import run_in_threadpool_inline, token_data
 
 
 def _channel(*, channel_type: ChannelType, enabled: bool = True, config: dict[str, object] | None = None):
-    return NotificationChannel(name=f"{channel_type.value}-channel", type=channel_type, enabled=enabled, config=config or {})
+    return NotificationChannel(
+        name=f"{channel_type.value}-channel", type=channel_type, enabled=enabled, config=config or {}
+    )
 
 
 @pytest.mark.asyncio
@@ -48,7 +50,11 @@ async def test_test_channel_rejects_disabled_channels(monkeypatch: pytest.Monkey
     monkeypatch.setattr(
         channels_router.storage_service,
         "get_notification_channel",
-        lambda *_args: _channel(channel_type=ChannelType.SLACK, enabled=False, config={"webhook_url": "https://hooks.slack.com/services/a/b/c"}),
+        lambda *_args: _channel(
+            channel_type=ChannelType.SLACK,
+            enabled=False,
+            config={"webhook_url": "https://hooks.slack.com/services/a/b/c"},
+        ),
     )
 
     with pytest.raises(HTTPException) as exc:
@@ -79,7 +85,7 @@ async def test_test_channel_surfaces_configuration_errors(monkeypatch: pytest.Mo
         await channels_router.test_channel("channel-3", current_user=user)
 
     assert exc.value.status_code == 400
-    assert "missing smtp_host; missing smtp_password" == exc.value.detail
+    assert exc.value.detail == "missing smtp_host; missing smtp_password"
 
 
 @pytest.mark.asyncio
@@ -140,7 +146,9 @@ async def test_test_channel_non_webhook_failure_uses_generic_error(monkeypatch: 
     monkeypatch.setattr(
         channels_router.storage_service,
         "get_notification_channel",
-        lambda *_args: _channel(channel_type=ChannelType.SLACK, config={"webhook_url": "https://hooks.slack.com/services/a/b/c"}),
+        lambda *_args: _channel(
+            channel_type=ChannelType.SLACK, config={"webhook_url": "https://hooks.slack.com/services/a/b/c"}
+        ),
     )
     monkeypatch.setattr(channels_router.notification_service, "validate_channel_config", lambda *_args: [])
 

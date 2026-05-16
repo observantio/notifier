@@ -246,13 +246,12 @@ class IncidentStorageService:
                 creator_id = meta.get("created_by")
                 shared_group_ids = _safe_group_ids(meta)
 
-                if filters.group_id:
-                    if (
-                        filters.group_id not in group_ids
-                        or inc_visibility != "group"
-                        or filters.group_id not in shared_group_ids
-                    ):
-                        continue
+                if filters.group_id and (
+                    filters.group_id not in group_ids
+                    or inc_visibility != "group"
+                    or filters.group_id not in shared_group_ids
+                ):
+                    continue
 
                 if not _incident_access_allowed(
                     AccessCheck(

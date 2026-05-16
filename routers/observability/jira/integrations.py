@@ -1,10 +1,10 @@
 """
-Integrations management endpoints for Jira integration in the observability notifier router. 
-These endpoints allow users to create, update, delete, and list Jira integrations that are used 
-for incident management workflows. The endpoints handle authentication, permissions, and validation 
-of Jira credentials, and they ensure that sensitive information is encrypted when stored and masked 
-when returned in responses. Additionally, there is functionality to toggle the visibility of shared 
-Jira integrations for individual users. This module is crucial for managing the connections between 
+Integrations management endpoints for Jira integration in the observability notifier router.
+These endpoints allow users to create, update, delete, and list Jira integrations that are used
+for incident management workflows. The endpoints handle authentication, permissions, and validation
+of Jira credentials, and they ensure that sensitive information is encrypted when stored and masked
+when returned in responses. Additionally, there is functionality to toggle the visibility of shared
+Jira integrations for individual users. This module is crucial for managing the connections between
 the observability platform and Jira for effective incident tracking and resolution.
 
 Copyright (c) 2026 Stefan Kumarasinghe.

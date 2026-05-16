@@ -21,16 +21,21 @@ from importlib import import_module
 from types import ModuleType
 
 
-class _VaultForbiddenFallback(Exception):
+class _VaultForbiddenFallbackError(Exception):
     pass
 
 
-class _VaultInvalidPathFallback(Exception):
+class _VaultInvalidPathFallbackError(Exception):
     pass
 
 
-class _VaultErrorFallback(Exception):
+class _VaultErrorFallbackError(Exception):
     pass
+
+
+_VaultForbiddenFallback = _VaultForbiddenFallbackError
+_VaultInvalidPathFallback = _VaultInvalidPathFallbackError
+_VaultErrorFallback = _VaultErrorFallbackError
 
 
 hvac: ModuleType | None
@@ -38,23 +43,23 @@ hvac: ModuleType | None
 try:
     hvac = import_module("hvac")
     hvac_exceptions = import_module("hvac.exceptions")
-    forbidden_exc = getattr(hvac_exceptions, "Forbidden", _VaultForbiddenFallback)
-    invalid_path_exc = getattr(hvac_exceptions, "InvalidPath", _VaultInvalidPathFallback)
-    vault_error_exc = getattr(hvac_exceptions, "VaultError", _VaultErrorFallback)
+    forbidden_exc = getattr(hvac_exceptions, "Forbidden", _VaultForbiddenFallbackError)
+    invalid_path_exc = getattr(hvac_exceptions, "InvalidPath", _VaultInvalidPathFallbackError)
+    vault_error_exc = getattr(hvac_exceptions, "VaultError", _VaultErrorFallbackError)
     Forbidden = (
         forbidden_exc
         if isinstance(forbidden_exc, type) and issubclass(forbidden_exc, Exception)
-        else _VaultForbiddenFallback
+        else _VaultForbiddenFallbackError
     )
     InvalidPath = (
         invalid_path_exc
         if isinstance(invalid_path_exc, type) and issubclass(invalid_path_exc, Exception)
-        else _VaultInvalidPathFallback
+        else _VaultInvalidPathFallbackError
     )
     VaultError = (
         vault_error_exc
         if isinstance(vault_error_exc, type) and issubclass(vault_error_exc, Exception)
-        else _VaultErrorFallback
+        else _VaultErrorFallbackError
     )
 except ImportError:
     hvac = None
@@ -86,7 +91,6 @@ class VaultSecretProvider:
         if hvac is None:
             raise VaultClientError("hvac library is required for VaultSecretProvider")
 
-        self._hvac = hvac
         self._exc_not_found = InvalidPath
         self._exc_forbidden = Forbidden
         self._exc_vault = VaultError
@@ -97,9 +101,7 @@ class VaultSecretProvider:
         if kv_version not in (1, 2):
             raise VaultClientError(f"Unsupported kv_version: {kv_version!r}, must be 1 or 2")
 
-        self._address = address
         self._timeout = timeout
-        self._cacert = cacert
         self._prefix = prefix.strip("/")
         self._kv_version = kv_version
         self._cache: dict[str, tuple[float, object]] = {}

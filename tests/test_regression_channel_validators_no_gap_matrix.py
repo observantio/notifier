@@ -50,9 +50,7 @@ def test_validate_email_smtp_api_key_auth_requires_api_key_and_port_bounds() -> 
 
 def test_validate_slack_requires_safe_webhook_url() -> None:
     bad_errors = validators.validate_channel_config("slack", {"webhook_url": "ftp://hooks.slack.com/services/a/b/c"})
-    good_errors = validators.validate_channel_config(
-        "slack", {"webhook_url": "https://hooks.slack.com/services/a/b/c"}
-    )
+    good_errors = validators.validate_channel_config("slack", {"webhook_url": "https://hooks.slack.com/services/a/b/c"})
 
     assert bad_errors == ["Slack channel requires a valid 'webhook_url'"]
     assert good_errors == []

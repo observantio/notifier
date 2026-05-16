@@ -14,12 +14,13 @@ import sys
 import tempfile
 from pathlib import Path
 
-
 _TEST_SQLITE_DIR = Path(tempfile.mkdtemp(prefix="observantio-notifier-tests-"))
 _TEST_SQLITE_URL = f"sqlite:///{_TEST_SQLITE_DIR / 'notifier.sqlite3'}"
 _TEST_DATABASE_INITIALIZED = False
 
 atexit.register(shutil.rmtree, _TEST_SQLITE_DIR, ignore_errors=True)
+
+
 def ensure_test_env() -> None:
     global _TEST_DATABASE_INITIALIZED
 

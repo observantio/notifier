@@ -164,7 +164,9 @@ async def test_send_email_smtp_api_key_mode_sets_default_username(monkeypatch: p
 
 
 @pytest.mark.asyncio
-async def test_send_email_smtp_none_auth_clears_credentials_and_uses_default_port(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_send_email_smtp_none_auth_clears_credentials_and_uses_default_port(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     svc = NotificationService()
     channel = notification_channel(
         name="email-smtp-no-auth",

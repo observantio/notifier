@@ -10,7 +10,7 @@ License. You may obtain a copy of the License at http://www.apache.org/licenses/
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
@@ -25,7 +25,6 @@ if TYPE_CHECKING:
     from services.alertmanager_service import AlertManagerService
 
 QueryParamValue = str | int | float | bool | None
-QueryParamMapping = Mapping[str, QueryParamValue | Sequence[QueryParamValue]]
 
 
 @dataclass(frozen=True)

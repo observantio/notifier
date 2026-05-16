@@ -19,8 +19,8 @@ except ImportError:
 
 ensure_test_env()
 
-from services.alerting import channels_ops
 from models.alerting.receivers import AlertManagerStatus
+from services.alerting import channels_ops
 
 
 class FakeResponse:

@@ -107,66 +107,64 @@ def infer_tenant_id_from_alerts(
     alerts: Sequence[Mapping[str, object]] | None,
 ) -> str:
     base_tenant_id = tenant_id_from_scope_header(scoped_header)
-    if scoped_header and str(scoped_header).strip():
+    if scoped_header is not None:
         return base_tenant_id
 
     payload_alerts = alerts or []
-    if not payload_alerts:
-        return base_tenant_id
+    if payload_alerts:
+        candidates: set[str] = set()
+        with get_db_session() as db:
+            for alert in payload_alerts:
+                labels = alert.get("labels") if isinstance(alert, dict) else {}
+                if not isinstance(labels, dict):
+                    continue
+                alertname = _alert_label_value(labels, "alertname")
+                org_id = _alert_label_value(labels, "org_id", "orgId", "tenant", "product")
 
-    candidates: set[str] = set()
-    with get_db_session() as db:
-        for alert in payload_alerts:
-            labels = alert.get("labels") if isinstance(alert, dict) else {}
-            if not isinstance(labels, dict):
-                continue
-            alertname = _alert_label_value(labels, "alertname")
-            org_id = _alert_label_value(labels, "org_id", "orgId", "tenant", "product")
-
-            if alertname and org_id:
-                rows = (
-                    db.query(AlertRule.tenant_id)
-                    .filter(
-                        and_(
-                            AlertRule.enabled.is_(True),
-                            AlertRule.name == alertname,
-                            AlertRule.org_id == org_id,
+                if alertname and org_id:
+                    rows = (
+                        db.query(AlertRule.tenant_id)
+                        .filter(
+                            and_(
+                                AlertRule.enabled.is_(True),
+                                AlertRule.name == alertname,
+                                AlertRule.org_id == org_id,
+                            )
                         )
+                        .all()
                     )
-                    .all()
-                )
-                candidates.update(str(tenant_id) for (tenant_id,) in rows if str(tenant_id).strip())
-                continue
+                    candidates.update(str(tenant_id) for (tenant_id,) in rows if str(tenant_id).strip())
+                    continue
 
-            if alertname:
-                rows = (
-                    db.query(AlertRule.tenant_id)
-                    .filter(
-                        and_(
-                            AlertRule.enabled.is_(True),
-                            AlertRule.name == alertname,
+                if alertname:
+                    rows = (
+                        db.query(AlertRule.tenant_id)
+                        .filter(
+                            and_(
+                                AlertRule.enabled.is_(True),
+                                AlertRule.name == alertname,
+                            )
                         )
+                        .all()
                     )
-                    .all()
-                )
-                candidates.update(str(tenant_id) for (tenant_id,) in rows if str(tenant_id).strip())
+                    candidates.update(str(tenant_id) for (tenant_id,) in rows if str(tenant_id).strip())
 
-    if len(candidates) == 1:
-        inferred = next(iter(candidates))
-        logger.info(
-            "Inferred tenant %s from webhook alerts (base=%s, explicit_scope=%s)",
-            inferred,
-            base_tenant_id,
-            bool(scoped_header and str(scoped_header).strip()),
-        )
-        return inferred
+        if len(candidates) == 1:
+            inferred = next(iter(candidates))
+            logger.info(
+                "Inferred tenant %s from webhook alerts (base=%s)",
+                inferred,
+                base_tenant_id,
+            )
+            return inferred
 
-    if len(candidates) > 1:
-        logger.warning(
-            "Ambiguous tenant inference for webhook alerts; using base tenant %s candidates=%s",
-            base_tenant_id,
-            sorted(candidates),
-        )
+        if len(candidates) > 1:
+            logger.warning(
+                "Ambiguous tenant inference for webhook alerts; using base tenant %s candidates=%s",
+                base_tenant_id,
+                sorted(candidates),
+            )
+
     return base_tenant_id
 
 

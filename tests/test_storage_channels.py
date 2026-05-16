@@ -13,8 +13,8 @@ ensure_test_env()
 
 import os
 
-from cryptography.fernet import Fernet
 import pytest
+from cryptography.fernet import Fernet
 
 from config import config
 from database import get_db_session
@@ -40,6 +40,7 @@ def test_encrypt_decrypt_config_roundtrip(monkeypatch):
         assert dec == cfg
     finally:
         config.data_encryption_key = prev
+
 
 @pytest.mark.skipif(not __import__("database", fromlist=[""]).connection_test(), reason="DB not available")
 def test_create_channel_stores_encrypted_and_owner_sees_config(monkeypatch):

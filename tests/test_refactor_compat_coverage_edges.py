@@ -20,8 +20,7 @@ except ImportError:
 
 ensure_test_env()
 
-from middleware.error_handlers import handle_route_errors
-from middleware.error_handlers import RouteErrorResponse
+from middleware.error_handlers import RouteErrorResponse, handle_route_errors
 from services import notification_service as notification_mod
 from services.jira_service import JiraIssueCreateOptions, JiraIssueCreateRequest, JiraService
 from services.notification import email_providers, transport

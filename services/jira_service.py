@@ -16,7 +16,7 @@ import logging
 import os
 from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Literal, Optional
+from typing import Literal
 from urllib.parse import urlparse
 
 import httpx
@@ -28,7 +28,7 @@ from services.common.url_utils import is_safe_http_url
 
 logger = logging.getLogger(__name__)
 
-Credentials = Optional[Mapping[str, object]]
+Credentials = Mapping[str, object] | None
 QueryParams = Mapping[str, str | int | float | bool | None]
 
 

@@ -62,10 +62,7 @@ def _render_email_template(template_name: str, values: dict[str, str]) -> str | 
     except OSError as exc:
         logger.warning("Email template %s could not be loaded: %s", path, exc)
         return None
-    safe_values = {
-        k: (str(v or "") if k.endswith("_html") else html_escape(str(v or "")))
-        for k, v in values.items()
-    }
+    safe_values = {k: (str(v or "") if k.endswith("_html") else html_escape(str(v or ""))) for k, v in values.items()}
     return Template(raw).safe_substitute(safe_values)
 
 
@@ -173,10 +170,7 @@ def _rows_html(rows: list[tuple[str, str]]) -> str:
     html_rows: list[str] = []
     for key, value in rows:
         html_rows.append(
-            "<tr>"
-            f"<td class='k'>{html_escape(str(key))}</td>"
-            f"<td class='v'>{html_escape(str(value))}</td>"
-            "</tr>"
+            f"<tr><td class='k'>{html_escape(str(key))}</td><td class='v'>{html_escape(str(value))}</td></tr>"
         )
     return "".join(html_rows)
 

@@ -460,7 +460,9 @@ async def test_jira_service_higher_level_helpers_and_errors(monkeypatch):
     service._client = ErrClient()
     with pytest.raises(JiraError):
         await service._request(
-            JiraRequest("GET", "/rest/api/2/project", {"base_url": "https://jira", "authMode": "bearer", "bearer": "abc"})
+            JiraRequest(
+                "GET", "/rest/api/2/project", {"base_url": "https://jira", "authMode": "bearer", "bearer": "abc"}
+            )
         )
     with pytest.raises(JiraError):
         await service._request(

@@ -255,7 +255,12 @@ def test_rate_limit_ip_and_redis_edges(monkeypatch):
     monkeypatch.setattr(ip_mod.config, "trust_proxy_headers", False)
     assert ip_mod.client_ip(_request(ip="bad-ip")) == "unknown"
 
+    monkeypatch.setattr(ip_mod.config, "trust_proxy_headers", True)
+    monkeypatch.setattr(ip_mod, "_valid_ip", lambda _value: "203.0.113.10")
+    assert ip_mod.client_ip(_request(ip="bad-ip")) == "203.0.113.10"
+
     assert redis_mod._sanitize_redis_url(object()) == "<redis-url>"
+    assert redis_mod._sanitize_redis_url("not a url") == "not a url"
 
     limiter = redis_mod.RedisFixedWindowRateLimiter.__new__(redis_mod.RedisFixedWindowRateLimiter)
     limiter._key_prefix = "prefix"

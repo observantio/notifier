@@ -16,6 +16,7 @@ from email.message import EmailMessage
 from html import escape as html_escape
 from pathlib import Path
 from string import Template
+
 import aiosmtplib
 
 from config import config
@@ -219,9 +220,7 @@ class NotificationService:
         subject = f"[{action.upper()}] {alert.labels.get('alertname', 'Alert')}"
         body = notification_payloads.format_alert_body(alert, action)
         html_body = notification_payloads.format_alert_html(alert, action)
-        smtp_from = str(
-            cfg.get("smtp_from") or cfg.get("smtpFrom") or cfg.get("from") or config.default_admin_email
-        )
+        smtp_from = str(cfg.get("smtp_from") or cfg.get("smtpFrom") or cfg.get("from") or config.default_admin_email)
         return (
             notification_email.EmailDeliveryPayload(
                 subject=subject,
@@ -253,11 +252,7 @@ class NotificationService:
             sender = notification_email.send_via_sendgrid
         if provider == "resend":
             api_key = str(
-                cfg.get("resend_api_key")
-                or cfg.get("resendApiKey")
-                or cfg.get("api_key")
-                or cfg.get("apiKey")
-                or ""
+                cfg.get("resend_api_key") or cfg.get("resendApiKey") or cfg.get("api_key") or cfg.get("apiKey") or ""
             )
             sender = notification_email.send_via_resend
         if sender is None:

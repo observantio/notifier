@@ -14,7 +14,6 @@ from models.alerting.silences import Visibility
 from services.common.visibility import normalize_visibility as normalize_common_visibility
 
 SILENCE_META_PREFIX = "[watchdog-meta]"
-VALID_VISIBILITIES = {v.value for v in Visibility}
 
 
 def normalize_visibility(value: str | None) -> str:

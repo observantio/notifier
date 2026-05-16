@@ -15,7 +15,6 @@ import asyncio
 from email.message import EmailMessage
 
 import httpx
-import pytest
 
 from services.notification import email_providers, transport
 

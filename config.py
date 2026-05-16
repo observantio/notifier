@@ -15,6 +15,7 @@ import importlib
 import logging
 import os
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any, cast
 
 from cryptography.fernet import Fernet
@@ -97,7 +98,7 @@ def _is_production_env() -> bool:
 
 def _file_secret_callback(secret_path: str) -> Callable[[], str]:
     def load_secret_id() -> str:
-        with open(secret_path, encoding="utf-8") as handle:
+        with Path(secret_path).open(encoding="utf-8") as handle:
             return handle.read().strip()
 
     return load_secret_id
@@ -452,23 +453,25 @@ class Config:
 
     def _apply_security_defaults(self) -> None:
         vals = object.__getattribute__(self, "_values")
-        if self.jwt_algorithm in self.allowed_jwt_algorithms and (
-            not vals.get("jwt_private_key") or not vals.get("jwt_public_key")
+        if (
+            self.jwt_algorithm in self.allowed_jwt_algorithms
+            and (not vals.get("jwt_private_key") or not vals.get("jwt_public_key"))
+            and self.jwt_auto_generate_keys
+            and not self.is_production
         ):
-            if self.jwt_auto_generate_keys and not self.is_production:
-                if self.jwt_algorithm == "RS256":
-                    private_key, public_key = _generate_rsa_keypair()
-                elif self.jwt_algorithm == "ES256":
-                    private_key, public_key = _generate_ec_keypair()
-                else:
-                    raise ValueError("Unsupported JWT_ALGORITHM for auto key generation")
-                vals["jwt_private_key"] = private_key
-                vals["jwt_public_key"] = public_key
-                logger.warning(
-                    "Generated ephemeral JWT keypair for %s. Persist JWT_PRIVATE_KEY and JWT_PUBLIC_KEY "
-                    "in a secret manager to avoid token invalidation on restart.",
-                    self.jwt_algorithm,
-                )
+            if self.jwt_algorithm == "RS256":
+                private_key, public_key = _generate_rsa_keypair()
+            elif self.jwt_algorithm == "ES256":
+                private_key, public_key = _generate_ec_keypair()
+            else:
+                raise ValueError("Unsupported JWT_ALGORITHM for auto key generation")
+            vals["jwt_private_key"] = private_key
+            vals["jwt_public_key"] = public_key
+            logger.warning(
+                "Generated ephemeral JWT keypair for %s. Persist JWT_PRIVATE_KEY and JWT_PUBLIC_KEY "
+                "in a secret manager to avoid token invalidation on restart.",
+                self.jwt_algorithm,
+            )
 
     def validate(self) -> None:
         if self.database_url == self.example_database_url or "changeme123" in self.database_url:
@@ -517,8 +520,7 @@ class Config:
 
         if self.notifier_ssl_enabled and (not self.notifier_ssl_certfile or not self.notifier_ssl_keyfile):
             raise ValueError(
-                "NOTIFIER_SSL_CERTFILE and NOTIFIER_SSL_KEYFILE must be set "
-                "when NOTIFIER_SSL_ENABLED=true"
+                "NOTIFIER_SSL_CERTFILE and NOTIFIER_SSL_KEYFILE must be set when NOTIFIER_SSL_ENABLED=true"
             )
 
         if self.is_production:

@@ -164,7 +164,7 @@ def test_storage_service_delegates_to_subservices(monkeypatch):
 def test_alertmanager_service_getattr_rejects_unknown_async_op_name() -> None:
     svc = alert_mod.AlertManagerService("http://alertmanager/")
     with pytest.raises(AttributeError, match="AlertManagerService"):
-        svc.not_a_registered_watchdog_async_op
+        _ = svc.not_a_registered_watchdog_async_op
 
 
 def test_storage_service_hidden_resource_helpers(monkeypatch):

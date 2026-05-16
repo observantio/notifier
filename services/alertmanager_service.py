@@ -192,7 +192,7 @@ class AlertManagerService:
             if config.is_production:
                 raise HTTPException(
                     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail="INBOUND_WEBHOOK_TOKEN is required in production",
+                    detail="INBOUND_WEBHOOK_TOKEN is not configured",
                 )
             return
         provided_header = request.headers.get("x-watchdog-webhook-token")

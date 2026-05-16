@@ -277,7 +277,7 @@ def test_resolve_rule_by_alertname_and_jira_side_effect_error_paths(monkeypatch)
 
 def test_sync_incidents_from_alerts_dedupe_reopen_and_resolve_missing(monkeypatch):
     service = incidents_mod.IncidentStorageService()
-    now = datetime.now(UTC)
+    datetime.now(UTC)
 
     class _RuleObj:
         def __init__(self):
@@ -435,9 +435,7 @@ def test_incident_service_summary_list_get_update_and_filter(monkeypatch):
     monkeypatch.setattr(
         incidents_mod,
         "has_access",
-        lambda check: (
-            check.visibility != "private" or check.created_by == check.user_id
-        ),
+        lambda check: check.visibility != "private" or check.created_by == check.user_id,
     )
 
     summary = service.get_incident_summary("tenant-a", "user-1", ["g1"])

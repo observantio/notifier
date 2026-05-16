@@ -66,9 +66,11 @@ class IntegrationSecurityServiceTests(unittest.TestCase):
             normalize_jira_auth_mode("oauth")
 
     def test_normalize_jira_auth_mode_sso_requires_oidc(self):
-        with patch("services.alerting.integration_security_service.is_jira_sso_available", return_value=False):
-            with self.assertRaises(HTTPException):
-                normalize_jira_auth_mode("sso")
+        with (
+            patch("services.alerting.integration_security_service.is_jira_sso_available", return_value=False),
+            self.assertRaises(HTTPException),
+        ):
+            normalize_jira_auth_mode("sso")
 
     def test_validate_jira_credentials_api_token_mode(self):
         validate_jira_credentials(

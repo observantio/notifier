@@ -1,10 +1,10 @@
 """
-Incident link discovery endpoints for Jira integration in the observability notifier router. 
-These endpoints allow clients to list available Jira projects and issue types based on either 
-tenant-level Jira configuration or specific Jira integrations. The endpoints handle authentication 
-and permissions, and they return structured responses that indicate whether Jira is enabled for the 
-tenant and what projects and issue types are available. This functionality is essential for users to 
-configure their Jira integrations effectively when setting up incident management workflows in the 
+Incident link discovery endpoints for Jira integration in the observability notifier router.
+These endpoints allow clients to list available Jira projects and issue types based on either
+tenant-level Jira configuration or specific Jira integrations. The endpoints handle authentication
+and permissions, and they return structured responses that indicate whether Jira is enabled for the
+tenant and what projects and issue types are available. This functionality is essential for users to
+configure their Jira integrations effectively when setting up incident management workflows in the
 observability platform.
 
 Copyright (c) 2026 Stefan Kumarasinghe.

@@ -87,8 +87,8 @@ def channel_to_pydantic_for_viewer(
     include_sensitive: bool = False,
 ) -> NotificationChannelPydantic:
     channel_id = getattr(ch, "id", None)
-    channel_name = getattr(ch, "name")
-    channel_type = getattr(ch, "type")
+    channel_name = str(getattr(ch, "name", ""))
+    channel_type = str(getattr(ch, "type", ""))
     channel_enabled = bool(getattr(ch, "enabled", False))
     channel_config = getattr(ch, "config", None) or {}
     channel_created_by = getattr(ch, "created_by", None)

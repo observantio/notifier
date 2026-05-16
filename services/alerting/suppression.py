@@ -19,7 +19,5 @@ def is_suppressed_status(raw_status: object) -> bool:
             return True
         if raw_status.get("silencedBy"):
             return True
-        if raw_status.get("inhibitedBy"):
-            return True
-        return False
+        return bool(raw_status.get("inhibitedBy"))
     return str(raw_status or "").strip().lower() == "suppressed"

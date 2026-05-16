@@ -63,6 +63,7 @@ def _get_float_env(var_name: str, default: str) -> float:
     except ValueError as exc:
         raise RuntimeError(f"Invalid value for {var_name}: {raw_value!r}. Expected a numeric value.") from exc
 
+
 def _bootstrap_database() -> None:
     timeout_seconds = _get_float_env("DATABASE_STARTUP_TIMEOUT", "180")
     retry_delay_seconds = _get_float_env("DATABASE_STARTUP_RETRY_DELAY", "2")

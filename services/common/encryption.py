@@ -56,6 +56,6 @@ def decrypt_config(cfg: JSONDict) -> JSONDict:
     except RuntimeError:
         raise
     except InvalidToken as exc:
-        raise ValueError("Cannot decrypt channel config – wrong key or corrupted data") from exc
+        raise ValueError("Cannot decrypt channel config - wrong key or corrupted data") from exc
     except Exception as exc:
         raise ValueError("Failed to decrypt channel config") from exc

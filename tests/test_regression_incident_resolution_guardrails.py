@@ -30,7 +30,9 @@ async def _async_noop(*_args, **_kwargs):
 
 
 @pytest.mark.asyncio
-async def test_resolve_is_blocked_when_matching_active_alert_exists_by_incident_key(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_resolve_is_blocked_when_matching_active_alert_exists_by_incident_key(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     user = token_data()
     existing = alert_incident(incident_id="inc-r1", status=IncidentStatus.OPEN, labels={"alertname": "DiskFull"})
 

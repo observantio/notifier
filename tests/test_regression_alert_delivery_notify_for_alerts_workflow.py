@@ -88,7 +88,13 @@ async def test_notify_for_alerts_skips_when_no_channels_are_configured() -> None
 @pytest.mark.asyncio
 async def test_notify_for_alerts_skips_suppressed_status() -> None:
     storage = _StorageStub(
-        channels=[notification_channel(name="slack", channel_type=ChannelType.SLACK, config={"webhook_url": "https://hooks.slack.com/services/a/b/c"})],
+        channels=[
+            notification_channel(
+                name="slack",
+                channel_type=ChannelType.SLACK,
+                config={"webhook_url": "https://hooks.slack.com/services/a/b/c"},
+            )
+        ],
         matched_rule=None,
     )
     notifier = _NotificationStub()
@@ -132,7 +138,11 @@ async def test_notify_for_alerts_sends_active_alert_to_all_channels() -> None:
 
 @pytest.mark.asyncio
 async def test_notify_for_alerts_enriches_rule_annotations_before_delivery() -> None:
-    channels = [notification_channel(name="webhook", channel_type=ChannelType.WEBHOOK, config={"url": "https://receiver.example"})]
+    channels = [
+        notification_channel(
+            name="webhook", channel_type=ChannelType.WEBHOOK, config={"url": "https://receiver.example"}
+        )
+    ]
     matched_rule = SimpleNamespace(
         id="rule-1",
         name="LatencyHigh",

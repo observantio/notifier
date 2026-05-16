@@ -12,7 +12,7 @@ from types import SimpleNamespace
 
 import httpx
 import pytest
-from cryptography.fernet import Fernet, InvalidToken
+from cryptography.fernet import InvalidToken
 from fastapi import HTTPException
 
 try:
@@ -299,10 +299,13 @@ async def test_email_providers_and_payload_helpers(monkeypatch):
         is False
     )
     monkeypatch.setattr(email_providers.transport, "send_smtp_with_retry", raise_unexpected)
-    assert await email_providers.send_via_smtp(
-        msg,
-        smtp=transport.SmtpDeliveryConfig(hostname="smtp.example.com", port=587),
-    ) is False
+    assert (
+        await email_providers.send_via_smtp(
+            msg,
+            smtp=transport.SmtpDeliveryConfig(hostname="smtp.example.com", port=587),
+        )
+        is False
+    )
     with pytest.raises(ValueError, match="without TLS"):
         await email_providers.send_via_smtp(
             msg,
@@ -514,10 +517,10 @@ async def test_notification_validators_senders_and_transport(monkeypatch):
     )
     assert transport._is_transient_http(ValueError("x"), transport.DEFAULT_RETRY_ON_STATUS) is False
 
-    class _SmtpTransient(Exception):
+    class _SmtpTransientError(Exception):
         code = 450
 
-    class _SmtpPermanent(Exception):
+    class _SmtpPermanentError(Exception):
         code = 550
 
     smtp_transient = transport.aiosmtplib.errors.SMTPException("temporary")
@@ -724,10 +727,13 @@ async def test_notification_provider_sender_validator_transport_more_edges(monke
     )
     original_send_smtp_with_retry = transport.send_smtp_with_retry
     monkeypatch.setattr(email_providers.transport, "send_smtp_with_retry", smtp_os_error)
-    assert await email_providers.send_via_smtp(
-        msg,
-        smtp=transport.SmtpDeliveryConfig(hostname="smtp.example.com", port=587, start_tls=True),
-    ) is False
+    assert (
+        await email_providers.send_via_smtp(
+            msg,
+            smtp=transport.SmtpDeliveryConfig(hostname="smtp.example.com", port=587, start_tls=True),
+        )
+        is False
+    )
     monkeypatch.setattr(transport, "send_smtp_with_retry", original_send_smtp_with_retry)
 
     assert senders._is_allowed_host(None, allowed_hosts=senders.SLACK_ALLOWED_HOSTS) is False  # type: ignore[arg-type]

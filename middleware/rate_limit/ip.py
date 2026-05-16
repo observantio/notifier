@@ -9,7 +9,7 @@ License. You may obtain a copy of the License at http://www.apache.org/licenses/
 
 from __future__ import annotations
 
-from ipaddress import ip_address, ip_network
+from ipaddress import IPv4Address, IPv4Network, IPv6Address, IPv6Network, ip_address, ip_network
 
 from fastapi import Request
 
@@ -27,45 +27,40 @@ def _valid_ip(value: str) -> str | None:
         return None
 
 
-def client_ip(request: Request) -> str:
-    def _trusted_proxy_peer() -> bool:
-        if not config.trust_proxy_headers:
-            return False
-        trusted_cidrs = getattr(config, "trusted_proxy_cidrs", []) or []
-        if not trusted_cidrs:
-            return True
-
-        direct = (request.client.host if request.client else "").strip()
-        validated = _valid_ip(direct)
-        if not validated:
-            return False
-
-        is_trusted = False
+def _trusted_proxy_networks(trusted_cidrs: list[str]) -> list[IPv4Network | IPv6Network]:
+    networks: list[IPv4Network | IPv6Network] = []
+    for cidr in trusted_cidrs:
         try:
-            peer_ip = ip_address(validated)
-            for cidr in trusted_cidrs:
-                try:
-                    if peer_ip in ip_network(cidr, strict=False):
-                        is_trusted = True
-                        break
-                except ValueError:
-                    continue
+            networks.append(ip_network(cidr, strict=False))
         except ValueError:
-            is_trusted = False
-        return is_trusted
+            continue
+    return networks
 
-    if _trusted_proxy_peer():
-        forwarded_for = (request.headers.get("x-forwarded-for") or "").strip()
-        if forwarded_for:
-            first = forwarded_for.split(",", 1)[0].strip()
-            valid_first = _valid_ip(first)
-            if valid_first:
-                return valid_first
 
-        real_ip = (request.headers.get("x-real-ip") or "").strip()
-        valid_real_ip = _valid_ip(real_ip)
-        if valid_real_ip:
-            return valid_real_ip
+def client_ip(request: Request) -> str:
+    direct = (request.client.host if request.client else "").strip()
+    candidate = _valid_ip(direct)
 
-    direct = (request.client.host if request.client else "unknown").strip()
-    return _valid_ip(direct) or "unknown"
+    if config.trust_proxy_headers and candidate:
+        trusted_cidrs = getattr(config, "trusted_proxy_cidrs", []) or []
+        trusted_peer = not trusted_cidrs
+        if not trusted_peer:
+            peer_ip: IPv4Address | IPv6Address | None = None
+            try:
+                peer_ip = ip_address(direct)
+            except ValueError:
+                pass
+            if peer_ip is not None:
+                trusted_peer = any(peer_ip in network for network in _trusted_proxy_networks(trusted_cidrs))
+
+        if trusted_peer:
+            forwarded_for = (request.headers.get("x-forwarded-for") or "").strip()
+            first = _valid_ip(forwarded_for.split(",", 1)[0].strip()) if forwarded_for else None
+            if first:
+                return first
+
+            real_ip = _valid_ip((request.headers.get("x-real-ip") or "").strip())
+            if real_ip:
+                return real_ip
+
+    return candidate or "unknown"

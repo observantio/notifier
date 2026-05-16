@@ -21,8 +21,7 @@ ensure_test_env()
 from config import config
 from services import notification_service as notification_mod
 from services.notification import transport
-from services.notification_service import IncidentAssignmentEmail
-from services.notification_service import NotificationService
+from services.notification_service import IncidentAssignmentEmail, NotificationService
 
 
 @pytest.mark.asyncio

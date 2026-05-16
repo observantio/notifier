@@ -127,4 +127,3 @@ def sample_alert(
             "fingerprint": fingerprint,
         }
     )
-

@@ -21,8 +21,8 @@ class RuntimeSSLOptions:
     ssl_keyfile: str
 
     @classmethod
-    def from_config(cls, config: object) -> RuntimeSSLOptions | None:
-        if not getattr(config, "notifier_ssl_enabled"):
+    def from_config(cls, config: Any) -> RuntimeSSLOptions | None:
+        if not config.notifier_ssl_enabled:
             return None
 
         return cls(

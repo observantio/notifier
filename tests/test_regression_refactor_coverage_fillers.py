@@ -7,7 +7,7 @@ License. You may obtain a copy of the License at http://www.apache.org/licenses/
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from types import SimpleNamespace
 
 import pytest
@@ -20,8 +20,8 @@ except ImportError:
 ensure_test_env()
 
 from routers.observability import incidents as incidents_router
-from services.alerting.alerts_ops import AlertQuery
 from services import alertmanager_service as alertmanager_mod
+from services.alerting.alerts_ops import AlertQuery
 from services.jira_service import JiraIssueCreateOptions, _coerce_issue_options
 from services.notification import validators as notification_validators
 
@@ -112,11 +112,11 @@ async def test_ensure_resolve_allowed_returns_when_not_resolved(monkeypatch: pyt
         jiraTicketKey=None,
         jiraTicketUrl=None,
         jiraIntegrationId=None,
-        startsAt=datetime.now(tz=timezone.utc),
-        lastSeenAt=datetime.now(tz=timezone.utc),
+        startsAt=datetime.now(tz=UTC),
+        lastSeenAt=datetime.now(tz=UTC),
         resolvedAt=None,
-        createdAt=datetime.now(tz=timezone.utc),
-        updatedAt=datetime.now(tz=timezone.utc),
+        createdAt=datetime.now(tz=UTC),
+        updatedAt=datetime.now(tz=UTC),
         userManaged=False,
         hideWhenResolved=False,
     )
@@ -150,11 +150,11 @@ async def test_ensure_resolve_allowed_raises_if_active_alert_exists(monkeypatch:
         jiraTicketKey=None,
         jiraTicketUrl=None,
         jiraIntegrationId=None,
-        startsAt=datetime.now(tz=timezone.utc),
-        lastSeenAt=datetime.now(tz=timezone.utc),
+        startsAt=datetime.now(tz=UTC),
+        lastSeenAt=datetime.now(tz=UTC),
         resolvedAt=None,
-        createdAt=datetime.now(tz=timezone.utc),
-        updatedAt=datetime.now(tz=timezone.utc),
+        createdAt=datetime.now(tz=UTC),
+        updatedAt=datetime.now(tz=UTC),
         userManaged=False,
         hideWhenResolved=False,
     )
@@ -180,9 +180,7 @@ def test_jira_issue_option_coercion_default_and_explicit_options() -> None:
     assert defaults.issue_type == "Task"
     assert defaults.priority is None
 
-    explicit = _coerce_issue_options(
-        JiraIssueCreateOptions(description="hello", issue_type="Bug", priority="High")
-    )
+    explicit = _coerce_issue_options(JiraIssueCreateOptions(description="hello", issue_type="Bug", priority="High"))
     assert explicit.description == "hello"
     assert explicit.issue_type == "Bug"
     assert explicit.priority == "High"
