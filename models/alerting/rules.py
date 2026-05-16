@@ -24,7 +24,6 @@ DESC_RULE_ANNOTATIONS = "Annotations to add to alerts from this rule"
 DESC_RULE_FOR_DURATION = "Duration to wait before firing the alert"
 DESC_RULE_GROUP_NAME = "Name of the rule group this rule belongs to"
 DESC_RULE_GROUP_INTERVAL = "Interval between evaluations of this rule group"
-DESC_RULE_GROUP_RULES = "Rules in this group"
 DESC_VISIBILITY_SCOPE = "Visibility scope"
 DESC_GROUP_IDS_RULE_SHARED_WITH = "Group IDs this rule is shared with (when visibility=group)"
 DESC_GROUP_IDS_SHARE_WITH = "Group IDs to share with"
@@ -117,9 +116,3 @@ class AlertRuleCreate(BaseModel):
         default_factory=list, alias="sharedGroupIds", description=DESC_GROUP_IDS_SHARE_WITH, examples=[["group-ops"]]
     )
     model_config = ConfigDict(use_enum_values=True, populate_by_name=True, extra="forbid")
-
-
-class RuleGroup(BaseModel):
-    name: str = Field(..., description=DESC_RULE_GROUP_NAME, examples=["watchdog-default"])
-    interval: str | None = Field(None, description=DESC_RULE_GROUP_INTERVAL, examples=["1m"])
-    rules: list[AlertRule] = Field(default_factory=list, description=DESC_RULE_GROUP_RULES)
