@@ -2,12 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
-## [v0.0.6] - 2026-05-16
+## [Unreleased] - 2026-05-16
 
 ### Changed
 
-- Hardened notifier rate-limit IP handling, Vault client typing, and related edge-case coverage while keeping `pytest`, `mypy`, and `pylint` green at 100% coverage.
-- Cleaned up notifier alerting and security surfaces to preserve strict typing without changing runtime behavior.
+- Hardened notifier rate-limit IP handling, including trusted proxy resolution, invalid CIDR fallback, and Redis limiter branches.
+- Tightened alerting security, webhook tenant inference, Vault client fallback exceptions, and notifier startup URL/parsing validation.
 
 ## [v0.0.5] - 2026-04-20
 
